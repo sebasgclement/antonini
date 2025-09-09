@@ -3,32 +3,42 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
 
 class AuthController extends Controller
 {
-    public function login(Request $req) {
+    public function login(Request $req)
+    {
         $data = $req->validate([
-            'email' => ['required','email'],
+            'email'    => ['required', 'email'],
             'password' => ['required'],
         ]);
 
-        if (!Auth::attempt($data)) {
-            throw ValidationException::withMessages([
-                'email' => ['Credenciales inválidas'],
-            ]);
+        $user = User::where('email', $data['email'])->first();
+
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Credenciales inválidas',
+            ], 401);
         }
 
-        $req->session()->regenerate();
+        
+        $token = $user->createToken('api')->plainTextToken;
 
-        return response()->json(['ok'=>true, 'user'=>Auth::user()]);
+        return response()->json([
+            'ok'    => true,
+            'user'  => $user,
+            'token' => $token,
+        ], 200);
     }
 
-    public function logout(Request $req) {
-        Auth::guard('web')->logout();
-        $req->session()->invalidate();
-        $req->session()->regenerateToken();
-        return response()->json(['ok'=>true]);
+    public function logout(Request $req)
+    {
+        
+        $req->user()->currentAccessToken()->delete();
+
+        return response()->json(['ok' => true]);
     }
 }
