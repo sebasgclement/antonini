@@ -5,6 +5,8 @@ import RegisterCustomer from './pages/customers/Register'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './layout/Layout'
 import ReceptionCreate from './pages/receptions/Create'
+import CustomersList from './pages/customers/List'
+import CustomerEdit from './pages/customers/Edit'
 
 
 export default function App() {
@@ -19,6 +21,7 @@ element={
 <ProtectedRoute>
 <Layout>
 <Home />
+<CustomersList />
 </Layout>
 </ProtectedRoute>
 }
