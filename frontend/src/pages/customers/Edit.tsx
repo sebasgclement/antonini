@@ -17,7 +17,7 @@ export default function CustomerEdit() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get(`/api/customers/${id}`)
+        const { data } = await api.get(`/customers/${id}`)
         // Soporta { ok:true, data:{...} } o plano
         setC(data?.data ?? data ?? {})
       } catch (e: any) {
@@ -40,7 +40,7 @@ export default function CustomerEdit() {
         email:      c.email ?? undefined,
         phone:      c.phone ?? undefined,
       }
-      await api.put(`/api/customers/${id}`, payload)
+      await api.put(`/customers/${id}`, payload)
       setToast('Cliente actualizado')
       nav('/clientes')
     } catch (e: any) {

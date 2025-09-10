@@ -11,16 +11,9 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-    ];
+    protected $fillable = ['name','email','password'];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['password','remember_token'];
 
     protected function casts(): array
     {
@@ -28,5 +21,12 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    
+    public function roles()
+    {
+        
+        return $this->belongsToMany(Role::class, 'role_user', 'user_id', 'role_id');
     }
 }

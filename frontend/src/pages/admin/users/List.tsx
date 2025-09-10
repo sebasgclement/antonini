@@ -1,15 +1,29 @@
-// src/pages/customers/List.tsx
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import api from '../../lib/api'
-import usePagedList from '../../hooks/usePagedList'
-import Toast from '../../components/ui/Toast'
-import Button from '../../components/ui/Button'
-import Confirm from '../../components/ui/Confirm'
-import Pagination from '../../components/ui/Pagination'
-import { displayCustomerName, type Customer } from '../../types/customer'
+import api from '../../../lib/api'
+import usePagedList from '../../../hooks/usePagedList'
+import Toast from '../../../components/ui/Toast'
+import Button from '../../../components/ui/Button'
+import Confirm from '../../../components/ui/Confirm'
+import Pagination from '../../../components/ui/Pagination'
 
-export default function CustomersList() {
+type RoleObj = { id: number; name: string }
+export type User = {
+  id: number
+  name: string
+  email: string
+  role?: string | null
+  roles?: (string | RoleObj)[] | null
+}
+
+function readRoleName(r: any): string {
+  if (!r) return ''
+  if (typeof r === 'string') return r
+  if (typeof r === 'object') return String(r.name ?? r.rol ?? r.role ?? '')
+  return String(r)
+}
+
+export default function UsersList() {
   const nav = useNavigate()
 
   const {
@@ -23,30 +37,28 @@ export default function CustomersList() {
     search,
     setSearch,
     refetch,
-  } = usePagedList<Customer>('/customers')
+  } = usePagedList<User>('/admin/users')
 
   const [toast, setToast] = useState('')
-  const [toDelete, setToDelete] = useState<Customer | null>(null)
+  const [toDelete, setToDelete] = useState<User | null>(null)
 
   const rows = useMemo(() => items, [items])
 
   const onDelete = async () => {
     if (!toDelete) return
     try {
-      
-      await api.delete(`/customers/${toDelete.id}`)
+      await api.delete(`/admin/users/${toDelete.id}`)
 
-      
-      setItems(prev => prev.filter(c => c.id !== toDelete.id))
+      // actualizar grilla local
+      setItems(prev => prev.filter(u => u.id !== toDelete.id))
 
-      
+      // si eliminamos el último de la página, retroceder
       if (rows.length === 1 && page > 1) {
         setPage(page - 1)
-      
         setTimeout(refetch, 0)
       }
 
-      setToast('Cliente eliminado')
+      setToast('Usuario eliminado')
     } catch (e: any) {
       setToast(e?.response?.data?.message || 'No se pudo eliminar')
     } finally {
@@ -57,13 +69,13 @@ export default function CustomersList() {
   return (
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
-        <div className="title">Clientes</div>
-        <Link className="link" to="/clientes/registro">+ Nuevo cliente</Link>
+        <div className="title">Usuarios</div>
+        <Link className="link" to="/admin/usuarios/crear">+ Nuevo</Link>
       </div>
 
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>
         <input
-          placeholder="Buscar por nombre, email, doc, teléfono…"
+          placeholder="Buscar por nombre o email…"
           value={search}
           onChange={e => setSearch(e.currentTarget.value)}
           style={{
@@ -86,38 +98,41 @@ export default function CustomersList() {
           </div>
         ) : rows.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--color-muted)' }}>
-            No hay clientes.
+            No hay usuarios para mostrar.
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--color-muted)' }}>
                 <th style={{ padding: 8 }}>#</th>
-                <th style={{ padding: 8 }}>Cliente</th>
-                <th style={{ padding: 8 }}>Documento</th>
+                <th style={{ padding: 8 }}>Nombre</th>
                 <th style={{ padding: 8 }}>Email</th>
-                <th style={{ padding: 8 }}>Teléfono</th>
+                <th style={{ padding: 8 }}>Rol</th>
                 <th style={{ padding: 8, textAlign: 'right' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(c => (
-                <tr key={c.id} style={{ borderTop: '1px solid #1f2430' }}>
-                  <td style={{ padding: 8 }}>{c.id}</td>
-                  <td style={{ padding: 8 }}>{displayCustomerName(c)}</td>
-                  <td style={{ padding: 8 }}>
-                    {[c.doc_type, c.doc_number].filter(Boolean).join(' ') || '—'}
-                  </td>
-                  <td style={{ padding: 8 }}>{c.email || '—'}</td>
-                  <td style={{ padding: 8 }}>{c.phone || '—'}</td>
-                  <td style={{ padding: 8 }}>
-                    <div className="hstack" style={{ justifyContent: 'flex-end', gap: 8 }}>
-                      <Button onClick={() => nav(`/clientes/${c.id}/edit`)}>Editar</Button>
-                      <Button onClick={() => setToDelete(c)}>Eliminar</Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {rows.map(u => {
+                const role =
+                  u.role ??
+                  (Array.isArray(u.roles) && u.roles.length
+                    ? readRoleName(u.roles[0])
+                    : '')
+                return (
+                  <tr key={u.id} style={{ borderTop: '1px solid #1f2430' }}>
+                    <td style={{ padding: 8 }}>{u.id}</td>
+                    <td style={{ padding: 8 }}>{u.name}</td>
+                    <td style={{ padding: 8 }}>{u.email}</td>
+                    <td style={{ padding: 8 }}>{role || '—'}</td>
+                    <td style={{ padding: 8 }}>
+                      <div className="hstack" style={{ justifyContent: 'flex-end', gap: 8 }}>
+                        <Button onClick={() => nav(`/admin/usuarios/${u.id}/editar`)}>Editar</Button>
+                        <Button onClick={() => setToDelete(u)}>Eliminar</Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
@@ -134,11 +149,10 @@ export default function CustomersList() {
 
       <Confirm
         open={!!toDelete}
-        title="Eliminar cliente"
+        title="Eliminar usuario"
         message={
           <>
-            Vas a eliminar <b>{displayCustomerName(toDelete || { id: 0 } as Customer)}</b>.
-            Esta acción no se puede deshacer.
+            Vas a eliminar <b>{toDelete?.name}</b>. Esta acción no se puede deshacer.
           </>
         }
         onCancel={() => setToDelete(null)}

@@ -21,7 +21,7 @@ export default function RegisterCustomer() {
     setLoading(true)
     setToast('')
     try {
-      const { data } = await api.post('/api/customers/register', {
+      const { data } = await api.post('/customers', {
         first_name: firstName,
         last_name: lastName,
         doc_type: docType,
