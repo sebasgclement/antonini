@@ -21,7 +21,7 @@ export default function RegisterCustomer() {
     setLoading(true)
     setToast('')
     try {
-      const { data } = await api.post('/customers', {
+      await api.post('/customers', {
         first_name: firstName,
         last_name: lastName,
         doc_type: docType,
@@ -30,7 +30,6 @@ export default function RegisterCustomer() {
         phone,
       })
       setToast('Cliente registrado con éxito')
-      // limpiar formulario (opcional)
       setFirstName('')
       setLastName('')
       setDocType('DNI')
@@ -45,30 +44,31 @@ export default function RegisterCustomer() {
   }
 
   return (
-    <div className="container">
-      <div className="card vstack" style={{ maxWidth: 700, margin: '0 auto' }}>
+    <div className="page">
+      <div className="card vstack" style={{ maxWidth: 700, margin: '0 auto', gap: 16 }}>
         <div className="title">Registro de clientes</div>
-        <form onSubmit={onSubmit} className="vstack">
+        <form onSubmit={onSubmit} className="vstack" style={{ gap: 16 }}>
           <div className="hstack" style={{ gap: 16 }}>
             <Input label="Nombre" value={firstName} onChange={e => setFirstName(e.currentTarget.value)} required />
             <Input label="Apellido" value={lastName} onChange={e => setLastName(e.currentTarget.value)} required />
           </div>
           <div className="hstack" style={{ gap: 16 }}>
-            <Input label="Tipo doc" value={docType} onChange={e => setDocType(e.currentTarget.value)} placeholder="DNI / Pasaporte" />
+            <Input label="Tipo doc" value={docType} onChange={e => setDocType(e.currentTarget.value)} />
             <Input label="Nro doc" value={docNumber} onChange={e => setDocNumber(e.currentTarget.value)} />
           </div>
           <div className="hstack" style={{ gap: 16 }}>
             <Input label="Email" type="email" value={email} onChange={e => setEmail(e.currentTarget.value)} />
             <Input label="Teléfono" value={phone} onChange={e => setPhone(e.currentTarget.value)} />
           </div>
-
           <div className="hstack" style={{ justifyContent: 'flex-end' }}>
             <Button type="submit" loading={loading}>Guardar</Button>
           </div>
         </form>
       </div>
 
-      {toast && <Toast message={toast} type={toast.includes('éxito') ? 'success' : 'error'} />}
+      {toast && (
+        <Toast message={toast} type={toast.includes('éxito') ? 'success' : 'error'} />
+      )}
     </div>
   )
 }

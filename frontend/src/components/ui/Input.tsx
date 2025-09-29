@@ -10,13 +10,7 @@ return (
 {label && <label className="label">{label}</label>}
 <input
 {...rest}
-style={{
-background: '#0c0f14',
-color: 'var(--color-text)',
-border: '1px solid #252b37',
-borderRadius: '10px',
-padding: '10px 12px'
-}}
+
 />
 </div>
 )

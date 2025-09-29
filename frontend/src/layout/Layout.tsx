@@ -1,19 +1,31 @@
-import Header from './Header'
-import Sidebar from './Sidebar'
-
+import { useState } from "react";
+import Header from "./Header";
+import Sidebar from "./Sidebar";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-return (
-<div className="container" style={{ height: '100%' }}>
-<div className="vstack" style={{ gap: 12, height: '100%' }}>
-<Header />
-<div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 12, height: '100%' }}>
-<Sidebar />
-<main className="vstack" style={{ gap: 12 }}>
-{children}
-</main>
-</div>
-</div>
-</div>
-)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <div className="layout-container">
+      <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+
+      <div className="layout-grid">
+        {/* Backdrop en mobile */}
+        {sidebarOpen && (
+          <div
+            className="sidebar-backdrop"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar con toggle */}
+        <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+          <Sidebar onClose={() => setSidebarOpen(false)} />
+        </aside>
+
+        {/* Contenido principal */}
+        <main className="main-content vstack">{children}</main>
+      </div>
+    </div>
+  );
 }

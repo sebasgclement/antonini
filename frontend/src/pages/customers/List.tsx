@@ -33,19 +33,12 @@ export default function CustomersList() {
   const onDelete = async () => {
     if (!toDelete) return
     try {
-      
       await api.delete(`/customers/${toDelete.id}`)
-
-      
       setItems(prev => prev.filter(c => c.id !== toDelete.id))
-
-      
       if (rows.length === 1 && page > 1) {
         setPage(page - 1)
-      
         setTimeout(refetch, 0)
       }
-
       setToast('Cliente eliminado')
     } catch (e: any) {
       setToast(e?.response?.data?.message || 'No se pudo eliminar')
@@ -61,6 +54,7 @@ export default function CustomersList() {
         <Link className="link" to="/clientes/registro">+ Nuevo cliente</Link>
       </div>
 
+      {/* input con estilo igual a vehículos */}
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>
         <input
           placeholder="Buscar por nombre, email, doc, teléfono…"
@@ -81,13 +75,9 @@ export default function CustomersList() {
         {loading ? (
           <div style={{ padding: 16 }}>Cargando…</div>
         ) : error ? (
-          <div style={{ padding: 16, color: 'var(--color-danger)' }}>
-            Error: {error}
-          </div>
+          <div style={{ padding: 16, color: 'var(--color-danger)' }}>Error: {error}</div>
         ) : rows.length === 0 ? (
-          <div style={{ padding: 16, color: 'var(--color-muted)' }}>
-            No hay clientes.
-          </div>
+          <div style={{ padding: 16, color: 'var(--color-muted)' }}>No hay clientes.</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -137,7 +127,7 @@ export default function CustomersList() {
         title="Eliminar cliente"
         message={
           <>
-            Vas a eliminar <b>{displayCustomerName(toDelete || { id: 0 } as Customer)}</b>.
+            Vas a eliminar <b>{displayCustomerName(toDelete || { id: 0 } as Customer)}</b>.  
             Esta acción no se puede deshacer.
           </>
         }

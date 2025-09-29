@@ -1,72 +1,51 @@
-// src/components/Sidebar.tsx
-import { NavLink } from 'react-router-dom'
-import useAuth from '../hooks/useAuth'
+import { NavLink } from "react-router-dom";
+import useAuth from "../hooks/useAuth";
+import Button from "../components/ui/Button";
 
-const linkStyle: React.CSSProperties = {
-  display: 'block',
-  padding: '10px 14px',
-  borderRadius: 10,
-  color: 'var(--color-text)',
-  textDecoration: 'none',
-  border: '1px solid transparent',
-}
-
-const active = (isActive: boolean) => ({
-  ...linkStyle,
-  background: isActive ? '#121620' : 'transparent',
-  borderColor: isActive ? '#222836' : 'transparent',
-})
-
-export default function Sidebar() {
-  const { isAdmin } = useAuth()
+export default function Sidebar({ onClose }: { onClose?: () => void }) {
+  const { isAdmin, user, logout } = useAuth();
 
   return (
-    <aside
-      style={{
-        width: 260,
-        padding: 16,
-        background: 'var(--color-card)',
-        borderRadius: 'var(--radius)',
-        border: '1px solid #1f2430',
-        height: '100%',
-      }}
-    >
+    <div className="vstack" style={{ height: "100%" }}>
+      {/* Botón cerrar solo en mobile */}
+      <button className="sidebar-close" onClick={onClose}>
+        ✕
+      </button>
+
       <nav className="vstack" style={{ gap: 8 }}>
-        <NavLink to="/" end style={({ isActive }) => active(isActive)}>
+        <NavLink to="/" end className="nav-link">
           🏠 Inicio
         </NavLink>
 
-        {/* match exacto para que /clientes no se active en /clientes/registro */}
-        <NavLink to="/clientes" end style={({ isActive }) => active(isActive)}>
+        <NavLink to="/clientes" end className="nav-link">
           📇 Clientes
         </NavLink>
 
-        <NavLink to="/recepciones/nueva" style={({ isActive }) => active(isActive)}>
-          🚗 Recepción de vehículo
+        <NavLink to="/vehiculos" className="nav-link">
+          🚙 Administración de Vehículos
         </NavLink>
 
-        {/* Sección exclusiva de admin */}
         {isAdmin && (
           <>
-            <hr style={{ margin: '12px 0', borderColor: '#2a2f3c' }} />
-            <div style={{ fontSize: 12, opacity: 0.7, padding: '0 4px' }}>
-              Administración
-            </div>
-            <NavLink
-              to="/admin/usuarios"
-              style={({ isActive }) => active(isActive)}
-            >
+            <hr className="sidebar-separator" />
+            <div className="sidebar-section">Administración</div>
+            <NavLink to="/admin/usuarios" className="nav-link">
               👤 Usuarios
             </NavLink>
-            <NavLink
-              to="/admin/roles"
-              style={({ isActive }) => active(isActive)}
-            >
+            <NavLink to="/admin/roles" className="nav-link">
               🔑 Roles
             </NavLink>
           </>
         )}
       </nav>
-    </aside>
-  )
+
+      {/* Footer con user/salir en mobile */}
+      <div className="sidebar-footer">
+        <span style={{ color: "var(--color-muted)", fontSize: "0.9rem" }}>
+          {user?.name || user?.email}
+        </span>
+        <Button onClick={logout}>Salir</Button>
+      </div>
+    </div>
+  );
 }
