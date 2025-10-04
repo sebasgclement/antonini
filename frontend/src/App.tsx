@@ -18,6 +18,8 @@ import AdminRoute from './components/AdminRoute'
 import Layout from './layout/Layout'
 import ReservationsList from './pages/reservations/List'
 import RegisterReservation from './pages/reservations/Register'
+import ReportsDashboard from "./pages/admin/reports/Dashboard";
+
 
 
 export default function App() {
@@ -144,6 +146,19 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+  path="/admin/reportes"
+  element={
+    <ProtectedRoute>
+      <AdminRoute>
+        <Layout>
+          <ReportsDashboard />
+        </Layout>
+      </AdminRoute>
+    </ProtectedRoute>
+  }
+/>
+
 
       {/* Vehículos */}
       <Route

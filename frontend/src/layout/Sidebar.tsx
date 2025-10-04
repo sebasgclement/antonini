@@ -40,7 +40,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
             <NavLink to="/admin/roles" className="nav-link">
               🔑 Roles
             </NavLink>
+            <NavLink to="/admin/reportes" className="nav-link">
+              📊 Reportes
+            </NavLink>
+
           </>
+          
         )}
       </nav>
 

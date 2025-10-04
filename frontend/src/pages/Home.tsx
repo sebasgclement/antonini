@@ -4,13 +4,17 @@ import useAuth from "../hooks/useAuth";
 export default function Home() {
   const { user } = useAuth();
 
+  // ✅ Si el usuario tiene el rol admin
+  const isAdmin =
+    user?.roles?.some(
+      (r: any) => r.name?.toLowerCase() === "admin" || r.name?.toLowerCase() === "superadmin"
+    ) || false;
+
   return (
     <div className="page vstack">
       {/* Encabezado de la página */}
       <div className="page-header">
-        <h1 className="page-title">
-          Dashboard — {user?.name || "Usuario"}
-        </h1>
+        <h1 className="page-title">Dashboard — {user?.name || "Usuario"}</h1>
       </div>
 
       {/* Sección de atajos */}
@@ -23,12 +27,16 @@ export default function Home() {
           <Link className="btn-link" to="/vehiculos/registro">
             + Registrar vehículo
           </Link>
-          <Link className="btn-link" to="/reservas/registro">
+          <Link className="btn-link" to="/reservas/nueva">
             + Registrar reserva
           </Link>
-          <Link className="btn-link" to="/transferencias/registro">
-            + Registrar transferencia
-          </Link>
+
+          {/* ✅ Solo visible para administradores */}
+          {isAdmin && (
+            <Link className="btn-link" to="/admin/reportes">
+              + Ver reportes
+            </Link>
+          )}
         </div>
       </section>
     </div>
