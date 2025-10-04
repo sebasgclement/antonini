@@ -10,4 +10,10 @@ class Customer extends Model
         'first_name','last_name','doc_type','doc_number','cuit',
         'email','phone','alt_phone','city','address','notes'
     ];
+
+    public function reservations()
+    {
+        return $this->hasMany(Reservation::class);
+    }
+
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleExpenseController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\ReservationController;
 
 // ================== AUTH ==================
 Route::post('/auth/login',  [AuthController::class, 'login']);
@@ -17,18 +18,10 @@ Route::get('/ping', fn () => response()->json(['pong' => true]));
 // ================== ZONA AUTENTICADA ==================
 Route::middleware('auth:sanctum')->group(function () {
     // Customers CRUD
-    Route::get   ('/customers',            [CustomerController::class, 'index']);
-    Route::post  ('/customers',            [CustomerController::class, 'store']);
-    Route::get   ('/customers/{customer}', [CustomerController::class, 'show']);
-    Route::put   ('/customers/{customer}', [CustomerController::class, 'update']);
-    Route::delete('/customers/{customer}', [CustomerController::class, 'destroy']);
+    Route::apiResource('customers', CustomerController::class);
 
     // Vehicles CRUD (ya reemplaza a Reception)
-    Route::get   ('/vehicles',            [VehicleController::class, 'index']);
-    Route::post  ('/vehicles',            [VehicleController::class, 'store']);
-    Route::get   ('/vehicles/{vehicle}',  [VehicleController::class, 'show']);
-    Route::put   ('/vehicles/{vehicle}',  [VehicleController::class, 'update']);
-    Route::delete('/vehicles/{vehicle}',  [VehicleController::class, 'destroy']);
+    Route::apiResource('vehicles', VehicleController::class);
 
     // Expenses por vehículo
     Route::get   ('/vehicles/{vehicle}/expenses',          [VehicleExpenseController::class, 'index']);
@@ -38,7 +31,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reports
     Route::get('/reports/sales/monthly',    [ReportController::class, 'salesMonthly']);
     Route::get('/reports/expenses/monthly', [ReportController::class, 'expensesMonthly']);
+
+    // ✅ Reservas
+    Route::get('/reservations/create', [ReservationController::class, 'create']);
+    Route::apiResource('reservations', ReservationController::class);
+
 });
+
 
 // ================== ZONA Roles ==================
 
@@ -62,3 +61,9 @@ Route::middleware(['auth:sanctum','role:admin'])->group(function () {
 
     Route::get('/admin/roles', [\App\Http\Controllers\AdminUserController::class, 'roles']);
 });
+
+
+
+
+
+
