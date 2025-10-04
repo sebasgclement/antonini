@@ -10,23 +10,25 @@ class Reservation extends Model
     use HasFactory;
 
     protected $fillable = [
-        'vehicle_id',
+        'vehicle_id',        // vehículo vendido
         'customer_id',
         'seller_id',
-        'used_vehicle_id',
+        'used_vehicle_id',   // vehículo tomado en parte de pago
         'date',
-        'price',
+        'price',             // precio total de venta
         'deposit',
         'payment_method',
         'payment_details',
+        'workshop_expenses', // 💡 nuevo campo: gastos de taller
         'comments',
         'status',
     ];
 
     protected $casts = [
-        'price'   => 'decimal:2',
-        'deposit' => 'decimal:2',
-        'date'    => 'datetime',
+        'price'             => 'decimal:2',
+        'deposit'           => 'decimal:2',
+        'workshop_expenses' => 'decimal:2',
+        'date'              => 'datetime',
     ];
 
     // ================= RELACIONES =================
@@ -36,6 +38,7 @@ class Reservation extends Model
         return $this->belongsTo(Vehicle::class);
     }
 
+    // Vehículo entregado como parte de pago
     public function usedVehicle()
     {
         return $this->belongsTo(Vehicle::class, 'used_vehicle_id');
@@ -51,18 +54,32 @@ class Reservation extends Model
         return $this->belongsTo(User::class, 'seller_id');
     }
 
+    // ================= MÉTODOS AUXILIARES =================
+
+    /**
+     * Calcula la ganancia neta:
+     * precio de venta - valor vehículo usado - gastos de taller
+     */
+    public function getProfitAttribute(): float
+    {
+        $tradeInValue = $this->usedVehicle?->price ?? 0;
+        $workshop = $this->workshop_expenses ?? 0;
+
+        return (float) $this->price - $tradeInValue - $workshop;
+    }
+
     // ================= EVENTOS AUTOMÁTICOS =================
 
     protected static function booted()
     {
-        // Cuando se crea una reserva -> marcar vehículo como reservado
+        // Al crear la reserva → marcar vehículo como reservado
         static::created(function ($reservation) {
             if ($reservation->vehicle && $reservation->status === 'pendiente') {
                 $reservation->vehicle->update(['status' => 'reservado']);
             }
         });
 
-        // Cuando se actualiza una reserva -> sincronizar estado del vehículo
+        // Al actualizar la reserva → sincronizar estado del vehículo
         static::updated(function ($reservation) {
             if (! $reservation->vehicle) return;
 
@@ -79,7 +96,7 @@ class Reservation extends Model
             }
         });
 
-        // Cuando se elimina una reserva pendiente -> liberar vehículo
+        // Al eliminar una reserva pendiente → liberar vehículo
         static::deleted(function ($reservation) {
             if ($reservation->vehicle && $reservation->status === 'pendiente') {
                 $reservation->vehicle->update(['status' => 'disponible']);

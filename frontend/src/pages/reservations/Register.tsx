@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Toast from '../../components/ui/Toast'
 
-type Vehicle = { id: number; plate: string; brand: string; model: string; status: string }
+type Vehicle = { id: number; plate: string; brand: string; model: string; status: string; price?: number }
 
 export default function RegisterReservation() {
   const nav = useNavigate()
@@ -16,12 +16,18 @@ export default function RegisterReservation() {
   const [customers, setCustomers] = useState<any[]>([])
   const [vehicleId, setVehicleId] = useState<number | ''>(vehicleIdParam ? parseInt(vehicleIdParam) : '')
   const [customerId, setCustomerId] = useState<number | ''>('')
+
   const [price, setPrice] = useState<number | ''>('')
   const [deposit, setDeposit] = useState<number | ''>('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [comments, setComments] = useState('')
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Nuevo: parte de pago y gastos de taller
+  const [hasTradeIn, setHasTradeIn] = useState(false)
+  const [tradeInVehicleId, setTradeInVehicleId] = useState<number | ''>('')
+  const [workshopExpenses, setWorkshopExpenses] = useState<number | ''>('')
 
   useEffect(() => {
     (async () => {
@@ -42,10 +48,12 @@ export default function RegisterReservation() {
       await api.post('/reservations', {
         vehicle_id: vehicleId,
         customer_id: customerId,
-        seller_id: 1, // ⚠️ reemplazar por el ID del usuario logueado
+        seller_id: 1, // ⚠️ reemplazar por ID del usuario logueado
         price,
         deposit,
         payment_method: paymentMethod,
+        used_vehicle_id: hasTradeIn ? tradeInVehicleId : null,
+        workshop_expenses: workshopExpenses || null,
         comments,
       })
       setToast('Reserva creada correctamente ✅')
@@ -62,6 +70,7 @@ export default function RegisterReservation() {
       <form onSubmit={onSubmit} className="vstack" style={{ gap: 16 }}>
         <div className="title">Registrar reserva</div>
 
+        {/* VEHÍCULO PRINCIPAL */}
         <div className="card vstack" style={{ gap: 16 }}>
           <label>Vehículo *</label>
           {vehicles.length > 0 ? (
@@ -87,6 +96,7 @@ export default function RegisterReservation() {
           )}
         </div>
 
+        {/* CLIENTE */}
         <div className="card vstack" style={{ gap: 16 }}>
           <label>Cliente *</label>
           <select
@@ -103,6 +113,7 @@ export default function RegisterReservation() {
           </select>
         </div>
 
+        {/* DATOS ECONÓMICOS */}
         <div className="card vstack" style={{ gap: 16 }}>
           <div className="form-row">
             <Input
@@ -123,23 +134,77 @@ export default function RegisterReservation() {
           <div className="form-group">
             <label>Forma de pago</label>
             <select
-                value={paymentMethod}
-                onChange={e => setPaymentMethod(e.currentTarget.value)}
-                required
+              value={paymentMethod}
+              onChange={e => setPaymentMethod(e.currentTarget.value)}
+              required
             >
-                <option value="">Seleccionar…</option>
-                <option value="efectivo">Efectivo</option>
-                <option value="cheque">Cheque</option>
-                <option value="tarjeta_debito">Tarjeta de Débito</option>
-                <option value="tarjeta_credito">Tarjeta de Crédito</option>
-                <option value="transferencia">Transferencia</option>
+              <option value="">Seleccionar…</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="cheque">Cheque</option>
+              <option value="tarjeta_debito">Tarjeta de Débito</option>
+              <option value="tarjeta_credito">Tarjeta de Crédito</option>
+              <option value="transferencia">Transferencia</option>
             </select>
+          </div>
         </div>
 
+        {/* VEHÍCULO USADO COMO PARTE DE PAGO */}
+        <div className="card vstack" style={{ gap: 12 }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={hasTradeIn}
+              onChange={e => setHasTradeIn(e.currentTarget.checked)}
+            />{' '}
+            Entrega un vehículo como parte de pago
+          </label>
+
+          {hasTradeIn && (
+            <div className="vstack" style={{ gap: 12 }}>
+              <label>Seleccionar vehículo usado</label>
+              <select
+                value={tradeInVehicleId}
+                onChange={e => setTradeInVehicleId(parseInt(e.currentTarget.value) || '')}
+                required={hasTradeIn}
+              >
+                <option value="">Seleccionar…</option>
+                {vehicles.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.brand} {v.model} ({v.plate}) - $
+                    {v.price?.toLocaleString() || '—'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* GASTOS DE TALLER */}
+        <div className="card vstack" style={{ gap: 12 }}>
+          <Input
+            label="Gastos de taller ($)"
+            type="number"
+            value={workshopExpenses as any}
+            onChange={e => setWorkshopExpenses(parseFloat(e.currentTarget.value) || '')}
+            placeholder="Ej: 45000"
+          />
+        </div>
+
+        {/* COMENTARIOS */}
+        <div className="card vstack" style={{ gap: 12 }}>
+          <label>Comentarios</label>
           <textarea
-            placeholder="Comentarios"
+            placeholder="Observaciones adicionales, condiciones de pago, etc."
             value={comments}
             onChange={e => setComments(e.currentTarget.value)}
+            style={{
+              background: '#0c0f14',
+              color: 'var(--color-text)',
+              border: '1px solid #252b37',
+              borderRadius: 10,
+              padding: '10px 12px',
+              minHeight: 80,
+            }}
           />
         </div>
 
@@ -150,7 +215,9 @@ export default function RegisterReservation() {
         </div>
       </form>
 
-      {toast && <Toast message={toast} type={toast.includes('✅') ? 'success' : 'error'} />}
+      {toast && (
+        <Toast message={toast} type={toast.includes('✅') ? 'success' : 'error'} />
+      )}
     </div>
   )
 }

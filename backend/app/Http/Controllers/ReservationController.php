@@ -5,169 +5,116 @@ namespace App\Http\Controllers;
 use App\Models\Reservation;
 use App\Models\Vehicle;
 use App\Models\Customer;
-use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class ReservationController extends Controller
 {
-    /**
-     * Muestra el listado de reservas
-     */
+    // ================= LISTAR TODAS LAS RESERVAS =================
     public function index()
     {
-        $reservations = Reservation::with(['vehicle', 'customer', 'seller', 'usedVehicle'])
-            ->orderBy('date', 'desc')
+        $reservations = Reservation::with(['vehicle', 'usedVehicle', 'customer', 'seller'])
+            ->orderByDesc('date')
             ->get();
 
-        return response()->json($reservations);
+        // Agregamos la ganancia calculada
+        $reservations->each(function ($r) {
+            $r->profit = $r->profit; // atributo virtual
+        });
+
+        return response()->json(['data' => $reservations]);
     }
 
-    /**
-     * Devuelve datos necesarios para armar el formulario (vehículos, clientes, vendedores)
-     */
-    public function create(Request $request)
-{
-    $vehicles = \App\Models\Vehicle::where('status', 'disponible')->get(['id', 'plate', 'brand', 'model']);
-    $customers = \App\Models\Customer::orderBy('last_name')->get(['id', 'first_name', 'last_name']);
-    $sellers = \App\Models\User::select('id', 'name')->get();
+    // ================= FORMULARIO DE CREACIÓN (datos iniciales) =================
+    public function create()
+    {
+        // Vehículos disponibles para vender o tomar en parte de pago
+        $vehicles = Vehicle::where('status', 'disponible')->get(['id', 'brand', 'model', 'plate', 'price']);
+        $customers = Customer::orderBy('last_name')->get(['id', 'first_name', 'last_name']);
 
-    return response()->json([
-        'vehicles' => $vehicles,
-        'customers' => $customers,
-        'sellers' => $sellers,
-        'logged_user' => $request->user(), // opcional: te da el vendedor actual
-    ]);
-}
+        return response()->json([
+            'vehicles' => $vehicles,
+            'customers' => $customers,
+        ]);
+    }
 
-
-    /**
-     * Registra una nueva reserva
-     */
+    // ================= GUARDAR NUEVA RESERVA =================
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'vehicle_id'       => 'required|exists:vehicles,id',
-            'customer_id'      => 'required|exists:customers,id',
-            'seller_id'        => 'required|exists:users,id',
-            'used_vehicle_id'  => 'nullable|exists:vehicles,id',
-            'price'            => 'required|numeric|min:0',
-            'deposit'          => 'nullable|numeric|min:0',
-            'payment_method'   => 'nullable|string|max:50',
-            'payment_details'  => 'nullable|string',
-            'comments'         => 'nullable|string',
+        $data = $request->validate([
+            'vehicle_id'        => 'required|exists:vehicles,id',
+            'customer_id'       => 'required|exists:customers,id',
+            'used_vehicle_id'   => 'nullable|exists:vehicles,id',
+            'price'             => 'required|numeric|min:0',
+            'deposit'           => 'nullable|numeric|min:0',
+            'payment_method'    => 'required|string|max:50',
+            'payment_details'   => 'nullable|string|max:255',
+            'workshop_expenses' => 'nullable|numeric|min:0',
+            'comments'          => 'nullable|string|max:1000',
+            'status'            => 'nullable|string|max:50',
+            'date'              => 'nullable|date',
         ]);
 
-        DB::beginTransaction();
+        // Asignar vendedor automáticamente si está autenticado
+        $data['seller_id'] = Auth::id() ?? $request->seller_id ?? 1;
+        $data['status'] = $data['status'] ?? 'pendiente';
+        $data['date'] = $data['date'] ?? now();
 
-        try {
-            // Crear reserva
-            $reservation = Reservation::create(array_merge($validated, [
-                'date' => now(),
-                'status' => 'pendiente',
-                'seller_id' => $request->user()->id, // ← usuario autenticado (vendedor)
-            ]));
+        $reservation = Reservation::create($data);
 
-
-            // Actualizar estado del vehículo
-            $vehicle = Vehicle::find($validated['vehicle_id']);
-            $vehicle->update(['status' => 'reservado']);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Reserva creada correctamente.',
-                'reservation' => $reservation->load(['vehicle', 'customer', 'seller']),
-            ], 201);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'error' => 'Error al crear la reserva.',
-                'details' => $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'Reserva registrada correctamente ✅',
+            'data' => [
+                ...$reservation->load(['vehicle', 'usedVehicle', 'customer', 'seller'])->toArray(),
+                'profit' => $reservation->profit,
+            ]
+        ], 201);
     }
 
-    /**
-     * Muestra una reserva específica
-     */
-    public function show($id)
+    // ================= MOSTRAR UNA RESERVA =================
+    public function show(Reservation $reservation)
     {
-        $reservation = Reservation::with(['vehicle', 'customer', 'seller', 'usedVehicle'])->findOrFail($id);
-        return response()->json($reservation);
+        $reservation->load(['vehicle', 'usedVehicle', 'customer', 'seller']);
+        $reservation->profit = $reservation->profit;
+
+        return response()->json(['data' => $reservation]);
     }
 
-    /**
-     * Actualiza una reserva existente
-     */
-    public function update(Request $request, $id)
+    // ================= ACTUALIZAR RESERVA =================
+    public function update(Request $request, Reservation $reservation)
     {
-        $reservation = Reservation::findOrFail($id);
-
-        $validated = $request->validate([
-            'price'           => 'required|numeric|min:0',
-            'deposit'         => 'nullable|numeric|min:0',
-            'payment_method'  => 'nullable|string|max:50',
-            'payment_details' => 'nullable|string',
-            'comments'        => 'nullable|string',
-            'status'          => 'required|in:pendiente,confirmada,anulada',
+        $data = $request->validate([
+            'vehicle_id'        => 'sometimes|exists:vehicles,id',
+            'customer_id'       => 'sometimes|exists:customers,id',
+            'used_vehicle_id'   => 'nullable|exists:vehicles,id',
+            'price'             => 'sometimes|numeric|min:0',
+            'deposit'           => 'nullable|numeric|min:0',
+            'payment_method'    => 'sometimes|string|max:50',
+            'payment_details'   => 'nullable|string|max:255',
+            'workshop_expenses' => 'nullable|numeric|min:0',
+            'comments'          => 'nullable|string|max:1000',
+            'status'            => 'nullable|string|max:50',
+            'date'              => 'nullable|date',
         ]);
 
-        DB::beginTransaction();
+        $reservation->update($data);
 
-        try {
-            $reservation->update($validated);
-
-            // Si se confirma la reserva, el vehículo pasa a "vendido"
-            if ($validated['status'] === 'confirmada') {
-                $reservation->vehicle->update(['status' => 'vendido']);
-            }
-
-            // Si se anula, vuelve a "disponible"
-            if ($validated['status'] === 'anulada') {
-                $reservation->vehicle->update(['status' => 'disponible']);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Reserva actualizada correctamente.',
-                'reservation' => $reservation->load(['vehicle', 'customer', 'seller']),
-            ]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'error' => 'Error al actualizar la reserva.',
-                'details' => $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'Reserva actualizada correctamente ✅',
+            'data' => [
+                ...$reservation->load(['vehicle', 'usedVehicle', 'customer', 'seller'])->toArray(),
+                'profit' => $reservation->profit,
+            ]
+        ]);
     }
 
-    /**
-     * Elimina una reserva
-     */
-    public function destroy($id)
+    // ================= ELIMINAR RESERVA =================
+    public function destroy(Reservation $reservation)
     {
-        $reservation = Reservation::findOrFail($id);
+        $reservation->delete();
 
-        DB::beginTransaction();
-
-        try {
-            // liberar vehículo si estaba reservado
-            if ($reservation->status === 'pendiente') {
-                $reservation->vehicle->update(['status' => 'disponible']);
-            }
-
-            $reservation->delete();
-            DB::commit();
-
-            return response()->json(['message' => 'Reserva eliminada correctamente.']);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'error' => 'Error al eliminar la reserva.',
-                'details' => $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'Reserva eliminada correctamente',
+        ]);
     }
 }
