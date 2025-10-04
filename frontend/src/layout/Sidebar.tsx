@@ -25,6 +25,11 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           🚙 Administración de Vehículos
         </NavLink>
 
+        <NavLink to="/reservas" className="nav-link">
+          📅 Reservas de Unidades
+        </NavLink>
+
+
         {isAdmin && (
           <>
             <hr className="sidebar-separator" />

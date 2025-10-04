@@ -16,6 +16,9 @@ import RolesEdit from './pages/admin/roles/Edit'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 import Layout from './layout/Layout'
+import ReservationsList from './pages/reservations/List'
+import RegisterReservation from './pages/reservations/Register'
+
 
 export default function App() {
   return (
@@ -173,6 +176,29 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+
+      {/* Reservas */}
+<Route
+  path="/reservas"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <ReservationsList />
+      </Layout>
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/reservas/nueva"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <RegisterReservation />
+      </Layout>
+    </ProtectedRoute>
+  }
+/>
+
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
