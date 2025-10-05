@@ -45,7 +45,7 @@ export default function UsersEdit() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Editar usuario</div>
-        <Link className="link" to="/admin/usuarios">Volver</Link>
+        <Link className="enlace" to="/admin/usuarios">Volver</Link>
       </div>
 
       <UserForm initial={initial ?? {}} onSubmit={handleSubmit} submitting={saving} isEdit />

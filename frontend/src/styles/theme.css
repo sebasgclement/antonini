@@ -236,6 +236,20 @@ table td:last-child .hstack {
   .sidebar-footer { display: flex; }
 }
 
+.enlace {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.enlace:hover {
+  color: var(--color-primary-600);
+  text-decoration: underline;
+}
+
 /* ===== Formularios ===== */
 input, select, textarea {
   background: #0c0f14;
@@ -302,4 +316,232 @@ form button {
     flex-direction: column;
     gap: 12px;
   }
+}
+
+/* ===== Reportes Dashboard ===== */
+.report-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* === Filtros === */
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: end; /* 🔹 mantiene todos los campos alineados abajo */
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* 🔹 alinea label+select hacia abajo */
+}
+
+.form-group select {
+  height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0c0f14;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+/* 🔹 elimina espacio entre label y select para igualar a los inputs */
+.form-group > label {
+  margin-bottom: 4px;
+}
+
+/* === Botonera === */
+.report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* === Widgets === */
+.dashboard-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.widget {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.widget:hover {
+  transform: translateY(-3px);
+  background: #1b1f27;
+}
+
+.widget-title {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.widget-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.text-success {
+  color: #10b981;
+}
+
+/* === Tablas === */
+.report-section {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.report-table th,
+.report-table td {
+  padding: 10px 12px;
+  border-top: 1px solid #1f2430;
+}
+
+.report-table th {
+  color: var(--color-muted);
+  text-align: left;
+}
+
+.report-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.report-table-empty {
+  text-align: center;
+  padding: 12px;
+  color: var(--color-muted);
+}
+
+.report-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+/* === Responsive === */
+@media (max-width: 1100px) {
+  .report-filters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .report-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
+/* === FIX FINAL: alineación uniforme inputs/select === */
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.report-filters > * {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* 🔹 todos los grupos alineados al fondo */
+}
+
+.report-filters label {
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+.report-filters input,
+.report-filters select {
+  height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0c0f14;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  appearance: none;
+  line-height: 1.5;
+}
+
+.report-filters select {
+  background-image: url("data:image/svg+xml,%3Csvg fill='white' height='16' width='16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6l4 4 4-4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  padding-right: 32px;
+}
+
+/* === Reportes: grid de filtros (versión compacta y consistente) === */
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+/* Cada celda del grid alinea contenido por la base */
+.report-filters .field {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* Label uniforme */
+.report-filters .field > label {
+  margin-bottom: 6px;
+  color: var(--color-muted);
+}
+
+/* Controles con la misma altura/padding que tus Input */
+.report-filters .field :is(input, select) {
+  height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0c0f14;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  line-height: 1.5;
+  width: 100%;
+}
+
+/* Select con caret custom (sin tocar la altura) */
+.report-filters .field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg fill='white' height='16' width='16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6l4 4 4-4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  padding-right: 32px;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .report-filters { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .report-filters { grid-template-columns: 1fr; }
 }

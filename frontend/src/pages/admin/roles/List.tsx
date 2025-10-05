@@ -44,7 +44,7 @@ export default function RolesList() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Roles</div>
-        <Link className="link" to="/admin/roles/crear">+ Nuevo</Link>
+        <Link className="enlace" to="/admin/roles/crear">+ Nuevo</Link>
       </div>
 
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>

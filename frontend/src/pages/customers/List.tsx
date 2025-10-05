@@ -51,7 +51,7 @@ export default function CustomersList() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Clientes</div>
-        <Link className="link" to="/clientes/registro">+ Nuevo cliente</Link>
+        <Link className="enlace" to="/clientes/registro">+ Nuevo cliente</Link>
       </div>
 
       {/* input con estilo igual a vehículos */}

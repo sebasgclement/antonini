@@ -43,7 +43,7 @@ export default function RolesEdit() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Editar rol</div>
-        <Link className="link" to="/admin/roles">Volver</Link>
+        <Link className="enlace" to="/admin/roles">Volver</Link>
       </div>
 
       <RoleForm initial={initial ?? {}} onSubmit={handleSubmit} submitting={saving} isEdit />

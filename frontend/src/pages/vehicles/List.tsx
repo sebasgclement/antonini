@@ -89,7 +89,7 @@ export default function VehiclesList() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Vehículos</div>
-        <Link className="link" to="/vehiculos/registro">+ Nuevo vehículo</Link>
+        <Link className="enlace" to="/vehiculos/registro">+ Nuevo vehículo</Link>
       </div>
 
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>

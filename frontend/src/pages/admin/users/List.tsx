@@ -70,7 +70,7 @@ export default function UsersList() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Usuarios</div>
-        <Link className="link" to="/admin/usuarios/crear">+ Nuevo</Link>
+        <Link className="enlace" to="/admin/usuarios/crear">+ Nuevo</Link>
       </div>
 
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>

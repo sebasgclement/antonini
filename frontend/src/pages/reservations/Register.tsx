@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../../lib/api'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -71,34 +71,37 @@ export default function RegisterReservation() {
         <div className="title">Registrar reserva</div>
 
         {/* VEHÍCULO PRINCIPAL */}
-        <div className="card vstack" style={{ gap: 16 }}>
-          <label>Vehículo *</label>
-          {vehicles.length > 0 ? (
-            <select
-              value={vehicleId}
-              onChange={e => setVehicleId(parseInt(e.currentTarget.value) || '')}
-              required
-            >
-              <option value="">Seleccionar…</option>
-              {vehicles.map(v => (
-                <option key={v.id} value={v.id}>
-                  {v.brand} {v.model} ({v.plate})
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div>
-              No hay vehículos disponibles.{' '}
-              <Link to="/vehiculos/registro" className="btn-link">
-                Registrar vehículo
-              </Link>
-            </div>
-          )}
-        </div>
+      <div className="card vstack" style={{ gap: 16 }}>
+        <label>Vehículo *</label>
+
+        
+        <a href="/vehiculos/registro" className="enlace">
+          + Registrar vehículo
+        </a>
+
+        <select
+          value={vehicleId}
+          onChange={(e) => setVehicleId(parseInt(e.currentTarget.value) || '')}
+          required
+        >
+          <option value="">Seleccionar…</option>
+          {vehicles.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.brand} {v.model} ({v.plate})
+            </option>
+          ))}
+        </select>
+      </div>
 
         {/* CLIENTE */}
         <div className="card vstack" style={{ gap: 16 }}>
           <label>Cliente *</label>
+          {/* 🔹 Nuevo: enlace siempre visible */}
+          
+            <a href="/clientes/registro" className='enlace'>
+              + Registrar cliente
+            </a>
+          
           <select
             value={customerId}
             onChange={e => setCustomerId(parseInt(e.currentTarget.value) || '')}

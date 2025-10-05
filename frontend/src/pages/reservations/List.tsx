@@ -31,7 +31,7 @@ export default function ReservationsList() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Reservas</div>
-        <Link className="link" to="/reservas/nueva">+ Nueva reserva</Link>
+        <Link className="enlace" to="/reservas/nueva">+ Nueva reserva</Link>
       </div>
 
       <div className="card" style={{ overflowX: 'auto' }}>

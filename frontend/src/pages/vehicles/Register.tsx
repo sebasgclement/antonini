@@ -1,83 +1,125 @@
-// src/pages/vehicles/Register.tsx
-import { useState, type FormEvent } from 'react'
-import api from '../../lib/api'
-import Button from '../../components/ui/Button'
-import Input from '../../components/ui/Input'
-import Toast from '../../components/ui/Toast'
+import { useState, type FormEvent, type ChangeEvent } from "react";
+import api from "../../lib/api";
+import Button from "../../components/ui/Button";
+import Input from "../../components/ui/Input";
+import Toast from "../../components/ui/Toast";
 
 export default function RegisterVehicle() {
-  const [plate, setPlate] = useState('')
-  const [brand, setBrand] = useState('')
-  const [model, setModel] = useState('')
-  const [year, setYear] = useState<number | ''>('')
-  const [vin, setVin] = useState('')
-  const [color, setColor] = useState('')
-  const [km, setKm] = useState<number | ''>('')
-  const [fuelLevel, setFuelLevel] = useState<number | ''>('')
+  const [plate, setPlate] = useState("");
+  const [brand, setBrand] = useState("");
+  const [model, setModel] = useState("");
+  const [year, setYear] = useState<number | "">("");
+  const [vin, setVin] = useState("");
+  const [color, setColor] = useState("");
+  const [km, setKm] = useState<number | "">("");
+  const [fuelLevel, setFuelLevel] = useState<number | "">("");
 
-  const [ownership, setOwnership] = useState<'propio' | 'consignado'>('consignado')
-  const [customerId, setCustomerId] = useState<number | ''>('')
-  const [customerName, setCustomerName] = useState('')
-  const [customerEmail, setCustomerEmail] = useState('')
-  const [customerPhone, setCustomerPhone] = useState('')
+  const [ownership, setOwnership] = useState<"propio" | "consignado">("consignado");
+  const [dni, setDni] = useState("");
+  const [customer, setCustomer] = useState<any | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
 
-  const [checkSpare, setCheckSpare] = useState(true)
-  const [checkJack, setCheckJack] = useState(true)
-  const [checkDocs, setCheckDocs] = useState(true)
-  const [notes, setNotes] = useState('')
+  const [checkSpare, setCheckSpare] = useState(true);
+  const [checkJack, setCheckJack] = useState(true);
+  const [checkDocs, setCheckDocs] = useState(true);
+  const [notes, setNotes] = useState("");
 
-  const [loading, setLoading] = useState(false)
-  const [toast, setToast] = useState('')
+  const [photoFront, setPhotoFront] = useState<File | null>(null);
+  const [photoBack, setPhotoBack] = useState<File | null>(null);
+  const [photoLeft, setPhotoLeft] = useState<File | null>(null);
+  const [photoRight, setPhotoRight] = useState<File | null>(null);
+  const [preview, setPreview] = useState<Record<string, string | null>>({});
+
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState("");
+
+  // Manejo de imágenes
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>, key: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setPreview(prev => ({ ...prev, [key]: url }));
+    if (key === "front") setPhotoFront(file);
+    if (key === "back") setPhotoBack(file);
+    if (key === "left") setPhotoLeft(file);
+    if (key === "right") setPhotoRight(file);
+  };
+
+  // Buscar cliente por DNI
+  const searchByDni = async () => {
+    if (!dni.trim()) return;
+    try {
+      const res = await api.get(`/customers?dni=${dni}`);
+      const found = res.data?.data?.[0] || null;
+      if (found) {
+        setCustomer(found);
+        setCustomerName(found.first_name + " " + found.last_name);
+        setCustomerEmail(found.email || "");
+        setCustomerPhone(found.phone || "");
+        setToast("Cliente encontrado ✅");
+      } else {
+        setCustomer(null);
+        setToast("No se encontró cliente con ese DNI");
+      }
+    } catch {
+      setToast("Error al buscar cliente");
+    }
+  };
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setLoading(true)
-    setToast('')
+    e.preventDefault();
+    setLoading(true);
+    setToast("");
 
     try {
-      const payload: any = {
-        plate,
-        brand,
-        model,
-        year: year === '' ? undefined : year,
-        vin: vin || undefined,
-        color: color || undefined,
-        km: km === '' ? undefined : km,
-        fuel_level: fuelLevel === '' ? undefined : fuelLevel,
-        ownership,
-        check_spare: checkSpare,
-        check_jack: checkJack,
-        check_docs: checkDocs,
-        notes: notes || undefined,
+      const form = new FormData();
+      form.append("plate", plate);
+      form.append("brand", brand);
+      form.append("model", model);
+      if (year) form.append("year", String(year));
+      if (vin) form.append("vin", vin);
+      if (color) form.append("color", color);
+      if (km) form.append("km", String(km));
+      if (fuelLevel) form.append("fuel_level", String(fuelLevel));
+      form.append("ownership", ownership);
+      form.append("check_spare", String(checkSpare));
+      form.append("check_jack", String(checkJack));
+      form.append("check_docs", String(checkDocs));
+      if (notes) form.append("notes", notes);
+
+      if (ownership === "consignado") {
+        form.append("customer_dni", dni);
+        form.append("customer_name", customerName);
+        if (customerEmail) form.append("customer_email", customerEmail);
+        if (customerPhone) form.append("customer_phone", customerPhone);
       }
 
-      // cliente solo si es consignado
-      if (ownership === 'consignado') {
-        payload.customer_id = customerId === '' ? undefined : customerId
-        if (!payload.customer_id) {
-          payload.customer = {
-            name: customerName || undefined,
-            email: customerEmail || undefined,
-            phone: customerPhone || undefined,
-          }
-        }
-      }
+      // Adjuntar fotos si existen
+      if (photoFront) form.append("photo_front", photoFront);
+      if (photoBack) form.append("photo_back", photoBack);
+      if (photoLeft) form.append("photo_left", photoLeft);
+      if (photoRight) form.append("photo_right", photoRight);
 
-      await api.post('/vehicles', payload)
-      setToast('Vehículo registrado con éxito ✅')
+      await api.post("/vehicles", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
-      // limpiar
-      setPlate(''); setBrand(''); setModel(''); setYear('')
-      setVin(''); setColor(''); setKm(''); setFuelLevel('')
-      setOwnership('consignado')
-      setCustomerId(''); setCustomerName(''); setCustomerEmail(''); setCustomerPhone('')
-      setCheckSpare(true); setCheckJack(true); setCheckDocs(true); setNotes('')
+      setToast("Vehículo registrado con éxito ✅");
+      setPlate(""); setBrand(""); setModel(""); setYear("");
+      setVin(""); setColor(""); setKm(""); setFuelLevel("");
+      setOwnership("consignado"); setDni("");
+      setCustomer(null); setCustomerName(""); setCustomerEmail(""); setCustomerPhone("");
+      setCheckSpare(true); setCheckJack(true); setCheckDocs(true); setNotes("");
+      setPhotoFront(null); setPhotoBack(null); setPhotoLeft(null); setPhotoRight(null);
+      setPreview({});
     } catch (err: any) {
-      setToast(err?.response?.data?.message || 'No se pudo registrar el vehículo')
+      setToast(err?.response?.data?.message || "No se pudo registrar el vehículo");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="container">
@@ -90,13 +132,7 @@ export default function RegisterVehicle() {
           <div className="hstack" style={{ gap: 16 }}>
             <Input label="Marca *" value={brand} onChange={e => setBrand(e.currentTarget.value)} required />
             <Input label="Modelo *" value={model} onChange={e => setModel(e.currentTarget.value)} required />
-            <Input label="Año" type="number" value={year as any} onChange={e => setYear(parseInt(e.currentTarget.value) || '')} />
-          </div>
-          <div className="hstack" style={{ gap: 16 }}>
-            <Input label="VIN / Chasis" value={vin} onChange={e => setVin(e.currentTarget.value)} />
-            <Input label="Color" value={color} onChange={e => setColor(e.currentTarget.value)} />
-            <Input label="Kilometraje" type="number" value={km as any} onChange={e => setKm(parseInt(e.currentTarget.value) || '')} />
-            <Input label="Combustible (%)" type="number" value={fuelLevel as any} onChange={e => setFuelLevel(parseInt(e.currentTarget.value) || '')} />
+            <Input label="Año" type="number" value={year as any} onChange={e => setYear(parseInt(e.currentTarget.value) || "")} />
           </div>
         </div>
 
@@ -105,28 +141,54 @@ export default function RegisterVehicle() {
           <div className="hstack" style={{ gap: 16 }}>
             <label>
               <input type="radio" name="ownership" value="propio"
-                checked={ownership === 'propio'} onChange={() => setOwnership('propio')} />
+                checked={ownership === "propio"} onChange={() => setOwnership("propio")} />
               Propio
             </label>
             <label>
               <input type="radio" name="ownership" value="consignado"
-                checked={ownership === 'consignado'} onChange={() => setOwnership('consignado')} />
+                checked={ownership === "consignado"} onChange={() => setOwnership("consignado")} />
               Consignado
             </label>
           </div>
         </div>
 
-        {/* Datos cliente, solo si consignado */}
-        {ownership === 'consignado' && (
+        {/* Cliente consignado */}
+        {ownership === "consignado" && (
           <div className="card vstack" style={{ gap: 16 }}>
             <div className="title">Datos del cliente</div>
-            <Input label="ID Cliente existente" type="number" value={customerId as any}
-              onChange={e => setCustomerId(parseInt(e.currentTarget.value) || '')} />
+
+            <div className="form-row" style={{ alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <Input label="DNI *" value={dni} onChange={e => setDni(e.currentTarget.value)} placeholder="Ej: 40123123" required />
+              </div>
+              <Button type="button" onClick={searchByDni}>Buscar</Button>
+            </div>
+
+            <a href="/clientes/registro" className="enlace">+ Registrar nuevo cliente</a>
             <Input label="Nombre completo" value={customerName} onChange={e => setCustomerName(e.currentTarget.value)} />
             <Input label="Email" type="email" value={customerEmail} onChange={e => setCustomerEmail(e.currentTarget.value)} />
             <Input label="Teléfono" value={customerPhone} onChange={e => setCustomerPhone(e.currentTarget.value)} />
           </div>
         )}
+
+        {/* Fotos del vehículo */}
+        <div className="card vstack" style={{ gap: 12 }}>
+          <label>Fotos del vehículo (opcional)</label>
+          <div className="hstack" style={{ flexWrap: "wrap", gap: 16 }}>
+            {["front", "back", "left", "right"].map(side => (
+              <div key={side} className="form-group" style={{ flex: 1, minWidth: 180 }}>
+                <label>{{
+                  front: "Frente",
+                  back: "Dorso",
+                  left: "Lateral Izquierdo",
+                  right: "Lateral Derecho",
+                }[side]}</label>
+                <input type="file" accept="image/*" onChange={e => handleFileChange(e, side)} />
+                {preview[side] && <img src={preview[side]!} alt={side} style={{ width: "100%", maxWidth: 280, marginTop: 8, borderRadius: 8 }} />}
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Checklist */}
         <div className="card vstack" style={{ gap: 8 }}>
@@ -139,22 +201,22 @@ export default function RegisterVehicle() {
             value={notes}
             onChange={e => setNotes(e.currentTarget.value)}
             style={{
-              background: '#0c0f14',
-              color: 'var(--color-text)',
-              border: '1px solid #252b37',
+              background: "#0c0f14",
+              color: "var(--color-text)",
+              border: "1px solid #252b37",
               borderRadius: 10,
-              padding: '10px 12px',
+              padding: "10px 12px",
               minHeight: 80,
             }}
           />
         </div>
 
-        <div className="hstack" style={{ justifyContent: 'flex-end' }}>
+        <div className="hstack" style={{ justifyContent: "flex-end" }}>
           <Button type="submit" loading={loading}>Guardar</Button>
         </div>
       </form>
 
-      {toast && <Toast message={toast} type={toast.includes('éxito') ? 'success' : 'error'} />}
+      {toast && <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />}
     </div>
-  )
+  );
 }

@@ -25,7 +25,7 @@ export default function UsersCreate() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Nuevo usuario</div>
-        <Link className="link" to="/admin/usuarios">Volver</Link>
+        <Link className="enlace" to="/admin/usuarios">Volver</Link>
       </div>
 
       {/* Card contenedor como en Clientes */}
