@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;   // 👈 Importá el base Controller
+use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class VehicleController extends Controller
 {
@@ -14,7 +15,7 @@ class VehicleController extends Controller
         $q = Vehicle::query()->with('customer');
 
         if ($search = $req->get('search')) {
-            $q->where(function($sub) use ($search) {
+            $q->where(function ($sub) use ($search) {
                 $sub->where('brand', 'like', "%$search%")
                     ->orWhere('model', 'like', "%$search%")
                     ->orWhere('plate', 'like', "%$search%")
@@ -22,20 +23,25 @@ class VehicleController extends Controller
             });
         }
 
-        $vehicles = $q->paginate(10);
+        $vehicles = $q->latest()->paginate(10);
 
-        return response()->json([
-            'ok'   => true,
-            'data' => $vehicles
-        ]);
+        return response()->json(['ok' => true, 'data' => $vehicles]);
     }
 
     // GET /vehicles/{id}
     public function show(Vehicle $vehicle)
     {
+        // 🔹 Añadir URLs absolutas a las fotos
+        foreach (['front', 'back', 'left', 'right'] as $side) {
+            $key = "photo_{$side}";
+            $vehicle->{$key . '_url'} = $vehicle->{$key}
+                ? asset('storage/' . $vehicle->{$key})
+                : null;
+        }
+
         return response()->json([
-            'ok'   => true,
-            'data' => $vehicle->load('customer', 'expenses')
+            'ok' => true,
+            'data' => $vehicle->load('customer', 'expenses'),
         ]);
     }
 
@@ -43,30 +49,44 @@ class VehicleController extends Controller
     public function store(Request $req)
     {
         $data = $req->validate([
-            'brand'           => 'required|string',
-            'model'           => 'required|string',
-            'year'            => 'nullable|integer',
-            'plate'           => 'required|string|unique:vehicles,plate',
-            'vin'             => 'nullable|string',
-            'color'           => 'nullable|string',
-            'km'              => 'nullable|integer',
-            'fuel_level'      => 'nullable|integer|min:0|max:100',
-            'ownership'       => 'required|in:propio,consignado',
-            'customer_id'     => 'nullable|exists:customers,id',
+            'brand' => 'required|string',
+            'model' => 'required|string',
+            'year' => 'nullable|integer',
+            'plate' => 'required|string|unique:vehicles,plate',
+            'vin' => 'nullable|string',
+            'color' => 'nullable|string',
+            'km' => 'nullable|integer',
+            'fuel_level' => 'nullable|integer|min:0|max:100',
+            'ownership' => 'required|in:propio,consignado',
+            'customer_id' => 'nullable|exists:customers,id',
             'reference_price' => 'nullable|numeric',
-            'price'           => 'nullable|numeric',
-            'status'          => 'in:disponible,reservado,vendido',
-            'check_spare'     => 'boolean',
-            'check_jack'      => 'boolean',
-            'check_docs'      => 'boolean',
-            'notes'           => 'nullable|string',
+            'price' => 'nullable|numeric',
+            'status' => 'in:disponible,reservado,vendido',
+            'check_spare' => 'boolean',
+            'check_jack' => 'boolean',
+            'check_docs' => 'boolean',
+            'notes' => 'nullable|string',
+
+            // 🆕 imágenes opcionales
+            'photo_front' => 'nullable|image|max:4096',
+            'photo_back' => 'nullable|image|max:4096',
+            'photo_left' => 'nullable|image|max:4096',
+            'photo_right' => 'nullable|image|max:4096',
         ]);
+
+        // 🖼️ Guardar imágenes si existen
+        foreach (['front', 'back', 'left', 'right'] as $side) {
+            $key = "photo_{$side}";
+            if ($req->hasFile($key)) {
+                $data[$key] = $req->file($key)->store('vehicles', 'public');
+            }
+        }
 
         $vehicle = Vehicle::create($data);
 
         return response()->json([
-            'ok'   => true,
-            'data' => $vehicle->load('customer')
+            'ok' => true,
+            'data' => $vehicle->load('customer'),
         ], 201);
     }
 
@@ -74,40 +94,68 @@ class VehicleController extends Controller
     public function update(Request $req, Vehicle $vehicle)
     {
         $data = $req->validate([
-            'brand'           => 'sometimes|string',
-            'model'           => 'sometimes|string',
-            'year'            => 'nullable|integer',
-            'plate'           => 'sometimes|string|unique:vehicles,plate,' . $vehicle->id,
-            'vin'             => 'nullable|string',
-            'color'           => 'nullable|string',
-            'km'              => 'nullable|integer',
-            'fuel_level'      => 'nullable|integer|min:0|max:100',
-            'ownership'       => 'in:propio,consignado',
-            'customer_id'     => 'nullable|exists:customers,id',
+            'brand' => 'sometimes|string',
+            'model' => 'sometimes|string',
+            'year' => 'nullable|integer',
+            'plate' => 'sometimes|string|unique:vehicles,plate,' . $vehicle->id,
+            'vin' => 'nullable|string',
+            'color' => 'nullable|string',
+            'km' => 'nullable|integer',
+            'fuel_level' => 'nullable|integer|min:0|max:100',
+            'ownership' => 'in:propio,consignado',
+            'customer_id' => 'nullable|exists:customers,id',
             'reference_price' => 'nullable|numeric',
-            'price'           => 'nullable|numeric',
-            'status'          => 'in:disponible,reservado,vendido',
-            'check_spare'     => 'boolean',
-            'check_jack'      => 'boolean',
-            'check_docs'      => 'boolean',
-            'notes'           => 'nullable|string',
+            'price' => 'nullable|numeric',
+            'status' => 'in:disponible,reservado,vendido',
+            'check_spare' => 'boolean',
+            'check_jack' => 'boolean',
+            'check_docs' => 'boolean',
+            'notes' => 'nullable|string',
+
+            // imágenes opcionales
+            'photo_front' => 'nullable|image|max:4096',
+            'photo_back' => 'nullable|image|max:4096',
+            'photo_left' => 'nullable|image|max:4096',
+            'photo_right' => 'nullable|image|max:4096',
         ]);
+
+        // 🧹 Eliminar si viene delete_photo_*
+        foreach (['front', 'back', 'left', 'right'] as $side) {
+            $key = "photo_{$side}";
+            if ($req->has("delete_photo_{$side}")) {
+                Storage::disk('public')->delete($vehicle->{$key});
+                $vehicle->{$key} = null;
+            }
+
+            if ($req->hasFile($key)) {
+                if ($vehicle->{$key}) {
+                    Storage::disk('public')->delete($vehicle->{$key});
+                }
+                $data[$key] = $req->file($key)->store('vehicles', 'public');
+            }
+        }
 
         $vehicle->update($data);
 
         return response()->json([
-            'ok'   => true,
-            'data' => $vehicle->load('customer')
+            'ok' => true,
+            'data' => $vehicle->load('customer'),
         ]);
     }
 
     // DELETE /vehicles/{id}
     public function destroy(Vehicle $vehicle)
     {
+        // 🧹 Eliminar fotos si existen
+        foreach (['front', 'back', 'left', 'right'] as $side) {
+            $key = "photo_{$side}";
+            if ($vehicle->{$key}) {
+                Storage::disk('public')->delete($vehicle->{$key});
+            }
+        }
+
         $vehicle->delete();
 
-        return response()->json([
-            'ok' => true
-        ]);
+        return response()->json(['ok' => true]);
     }
 }

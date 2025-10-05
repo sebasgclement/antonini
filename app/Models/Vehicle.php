@@ -12,7 +12,8 @@ class Vehicle extends Model
     protected $fillable = [
         'brand','model','year','plate','vin','color','km','fuel_level',
         'ownership','customer_id','reference_price','price','status',
-        'check_spare','check_jack','check_docs','notes'
+        'check_spare','check_jack','check_docs','notes',
+        'photo_front','photo_back','photo_left','photo_right', // 🆕 nuevas columnas
     ];
 
     protected $casts = [
@@ -40,5 +41,4 @@ class Vehicle extends Model
     {
         return $this->hasMany(Reservation::class);
     }
-
 }
