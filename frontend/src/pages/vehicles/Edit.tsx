@@ -16,7 +16,12 @@ type Vehicle = {
   km?: number
   fuel_level?: number
   ownership: 'propio' | 'consignado'
-  customer_id?: number | null
+  customer_dni?: string
+  customer_name?: string
+  customer_email?: string
+  customer_phone?: string
+  reference_price?: number
+  price?: number
   check_spare: boolean
   check_jack: boolean
   check_docs: boolean
@@ -72,6 +77,28 @@ export default function VehicleEdit() {
     setV(prev => ({ ...prev, [`photo_${side}_url`]: null }))
   }
 
+  // 🔍 Buscar cliente por DNI
+  const searchByDni = async () => {
+    if (!v.customer_dni?.trim()) return
+    try {
+      const res = await api.get(`/customers?dni=${v.customer_dni}`)
+      const found = res.data?.data?.[0] || null
+      if (found) {
+        setV(prev => ({
+          ...prev,
+          customer_name: `${found.first_name} ${found.last_name}`,
+          customer_email: found.email || '',
+          customer_phone: found.phone || '',
+        }))
+        setToast('Cliente encontrado ✅')
+      } else {
+        setToast('No se encontró cliente con ese DNI')
+      }
+    } catch {
+      setToast('Error al buscar cliente')
+    }
+  }
+
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSaving(true)
@@ -85,15 +112,26 @@ export default function VehicleEdit() {
       if (v.color) form.append('color', v.color)
       if (v.km) form.append('km', String(v.km))
       if (v.fuel_level) form.append('fuel_level', String(v.fuel_level))
+      if (v.reference_price) form.append('reference_price', String(v.reference_price))
+      if (v.price) form.append('price', String(v.price))
+
       form.append('ownership', v.ownership || 'propio')
-      if (v.ownership === 'consignado' && v.customer_id)
-        form.append('customer_id', String(v.customer_id))
-      form.append('check_spare', String(v.check_spare || false))
-      form.append('check_jack', String(v.check_jack || false))
-      form.append('check_docs', String(v.check_docs || false))
+
+      if (v.ownership === 'consignado' && v.customer_dni) {
+        form.append('customer_dni', v.customer_dni)
+        form.append('customer_name', v.customer_name || '')
+        if (v.customer_email) form.append('customer_email', v.customer_email)
+        if (v.customer_phone) form.append('customer_phone', v.customer_phone)
+      }
+
+      // ✅ Enviar booleanos como 1/0
+      form.append('check_spare', v.check_spare ? '1' : '0')
+      form.append('check_jack', v.check_jack ? '1' : '0')
+      form.append('check_docs', v.check_docs ? '1' : '0')
+
       if (v.notes) form.append('notes', v.notes)
 
-      // Adjuntar nuevas fotos
+      // Adjuntar nuevas fotos o eliminar
       Object.entries(newPhotos).forEach(([side, file]) => {
         if (file) form.append(`photo_${side}`, file)
         else form.append(`delete_photo_${side}`, '1')
@@ -104,7 +142,7 @@ export default function VehicleEdit() {
       })
 
       setToast('Vehículo actualizado ✅')
-      nav('/vehiculos')
+      setTimeout(() => nav('/vehiculos'), 800)
     } catch (err: any) {
       setToast(err?.response?.data?.message || 'No se pudo actualizar')
     } finally {
@@ -133,7 +171,57 @@ export default function VehicleEdit() {
             <Input label="Kilometraje" type="number" value={v.km || ''} onChange={e => setV({ ...v, km: parseInt(e.currentTarget.value) || undefined })} />
             <Input label="Combustible (%)" type="number" value={v.fuel_level || ''} onChange={e => setV({ ...v, fuel_level: parseInt(e.currentTarget.value) || undefined })} />
           </div>
+
+          {/* 🆕 Campos de precio */}
+          <div className="hstack" style={{ gap: 16 }}>
+            <Input
+              label="Precio de referencia ($)"
+              type="number"
+              value={v.reference_price || ''}
+              onChange={e => setV({ ...v, reference_price: parseFloat(e.currentTarget.value) || undefined })}
+            />
+            <Input
+              label="Precio de venta ($)"
+              type="number"
+              value={v.price || ''}
+              onChange={e => setV({ ...v, price: parseFloat(e.currentTarget.value) || undefined })}
+            />
+          </div>
         </div>
+
+        {/* Propiedad */}
+        <div className="card vstack">
+          <div className="hstack" style={{ gap: 16 }}>
+            <label>
+              <input type="radio" name="ownership" value="propio"
+                checked={v.ownership === 'propio'} onChange={() => setV({ ...v, ownership: 'propio', customer_dni: undefined })} />
+              Propio
+            </label>
+            <label>
+              <input type="radio" name="ownership" value="consignado"
+                checked={v.ownership === 'consignado'} onChange={() => setV({ ...v, ownership: 'consignado' })} />
+              Consignado
+            </label>
+          </div>
+        </div>
+
+        {/* Cliente consignado */}
+        {v.ownership === 'consignado' && (
+          <div className="card vstack" style={{ gap: 16 }}>
+            <div className="title">Datos del cliente</div>
+
+            <div className="form-row" style={{ alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <Input label="DNI *" value={v.customer_dni || ''} onChange={e => setV({ ...v, customer_dni: e.currentTarget.value })} required />
+              </div>
+              <Button type="button" onClick={searchByDni}>Buscar</Button>
+            </div>
+
+            <Input label="Nombre completo" value={v.customer_name || ''} onChange={e => setV({ ...v, customer_name: e.currentTarget.value })} />
+            <Input label="Email" type="email" value={v.customer_email || ''} onChange={e => setV({ ...v, customer_email: e.currentTarget.value })} />
+            <Input label="Teléfono" value={v.customer_phone || ''} onChange={e => setV({ ...v, customer_phone: e.currentTarget.value })} />
+          </div>
+        )}
 
         {/* Fotos */}
         <div className="card vstack" style={{ gap: 12 }}>
@@ -171,30 +259,6 @@ export default function VehicleEdit() {
             ))}
           </div>
         </div>
-
-        {/* Propiedad */}
-        <div className="card vstack">
-          <div className="hstack" style={{ gap: 16 }}>
-            <label>
-              <input type="radio" name="ownership" value="propio"
-                checked={v.ownership === 'propio'} onChange={() => setV({ ...v, ownership: 'propio', customer_id: undefined })} />
-              Propio
-            </label>
-            <label>
-              <input type="radio" name="ownership" value="consignado"
-                checked={v.ownership === 'consignado'} onChange={() => setV({ ...v, ownership: 'consignado' })} />
-              Consignado
-            </label>
-          </div>
-        </div>
-
-        {/* Cliente consignado */}
-        {v.ownership === 'consignado' && (
-          <div className="card vstack" style={{ gap: 16 }}>
-            <div className="title">Datos del cliente</div>
-            <Input label="ID Cliente existente" type="number" value={v.customer_id || ''} onChange={e => setV({ ...v, customer_id: parseInt(e.currentTarget.value) || undefined })} />
-          </div>
-        )}
 
         {/* Checklist */}
         <div className="card vstack" style={{ gap: 8 }}>

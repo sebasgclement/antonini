@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import api from '../../lib/api'
 import usePagedList from '../../hooks/usePagedList'
 import Toast from '../../components/ui/Toast'
-import Button from '../../components/ui/Button'
 import Confirm from '../../components/ui/Confirm'
 import Pagination from '../../components/ui/Pagination'
 
@@ -85,11 +84,25 @@ export default function VehiclesList() {
     }
   }
 
+  const handleCancelSale = async (vehicle: Vehicle) => {
+    try {
+      await api.put(`/vehicles/${vehicle.id}`, { status: 'disponible' })
+      setItems(prev =>
+        prev.map(v => (v.id === vehicle.id ? { ...v, status: 'disponible' } : v))
+      )
+      setToast(`Venta de ${vehicle.plate} cancelada ✅`)
+    } catch {
+      setToast('No se pudo cancelar la venta')
+    }
+  }
+
   return (
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Vehículos</div>
-        <Link className="enlace" to="/vehiculos/registro">+ Nuevo vehículo</Link>
+        <Link className="enlace" to="/vehiculos/registro">
+          + Nuevo vehículo
+        </Link>
       </div>
 
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>
@@ -132,7 +145,7 @@ export default function VehiclesList() {
 
               return (
                 <div key={status} style={{ marginBottom: 24 }}>
-                  {/* Acordeón header */}
+                  {/* Encabezado del acordeón */}
                   <button
                     onClick={() => toggleSection(status)}
                     style={{
@@ -150,13 +163,15 @@ export default function VehiclesList() {
                       borderBottom: '1px solid var(--color-border)',
                     }}
                   >
-                    <span>{title} ({filtered.length})</span>
+                    <span>
+                      {title} ({filtered.length})
+                    </span>
                     <span style={{ fontSize: '1rem', color: 'var(--color-muted)' }}>
                       {isOpen ? '▲' : '▼'}
                     </span>
                   </button>
 
-                  {/* Contenido del acordeón */}
+                  {/* Tabla */}
                   {isOpen && (
                     <table
                       style={{
@@ -187,37 +202,212 @@ export default function VehiclesList() {
                           <tr key={v.id} style={{ borderTop: '1px solid #1f2430' }}>
                             <td style={{ padding: 8 }}>{v.id}</td>
                             <td style={{ padding: 8 }}>{v.plate}</td>
-                            <td style={{ padding: 8 }}>{v.brand} {v.model}</td>
+                            <td style={{ padding: 8 }}>
+                              {v.brand} {v.model}
+                            </td>
                             <td style={{ padding: 8 }}>{v.year || '—'}</td>
                             <td style={{ padding: 8 }}>{v.ownership}</td>
                             <td style={{ padding: 8 }}>
                               {v.ownership === 'consignado'
                                 ? v.customer?.name ||
-                                  [v.customer?.first_name, v.customer?.last_name].filter(Boolean).join(' ') ||
+                                  [v.customer?.first_name, v.customer?.last_name]
+                                    .filter(Boolean)
+                                    .join(' ') ||
                                   `Cliente #${v.customer_id}`
                                 : '—'}
                             </td>
-                            <td style={{ padding: 8 }}>{v.km?.toLocaleString() || '—'}</td>
-                            <td style={{ padding: 8 }}>{v.fuel_level != null ? `${v.fuel_level}%` : '—'}</td>
+                            <td style={{ padding: 8 }}>
+                              {v.km?.toLocaleString() || '—'}
+                            </td>
+                            <td style={{ padding: 8 }}>
+                              {v.fuel_level != null ? `${v.fuel_level}%` : '—'}
+                            </td>
                             <td style={{ padding: 8 }}>
                               {[v.check_spare ? '🛞' : '—', v.check_jack ? '🛠️' : '—', v.check_docs ? '📄' : '—'].join(' ')}
                             </td>
-                            <td style={{ padding: 8 }}>{v.reference_price?.toLocaleString() || '—'}</td>
-                            <td style={{ padding: 8 }}>{v.price?.toLocaleString() || '—'}</td>
-                            <td style={{ padding: 8, textTransform: 'capitalize' }}>{v.status}</td>
                             <td style={{ padding: 8 }}>
-                              <div className="hstack" style={{ justifyContent: 'flex-end', gap: 8 }}>
+                              {v.reference_price?.toLocaleString() || '—'}
+                            </td>
+                            <td style={{ padding: 8 }}>
+                              {v.price?.toLocaleString() || '—'}
+                            </td>
+                            <td style={{ padding: 8, textTransform: 'capitalize' }}>
+                              {v.status}
+                            </td>
+                            <td style={{ padding: 8 }}>
+                              <div
+                                className="hstack"
+                                style={{ justifyContent: 'flex-end', gap: 8 }}
+                              >
+                                {/* 👁 Ver */}
+                                <button
+                                  title="Ver detalles"
+                                  onClick={() => nav(`/vehiculos/${v.id}/ver`)}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--color-muted)',
+                                    fontSize: '1rem',
+                                    cursor: 'pointer',
+                                    padding: '4px 6px',
+                                    transition: 'color 0.2s',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-primary)')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+                                >
+                                  👁
+                                </button>
+
+                                {/* ✎ Editar */}
                                 {v.status !== 'vendido' && (
-                                  <Button onClick={() => nav(`/vehiculos/${v.id}/edit`)}>Editar</Button>
+                                  <button
+                                    title="Editar"
+                                    onClick={() => nav(`/vehiculos/${v.id}/edit`)}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: 'var(--color-muted)',
+                                      fontSize: '1rem',
+                                      cursor: 'pointer',
+                                      padding: '4px 6px',
+                                      transition: 'color 0.2s',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-primary)')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+                                  >
+                                    ✎
+                                  </button>
                                 )}
+
+                                {/* 🛠 Gastos / ↩ Cancelar venta */}
+                                {v.status !== 'vendido' ? (
+                                  <button
+                                    title="Gastos de taller"
+                                    onClick={() => nav(`/vehiculos/${v.id}/gastos`)}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: 'var(--color-muted)',
+                                      fontSize: '1rem',
+                                      cursor: 'pointer',
+                                      padding: '4px 6px',
+                                      transition: 'color 0.2s',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-primary)')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+                                  >
+                                    🛠
+                                  </button>
+                                ) : (
+                                  <button
+                                    title="Cancelar venta (volver a disponible)"
+                                    onClick={() => handleCancelSale(v)}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: 'var(--color-muted)',
+                                      fontSize: '1rem',
+                                      cursor: 'pointer',
+                                      padding: '4px 6px',
+                                      transition: 'color 0.2s',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-primary)')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+                                  >
+                                    ↩️
+                                  </button>
+                                )}
+
+                                {/* ☐ Reservar / ✖ Eliminar */}
                                 {v.status === 'disponible' && (
                                   <>
-                                    <Button onClick={() => nav(`/reservas/nueva?vehicle_id=${v.id}`)}>Reservar</Button>
-                                    <Button onClick={() => setToDelete(v)}>Eliminar</Button>
+                                    <button
+                                      title="Reservar"
+                                      onClick={() => nav(`/reservas/nueva?vehicle_id=${v.id}`)}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--color-muted)',
+                                        fontSize: '1rem',
+                                        cursor: 'pointer',
+                                        padding: '4px 6px',
+                                        transition: 'color 0.2s',
+                                      }}
+                                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-primary)')}
+                                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+                                    >
+                                      ☐
+                                    </button>
+
+                                    <button
+                                      title="Eliminar"
+                                      onClick={() => setToDelete(v)}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--color-muted)',
+                                        fontSize: '1rem',
+                                        cursor: 'pointer',
+                                        padding: '4px 6px',
+                                        transition: 'color 0.2s',
+                                      }}
+                                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-danger)')}
+                                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+                                    >
+                                      ✖
+                                    </button>
                                   </>
                                 )}
+
+                                {/* ↩ Quitar reserva / 💰 Vender */}
                                 {v.status === 'reservado' && (
-                                  <Button onClick={() => handleUnreserve(v)}>Quitar reserva</Button>
+                                  <>
+                                    <button
+                                      title="Quitar reserva"
+                                      onClick={() => handleUnreserve(v)}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--color-muted)',
+                                        fontSize: '1rem',
+                                        cursor: 'pointer',
+                                        padding: '4px 6px',
+                                        transition: 'color 0.2s',
+                                      }}
+                                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-primary)')}
+                                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+                                    >
+                                      ↩
+                                    </button>
+
+                                    <button
+                                      title="Marcar como vendido"
+                                      onClick={async () => {
+                                        try {
+                                          await api.put(`/vehicles/${v.id}`, { status: 'vendido' })
+                                          setItems(prev =>
+                                            prev.map(x => (x.id === v.id ? { ...x, status: 'vendido' } : x))
+                                          )
+                                          setToast(`Vehículo ${v.plate} marcado como vendido ✅`)
+                                        } catch {
+                                          setToast('No se pudo cambiar el estado a vendido')
+                                        }
+                                      }}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#22c55e',
+                                        fontSize: '1.1rem',
+                                        cursor: 'pointer',
+                                        padding: '4px 6px',
+                                        transition: 'transform 0.2s',
+                                      }}
+                                      onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.2)')}
+                                      onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1.0)')}
+                                    >
+                                      💰
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </td>
@@ -240,7 +430,11 @@ export default function VehiclesList() {
       <Confirm
         open={!!toDelete}
         title="Eliminar vehículo"
-        message={<>Vas a eliminar <b>{toDelete?.plate}</b>. Esta acción no se puede deshacer.</>}
+        message={
+          <>
+            Vas a eliminar <b>{toDelete?.plate}</b>. Esta acción no se puede deshacer.
+          </>
+        }
         onCancel={() => setToDelete(null)}
         onConfirm={onDelete}
       />

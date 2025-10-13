@@ -1,17 +1,14 @@
-// src/pages/customers/List.tsx
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../../lib/api'
 import usePagedList from '../../hooks/usePagedList'
 import Toast from '../../components/ui/Toast'
-import Button from '../../components/ui/Button'
 import Confirm from '../../components/ui/Confirm'
 import Pagination from '../../components/ui/Pagination'
 import { displayCustomerName, type Customer } from '../../types/customer'
 
 export default function CustomersList() {
   const nav = useNavigate()
-
   const {
     items,
     setItems,
@@ -27,7 +24,6 @@ export default function CustomersList() {
 
   const [toast, setToast] = useState('')
   const [toDelete, setToDelete] = useState<Customer | null>(null)
-
   const rows = useMemo(() => items, [items])
 
   const onDelete = async () => {
@@ -39,7 +35,7 @@ export default function CustomersList() {
         setPage(page - 1)
         setTimeout(refetch, 0)
       }
-      setToast('Cliente eliminado')
+      setToast('Cliente eliminado ✅')
     } catch (e: any) {
       setToast(e?.response?.data?.message || 'No se pudo eliminar')
     } finally {
@@ -51,10 +47,12 @@ export default function CustomersList() {
     <div className="vstack" style={{ gap: 12 }}>
       <div className="hstack" style={{ justifyContent: 'space-between' }}>
         <div className="title">Clientes</div>
-        <Link className="enlace" to="/clientes/registro">+ Nuevo cliente</Link>
+        <Link className="enlace" to="/clientes/registro">
+          + Nuevo cliente
+        </Link>
       </div>
 
-      {/* input con estilo igual a vehículos */}
+      {/* 🔍 Buscador */}
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>
         <input
           placeholder="Buscar por nombre, email, doc, teléfono…"
@@ -75,9 +73,13 @@ export default function CustomersList() {
         {loading ? (
           <div style={{ padding: 16 }}>Cargando…</div>
         ) : error ? (
-          <div style={{ padding: 16, color: 'var(--color-danger)' }}>Error: {error}</div>
+          <div style={{ padding: 16, color: 'var(--color-danger)' }}>
+            Error: {error}
+          </div>
         ) : rows.length === 0 ? (
-          <div style={{ padding: 16, color: 'var(--color-muted)' }}>No hay clientes.</div>
+          <div style={{ padding: 16, color: 'var(--color-muted)' }}>
+            No hay clientes.
+          </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -101,9 +103,78 @@ export default function CustomersList() {
                   <td style={{ padding: 8 }}>{c.email || '—'}</td>
                   <td style={{ padding: 8 }}>{c.phone || '—'}</td>
                   <td style={{ padding: 8 }}>
-                    <div className="hstack" style={{ justifyContent: 'flex-end', gap: 8 }}>
-                      <Button onClick={() => nav(`/clientes/${c.id}/edit`)}>Editar</Button>
-                      <Button onClick={() => setToDelete(c)}>Eliminar</Button>
+                    <div
+                      className="hstack"
+                      style={{ justifyContent: 'flex-end', gap: 8 }}
+                    >
+                      {/* 👁 Ver */}
+                      <button
+                        title="Ver detalles"
+                        onClick={() => nav(`/clientes/${c.id}/ver`)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-muted)',
+                          fontSize: '1rem',
+                          cursor: 'pointer',
+                          padding: '4px 6px',
+                          transition: 'color 0.2s',
+                        }}
+                        onMouseEnter={e =>
+                          (e.currentTarget.style.color = 'var(--color-primary)')
+                        }
+                        onMouseLeave={e =>
+                          (e.currentTarget.style.color = 'var(--color-muted)')
+                        }
+                      >
+                        👁
+                      </button>
+
+                      {/* ✎ Editar */}
+                      <button
+                        title="Editar"
+                        onClick={() => nav(`/clientes/${c.id}/edit`)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-muted)',
+                          fontSize: '1rem',
+                          cursor: 'pointer',
+                          padding: '4px 6px',
+                          transition: 'color 0.2s',
+                        }}
+                        onMouseEnter={e =>
+                          (e.currentTarget.style.color = 'var(--color-primary)')
+                        }
+                        onMouseLeave={e =>
+                          (e.currentTarget.style.color = 'var(--color-muted)')
+                        }
+                      >
+                        ✎
+                      </button>
+
+                      {/* ✖ Eliminar */}
+                      <button
+                        title="Eliminar"
+                        onClick={() => setToDelete(c)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-muted)',
+                          fontSize: '1rem',
+                          cursor: 'pointer',
+                          padding: '4px 6px',
+                          transition: 'color 0.2s',
+                        }}
+                        onMouseEnter={e =>
+                          (e.currentTarget.style.color = 'var(--color-danger)')
+                        }
+                        onMouseLeave={e =>
+                          (e.currentTarget.style.color = 'var(--color-muted)')
+                        }
+                      >
+                        ✖
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -118,7 +189,7 @@ export default function CustomersList() {
       {toast && (
         <Toast
           message={toast}
-          type={toast.includes('eliminado') ? 'success' : 'error'}
+          type={toast.includes('✅') ? 'success' : 'error'}
         />
       )}
 
@@ -127,7 +198,8 @@ export default function CustomersList() {
         title="Eliminar cliente"
         message={
           <>
-            Vas a eliminar <b>{displayCustomerName(toDelete || { id: 0 } as Customer)}</b>.  
+            Vas a eliminar{' '}
+            <b>{displayCustomerName(toDelete || ({ id: 0 } as Customer))}</b>.  
             Esta acción no se puede deshacer.
           </>
         }

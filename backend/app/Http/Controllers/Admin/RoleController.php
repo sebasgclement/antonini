@@ -10,7 +10,8 @@ class RoleController extends Controller
 {
     public function index()
     {
-        return response()->json(['ok' => true, 'data' => Role::all()]);
+        // 🔹 Devuelve todos los roles directamente
+        return Role::orderBy('id', 'asc')->get();
     }
 
     public function store(Request $req)
@@ -20,14 +21,14 @@ class RoleController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        $role = Role::create($data);
-
-        return response()->json(['ok' => true, 'data' => $role], 201);
+        // 🔹 Devuelve el rol recién creado
+        return Role::create($data);
     }
 
     public function show(Role $role)
     {
-        return response()->json(['ok' => true, 'data' => $role]);
+        // 🔹 Devuelve el rol directamente
+        return $role;
     }
 
     public function update(Request $req, Role $role)
@@ -39,7 +40,8 @@ class RoleController extends Controller
 
         $role->update($data);
 
-        return response()->json(['ok' => true, 'data' => $role]);
+        // 🔹 Devuelve el rol actualizado
+        return $role;
     }
 
     public function destroy(Role $role)

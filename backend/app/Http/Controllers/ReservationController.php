@@ -14,12 +14,12 @@ class ReservationController extends Controller
     public function index()
     {
         $reservations = Reservation::with(['vehicle', 'usedVehicle', 'customer', 'seller'])
-            ->orderByDesc('date')
+            ->orderByDesc('created_at')
             ->get();
 
-        // Agregamos la ganancia calculada
+        // Agregar ganancia calculada
         $reservations->each(function ($r) {
-            $r->profit = $r->profit; // atributo virtual
+            $r->profit = $r->profit;
         });
 
         return response()->json(['data' => $reservations]);
@@ -28,7 +28,6 @@ class ReservationController extends Controller
     // ================= FORMULARIO DE CREACIÓN (datos iniciales) =================
     public function create()
     {
-        // Vehículos disponibles para vender o tomar en parte de pago
         $vehicles = Vehicle::where('status', 'disponible')->get(['id', 'brand', 'model', 'plate', 'price']);
         $customers = Customer::orderBy('last_name')->get(['id', 'first_name', 'last_name']);
 
@@ -55,7 +54,6 @@ class ReservationController extends Controller
             'date'              => 'nullable|date',
         ]);
 
-        // Asignar vendedor automáticamente si está autenticado
         $data['seller_id'] = Auth::id() ?? $request->seller_id ?? 1;
         $data['status'] = $data['status'] ?? 'pendiente';
         $data['date'] = $data['date'] ?? now();
@@ -97,6 +95,19 @@ class ReservationController extends Controller
             'date'              => 'nullable|date',
         ]);
 
+        // 🚗 Si el vehículo asociado ya está vendido, actualizar también la reserva
+        if (isset($data['vehicle_id'])) {
+            $vehicle = Vehicle::find($data['vehicle_id']);
+            if ($vehicle && $vehicle->status === 'vendido') {
+                $data['status'] = 'vendido';
+            }
+        }
+
+        // 👤 Si aún no tiene vendedor, asignar el actual
+        if (empty($reservation->seller_id)) {
+            $data['seller_id'] = Auth::id() ?? $request->seller_id ?? 1;
+        }
+
         $reservation->update($data);
 
         return response()->json([
@@ -110,11 +121,18 @@ class ReservationController extends Controller
 
     // ================= ELIMINAR RESERVA =================
     public function destroy(Reservation $reservation)
-    {
-        $reservation->delete();
+{
+    $vehicle = $reservation->vehicle;
 
-        return response()->json([
-            'message' => 'Reserva eliminada correctamente',
-        ]);
+    $reservation->delete();
+
+    if ($vehicle && $vehicle->status === 'reservado') {
+        $vehicle->update(['status' => 'disponible']);
     }
+
+    return response()->json([
+        'message' => 'Reserva eliminada correctamente ✅',
+    ]);
+}
+
 }

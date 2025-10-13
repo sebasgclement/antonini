@@ -5,42 +5,101 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Toast from '../../components/ui/Toast'
 
-type Vehicle = { id: number; plate: string; brand: string; model: string; status: string; price?: number }
+type Vehicle = {
+  id: number
+  plate: string
+  brand: string
+  model: string
+  status: string
+  price?: number
+}
 
 export default function RegisterReservation() {
   const nav = useNavigate()
   const [params] = useSearchParams()
+
   const vehicleIdParam = params.get('vehicle_id')
+  const customerIdParam = params.get('customer_id')
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [customers, setCustomers] = useState<any[]>([])
-  const [vehicleId, setVehicleId] = useState<number | ''>(vehicleIdParam ? parseInt(vehicleIdParam) : '')
-  const [customerId, setCustomerId] = useState<number | ''>('')
+  const [vehicleId, setVehicleId] = useState<number | ''>(
+    vehicleIdParam ? parseInt(vehicleIdParam) : ''
+  )
+  const [customerId, setCustomerId] = useState<number | ''>(
+    customerIdParam ? parseInt(customerIdParam) : ''
+  )
 
-  const [price, setPrice] = useState<number | ''>('')
-  const [deposit, setDeposit] = useState<number | ''>('')
+  const [price, setPrice] = useState<number | ''>('') // 💲 precio vehículo principal
+  const [deposit, setDeposit] = useState<number | ''>('') // 💰 seña
   const [paymentMethod, setPaymentMethod] = useState('')
   const [comments, setComments] = useState('')
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Nuevo: parte de pago y gastos de taller
+  // 🔹 Parte de pago / vehículo usado
   const [hasTradeIn, setHasTradeIn] = useState(false)
   const [tradeInVehicleId, setTradeInVehicleId] = useState<number | ''>('')
-  const [workshopExpenses, setWorkshopExpenses] = useState<number | ''>('')
+  const [tradeInValue, setTradeInValue] = useState<number | ''>('') // 💵 valor del usado
 
+  // 🧮 Saldo restante
+  const [balance, setBalance] = useState<number>(0)
+
+  // 🔹 Cargar datos base
   useEffect(() => {
     (async () => {
       try {
         const { data } = await api.get('/reservations/create')
         setVehicles(data.vehicles || [])
         setCustomers(data.customers || [])
+
+        // Si venimos redirigidos con un vehículo, precargar precio
+        if (vehicleIdParam) {
+          const v = data.vehicles?.find((x: Vehicle) => x.id === parseInt(vehicleIdParam))
+          if (v?.price) setPrice(v.price)
+        }
       } catch {
         setToast('Error al cargar datos')
       }
     })()
   }, [])
 
+  // 🔹 Cuando cambia el vehículo principal → actualizar precio
+  useEffect(() => {
+    if (!vehicleId) return
+    const selected = vehicles.find(v => v.id === vehicleId)
+    if (selected && selected.price) setPrice(selected.price)
+  }, [vehicleId, vehicles])
+
+  // 🔹 Cuando cambia el vehículo entregado → autocompletar valor
+  useEffect(() => {
+    if (!tradeInVehicleId) {
+      setTradeInValue('')
+      return
+    }
+    const trade = vehicles.find(v => v.id === tradeInVehicleId)
+    if (trade && trade.price) {
+      setTradeInValue(trade.price)
+    } else {
+      setTradeInValue('')
+    }
+  }, [tradeInVehicleId, vehicles])
+
+  // 🔹 Reaccionar a cambios en parámetros de URL
+  useEffect(() => {
+    if (vehicleIdParam) setVehicleId(parseInt(vehicleIdParam))
+    if (customerIdParam) setCustomerId(parseInt(customerIdParam))
+  }, [vehicleIdParam, customerIdParam])
+
+  // 🧮 Calcular saldo restante dinámicamente
+  useEffect(() => {
+    const total = Number(price) || 0
+    const paid = Number(deposit) || 0
+    const tradeValue = hasTradeIn ? Number(tradeInValue) || 0 : 0
+    setBalance(total - paid - tradeValue)
+  }, [price, deposit, tradeInValue, hasTradeIn])
+
+  // 🔹 Guardar reserva
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
@@ -48,12 +107,13 @@ export default function RegisterReservation() {
       await api.post('/reservations', {
         vehicle_id: vehicleId,
         customer_id: customerId,
-        seller_id: 1, // ⚠️ reemplazar por ID del usuario logueado
+        seller_id: 1, // ⚠️ reemplazar con ID real del usuario logueado
         price,
         deposit,
         payment_method: paymentMethod,
         used_vehicle_id: hasTradeIn ? tradeInVehicleId : null,
-        workshop_expenses: workshopExpenses || null,
+        trade_in_value: hasTradeIn ? tradeInValue : null,
+        balance,
         comments,
       })
       setToast('Reserva creada correctamente ✅')
@@ -71,37 +131,33 @@ export default function RegisterReservation() {
         <div className="title">Registrar reserva</div>
 
         {/* VEHÍCULO PRINCIPAL */}
-      <div className="card vstack" style={{ gap: 16 }}>
-        <label>Vehículo *</label>
+        <div className="card vstack" style={{ gap: 16 }}>
+          <label>Vehículo *</label>
+          <a href="/vehiculos/registro?redirect=/reservas/nueva" className="enlace">
+            + Registrar vehículo
+          </a>
 
-        
-        <a href="/vehiculos/registro" className="enlace">
-          + Registrar vehículo
-        </a>
-
-        <select
-          value={vehicleId}
-          onChange={(e) => setVehicleId(parseInt(e.currentTarget.value) || '')}
-          required
-        >
-          <option value="">Seleccionar…</option>
-          {vehicles.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.brand} {v.model} ({v.plate})
-            </option>
-          ))}
-        </select>
-      </div>
+          <select
+            value={vehicleId}
+            onChange={e => setVehicleId(parseInt(e.currentTarget.value) || '')}
+            required
+          >
+            <option value="">Seleccionar…</option>
+            {vehicles.map(v => (
+              <option key={v.id} value={v.id}>
+                {v.brand} {v.model} ({v.plate})
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* CLIENTE */}
         <div className="card vstack" style={{ gap: 16 }}>
           <label>Cliente *</label>
-          {/* 🔹 Nuevo: enlace siempre visible */}
-          
-            <a href="/clientes/registro" className='enlace'>
-              + Registrar cliente
-            </a>
-          
+          <a href="/clientes/registro?redirect=/reservas/nueva" className="enlace">
+            + Registrar cliente
+          </a>
+
           <select
             value={customerId}
             onChange={e => setCustomerId(parseInt(e.currentTarget.value) || '')}
@@ -164,7 +220,13 @@ export default function RegisterReservation() {
 
           {hasTradeIn && (
             <div className="vstack" style={{ gap: 12 }}>
-              <label>Seleccionar vehículo usado</label>
+              <div className="hstack" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <label>Seleccionar vehículo usado</label>
+                <a href="/vehiculos/registro?redirect=/reservas/nueva" className="enlace">
+                  + Registrar vehículo
+                </a>
+              </div>
+
               <select
                 value={tradeInVehicleId}
                 onChange={e => setTradeInVehicleId(parseInt(e.currentTarget.value) || '')}
@@ -173,23 +235,40 @@ export default function RegisterReservation() {
                 <option value="">Seleccionar…</option>
                 {vehicles.map(v => (
                   <option key={v.id} value={v.id}>
-                    {v.brand} {v.model} ({v.plate}) - $
-                    {v.price?.toLocaleString() || '—'}
+                    {v.brand} {v.model} ({v.plate}) - ${v.price?.toLocaleString() || '—'}
                   </option>
                 ))}
               </select>
+
+              <Input
+                label="Valor del vehículo entregado ($)"
+                type="number"
+                value={tradeInValue as any}
+                readOnly
+                style={{
+                  opacity: 0.8,
+                  cursor: 'not-allowed',
+                }}
+              />
             </div>
           )}
         </div>
 
-        {/* GASTOS DE TALLER */}
+        {/* 🧮 SALDO RESTANTE */}
         <div className="card vstack" style={{ gap: 12 }}>
-          <Input
-            label="Gastos de taller ($)"
+          <label>Saldo restante ($)</label>
+          <input
             type="number"
-            value={workshopExpenses as any}
-            onChange={e => setWorkshopExpenses(parseFloat(e.currentTarget.value) || '')}
-            placeholder="Ej: 45000"
+            value={balance}
+            readOnly
+            style={{
+              background: '#0c0f14',
+              color: balance >= 0 ? '#4ade80' : '#f87171', // verde si positivo, rojo si negativo
+              border: '1px solid #252b37',
+              borderRadius: 10,
+              padding: '10px 12px',
+              fontWeight: 'bold',
+            }}
           />
         </div>
 

@@ -29,10 +29,15 @@ export default function ReportsDashboard() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  // 🔹 Cargar lista de vendedores
   useEffect(() => {
-    api.get("/admin/users").then((res) => setSellers(res.data.data || res.data)).catch(() => {});
+    api
+      .get("/admin/users")
+      .then((res) => setSellers(res.data.data || res.data))
+      .catch(() => {});
   }, []);
 
+  // 🔹 Cargar reportes
   const loadReports = async () => {
     setLoading(true);
     setError("");
@@ -86,74 +91,78 @@ export default function ReportsDashboard() {
     }
   };
 
+  // 🔹 Sumar totales (solo del reporte mensual)
   const sumTotals = (arr: Report[]) => ({
     cantidad: arr.reduce((a, b) => a + (b.cantidad || 0), 0),
     total: arr.reduce((a, b) => a + (b.total || 0), 0),
     ganancia: arr.reduce((a, b) => a + (b.ganancia || 0), 0),
   });
 
-  const totals = sumTotals([...monthly, ...bySeller, ...byPayment]);
+  const totals = sumTotals(monthly);
 
   return (
     <div className="vstack" style={{ gap: 24 }}>
       <div className="title">📊 Reportes de Ventas</div>
 
       {/* === FILTROS === */}
-<div className="report-card">
-  <div className="report-filters">
-    <div className="field">
-      <Input
-        label="Año"
-        type="number"
-        name="year"
-        value={filters.year}
-        onChange={handleChange}
-      />
-    </div>
+      <div className="report-card">
+        <div className="report-filters">
+          <div className="field">
+            <Input
+              label="Año"
+              type="number"
+              name="year"
+              value={filters.year}
+              onChange={handleChange}
+            />
+          </div>
 
-    <div className="field">
-      <Input
-        label="Desde"
-        type="date"
-        name="start_date"
-        value={filters.start_date}
-        onChange={handleChange}
-      />
-    </div>
+          <div className="field">
+            <Input
+              label="Desde"
+              type="date"
+              name="start_date"
+              value={filters.start_date}
+              onChange={handleChange}
+            />
+          </div>
 
-    <div className="field">
-      <Input
-        label="Hasta"
-        type="date"
-        name="end_date"
-        value={filters.end_date}
-        onChange={handleChange}
-      />
-    </div>
+          <div className="field">
+            <Input
+              label="Hasta"
+              type="date"
+              name="end_date"
+              value={filters.end_date}
+              onChange={handleChange}
+            />
+          </div>
 
-    <div className="field">
-      <label>Vendedor</label>
-      <select
-        name="seller_id"
-        value={filters.seller_id}
-        onChange={handleChange}
-      >
-        <option value="">Todos</option>
-        {sellers.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  </div>
+          <div className="field">
+            <label>Vendedor</label>
+            <select
+              name="seller_id"
+              value={filters.seller_id}
+              onChange={handleChange}
+            >
+              <option value="">Todos</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-  <div className="report-actions">
-    <Button onClick={loadReports} loading={loading}>Aplicar filtros</Button>
-    <Button onClick={handleDownload} loading={downloading}>📄 Descargar PDF</Button>
-  </div>
-</div>
-
+        <div className="report-actions">
+          <Button onClick={loadReports} loading={loading}>
+            Aplicar filtros
+          </Button>
+          <Button onClick={handleDownload} loading={downloading}>
+            📄 Descargar PDF
+          </Button>
+        </div>
+      </div>
 
       {/* === WIDGETS === */}
       <div className="dashboard-widgets">
@@ -167,7 +176,9 @@ export default function ReportsDashboard() {
         </div>
         <div className="widget">
           <span className="widget-title">Ganancia Estimada</span>
-          <strong className="widget-value text-success">{formatCurrency(totals.ganancia)}</strong>
+          <strong className="widget-value text-success">
+            {formatCurrency(totals.ganancia)}
+          </strong>
         </div>
       </div>
 
@@ -195,7 +206,9 @@ export default function ReportsDashboard() {
             ) : (
               monthly.map((r, i) => (
                 <tr key={i}>
-                  <td>{r.month}/{r.year}</td>
+                  <td>
+                    {r.month}/{r.year}
+                  </td>
                   <td>{r.cantidad}</td>
                   <td>{formatCurrency(r.total)}</td>
                   <td>{formatCurrency(r.ganancia)}</td>
@@ -259,7 +272,7 @@ export default function ReportsDashboard() {
             ) : (
               byPayment.map((r, i) => (
                 <tr key={i}>
-                  <td>{r.payment_method}</td>
+                  <td>{r.payment_method || "—"}</td>
                   <td>{r.cantidad}</td>
                   <td>{formatCurrency(r.total)}</td>
                   <td>{formatCurrency(r.ganancia)}</td>

@@ -18,7 +18,14 @@ import AdminRoute from './components/AdminRoute'
 import Layout from './layout/Layout'
 import ReservationsList from './pages/reservations/List'
 import RegisterReservation from './pages/reservations/Register'
-import ReportsDashboard from "./pages/admin/reports/Dashboard";
+import ReportsDashboard from "./pages/admin/reports/Dashboard"
+import VehicleExpensesForm from './pages/vehicles/ExpensesForm'
+import ReservationView from "./pages/reservations/View"
+import VehicleView from './pages/vehicles/VehicleView'
+import CustomerView from './pages/customers/View'
+import ChangePassword from './pages/profile/ChangePassword'
+
+
 
 
 
@@ -66,6 +73,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <CustomerEdit />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/clientes/:id/ver"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <CustomerView />
             </Layout>
           </ProtectedRoute>
         }
@@ -158,6 +175,17 @@ export default function App() {
     </ProtectedRoute>
   }
 />
+{/* Cambio de contraseña */}
+<Route
+  path="/perfil/password"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <ChangePassword />
+      </Layout>
+    </ProtectedRoute>
+  }
+/>
 
 
       {/* Vehículos */}
@@ -191,6 +219,27 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+      path="/vehiculos/:id/gastos"
+      element={
+        <ProtectedRoute>
+          <Layout>
+            <VehicleExpensesForm />
+          </Layout>
+        </ProtectedRoute>
+      }
+    />
+    <Route
+  path="/vehiculos/:id/ver"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <VehicleView />
+      </Layout>
+    </ProtectedRoute>
+  }
+  />
+
 
       {/* Reservas */}
 <Route
@@ -213,6 +262,17 @@ export default function App() {
     </ProtectedRoute>
   }
 />
+<Route
+  path="/reservas/:id"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <ReservationView />
+      </Layout>
+    </ProtectedRoute>
+  }
+/>
+
 
 
       {/* Catch all */}
