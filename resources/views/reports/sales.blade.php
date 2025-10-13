@@ -50,46 +50,57 @@
 </head>
 <body>
   <header>
-    <img src="{{ public_path('antonini-logo-white-h160-safe.png') }}" alt="Antonini">
+    <img src="{{ public_path('antonini-logo-white-h160-safe.png') }}" alt="Antonini Automotores">
     <h1>Reporte de Ventas {{ $year }}</h1>
   </header>
 
-  <p><strong>Vendedor:</strong> {{ $seller }}</p>
+  <p>
+    <strong>Período:</strong>
+    {{ $vehiculos->min('updated_at') ? date('d/m/Y', strtotime($vehiculos->min('updated_at'))) : '-' }}
+    al
+    {{ $vehiculos->max('updated_at') ? date('d/m/Y', strtotime($vehiculos->max('updated_at'))) : '-' }}
+  </p>
 
   <table>
     <thead>
       <tr>
         <th>#</th>
-        <th>Fecha</th>
-        <th>Vehículo</th>
-        <th>Cliente</th>
-        <th>Forma de pago</th>
-        <th class="right">Precio</th>
-        <th class="right">Valor usado</th>
-        <th class="right">Gastos taller</th>
-        <th class="right">Ganancia</th>
+        <th>Fecha venta</th>
+        <th>Marca</th>
+        <th>Modelo</th>
+        <th>Año</th>
+        <th>Patente</th>
+        <th>Color</th>
+        <th class="right">Precio venta</th>
+        <th class="right">Precio referencia</th>
+        <th class="right">Ganancia estimada</th>
       </tr>
     </thead>
     <tbody>
-      @foreach($reservas as $r)
+      @forelse($vehiculos as $v)
       <tr>
-        <td>{{ $r->id }}</td>
-        <td>{{ $r->date?->format('d/m/Y') }}</td>
-        <td>{{ $r->vehicle?->brand }} {{ $r->vehicle?->model }}</td>
-        <td>{{ $r->customer?->first_name }} {{ $r->customer?->last_name }}</td>
-        <td>{{ ucfirst(str_replace('_',' ', $r->payment_method)) }}</td>
-        <td class="right">${{ number_format($r->price, 2, ',', '.') }}</td>
-        <td class="right">${{ number_format($r->usedVehicle?->price ?? 0, 2, ',', '.') }}</td>
-        <td class="right">${{ number_format($r->workshop_expenses ?? 0, 2, ',', '.') }}</td>
-        <td class="right">${{ number_format($r->profit, 2, ',', '.') }}</td>
+        <td>{{ $v->id }}</td>
+        <td>{{ $v->updated_at ? date('d/m/Y', strtotime($v->updated_at)) : '-' }}</td>
+        <td>{{ $v->brand }}</td>
+        <td>{{ $v->model }}</td>
+        <td>{{ $v->year }}</td>
+        <td>{{ $v->plate }}</td>
+        <td>{{ $v->color }}</td>
+        <td class="right">${{ number_format($v->price, 2, ',', '.') }}</td>
+        <td class="right">${{ number_format($v->reference_price ?? 0, 2, ',', '.') }}</td>
+        <td class="right">${{ number_format(($v->price - ($v->reference_price ?? 0)), 2, ',', '.') }}</td>
       </tr>
-      @endforeach
+      @empty
+      <tr>
+        <td colspan="10" style="text-align:center;">No se registran vehículos vendidos en este período.</td>
+      </tr>
+      @endforelse
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="5" class="right">Totales:</td>
+        <td colspan="7" class="right">Totales:</td>
         <td class="right">${{ number_format($totalVentas, 2, ',', '.') }}</td>
-        <td colspan="2"></td>
+        <td></td>
         <td class="right">${{ number_format($totalGanancia, 2, ',', '.') }}</td>
       </tr>
     </tfoot>

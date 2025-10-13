@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleExpenseController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\ReservationController;
+use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\Admin\RoleController;
 
 // ================== AUTH ==================
 Route::post('/auth/login',  [AuthController::class, 'login']);
@@ -25,38 +27,43 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('vehicles', VehicleController::class);
 
     // ✅ Gastos por vehículo
-    Route::get   ('/vehicles/{vehicle}/expenses',          [VehicleExpenseController::class, 'index']);
-    Route::post  ('/vehicles/{vehicle}/expenses',          [VehicleExpenseController::class, 'store']);
-    Route::delete('/vehicles/{vehicle}/expenses/{expense}',[VehicleExpenseController::class, 'destroy']);
+    Route::get   ('/vehicles/{vehicle}/expenses',           [VehicleExpenseController::class, 'index']);
+    Route::post  ('/vehicles/{vehicle}/expenses',           [VehicleExpenseController::class, 'store']);
+    Route::delete('/vehicles/{vehicle}/expenses/{expense}', [VehicleExpenseController::class, 'destroy']);
 
     // ✅ Reservas
     Route::get('/reservations/create', [ReservationController::class, 'create']);
     Route::apiResource('reservations', ReservationController::class);
-});
 
-// ================== ZONA ROLES ==================
-Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
-
-    // CRUD de roles
-    Route::get   ('/admin/roles',        [\App\Http\Controllers\Admin\RoleController::class, 'index']);
-    Route::post  ('/admin/roles',        [\App\Http\Controllers\Admin\RoleController::class, 'store']);
-    Route::get   ('/admin/roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'show']);
-    Route::put   ('/admin/roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'update']);
-    Route::delete('/admin/roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'destroy']);
+    // ✅ Cambio de contraseña
+    Route::post('/user/change-password', [AuthController::class, 'changePassword']);
 });
 
 // ================== ZONA ADMIN ==================
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
-    // ✅ Usuarios y roles
-    Route::get   ('/admin/users',        [\App\Http\Controllers\AdminUserController::class, 'index']);
-    Route::post  ('/admin/users',        [\App\Http\Controllers\AdminUserController::class, 'store']);
-    Route::get   ('/admin/users/{user}', [\App\Http\Controllers\AdminUserController::class, 'show']);
-    Route::put   ('/admin/users/{user}', [\App\Http\Controllers\AdminUserController::class, 'update']);
-    Route::delete('/admin/users/{user}', [\App\Http\Controllers\AdminUserController::class, 'destroy']);
-    Route::get('/admin/roles', [\App\Http\Controllers\AdminUserController::class, 'roles']);
+    // ================== ROLES (CRUD COMPLETO) ==================
+    Route::prefix('admin/roles')->group(function () {
+        Route::get   ('/',          [RoleController::class, 'index']);
+        Route::post  ('/',          [RoleController::class, 'store']);
+        Route::get   ('/{role}',    [RoleController::class, 'show']);
+        Route::put   ('/{role}',    [RoleController::class, 'update']);
+        Route::delete('/{role}',    [RoleController::class, 'destroy']);
+    });
 
-    // ✅ REPORTES (solo ADMIN)
+    // ✅ Listado simple de roles (para selects en formularios)
+    Route::get('/admin/roles-list', [AdminUserController::class, 'roles']);
+
+    // ================== USUARIOS ==================
+    Route::prefix('admin/users')->group(function () {
+        Route::get   ('/',        [AdminUserController::class, 'index']);
+        Route::post  ('/',        [AdminUserController::class, 'store']);
+        Route::get   ('/{user}',  [AdminUserController::class, 'show']);
+        Route::put   ('/{user}',  [AdminUserController::class, 'update']);
+        Route::delete('/{user}',  [AdminUserController::class, 'destroy']);
+    });
+
+    // ================== REPORTES ==================
     Route::prefix('reports')->group(function () {
         // Reportes dinámicos en JSON
         Route::get('/sales/monthly',    [ReportController::class, 'salesMonthly']);

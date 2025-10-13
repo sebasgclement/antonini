@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
 use App\Models\VehicleExpense;
-use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -13,65 +12,69 @@ use Barryvdh\DomPDF\Facade\Pdf;
 class ReportController extends Controller
 {
     /**
-     * 📅 Ventas por mes (filtrable por año, vendedor o rango de fechas)
+     * 📅 Ventas por mes (basadas en vehículos vendidos)
      */
     public function salesMonthly(Request $req)
     {
-        $query = Reservation::query()
-            ->select(
-                DB::raw('YEAR(date) as year'),
-                DB::raw('MONTH(date) as month'),
-                DB::raw('COUNT(*) as cantidad'),
-                DB::raw('SUM(price) as total'),
-                DB::raw('SUM(price - COALESCE((SELECT v.price FROM vehicles v WHERE v.id = used_vehicle_id), 0) - COALESCE(workshop_expenses, 0)) as ganancia')
-            )
-            ->where('status', 'confirmada');
+        try {
+            $query = Vehicle::query()
+                ->selectRaw('YEAR(sold_at) as year')
+                ->selectRaw('MONTH(sold_at) as month')
+                ->selectRaw('COUNT(*) as cantidad')
+                ->selectRaw('SUM(price) as total')
+                ->selectRaw('SUM(price - COALESCE(reference_price, 0)) as ganancia')
+                ->where('status', 'vendido');
 
-        // 🔹 Filtros opcionales
-        if ($req->filled('seller_id')) {
-            $query->where('seller_id', $req->seller_id);
+            // 🔹 Filtros opcionales
+            if ($req->filled('seller_id')) {
+                $query->where('seller_id', $req->seller_id);
+            }
+
+            if ($req->filled('start_date') && $req->filled('end_date')) {
+                $query->whereBetween(DB::raw('DATE(sold_at)'), [$req->start_date, $req->end_date]);
+            } elseif ($req->filled('year')) {
+                $query->whereYear('sold_at', $req->year);
+            } else {
+                $query->whereYear('sold_at', date('Y'));
+            }
+
+            $ventas = $query
+                ->groupByRaw('YEAR(sold_at), MONTH(sold_at)')
+                ->orderByRaw('YEAR(sold_at) desc, MONTH(sold_at)')
+                ->get();
+
+            return response()->json(['ok' => true, 'data' => $ventas]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        if ($req->filled('start_date') && $req->filled('end_date')) {
-            $query->whereBetween(DB::raw('DATE(date)'), [$req->start_date, $req->end_date]);
-        } elseif ($req->filled('year')) {
-            $query->whereYear('date', $req->year);
-        } else {
-            $query->whereYear('date', date('Y'));
-        }
-
-        $ventas = $query
-            ->groupBy('year', 'month')
-            ->orderBy('year', 'desc')
-            ->orderBy('month')
-            ->get();
-
-        return response()->json(['ok' => true, 'data' => $ventas]);
     }
 
     /**
-     * 👤 Ventas por vendedor
+     * 👤 Ventas por vendedor (usando seller_id del vehículo)
      */
     public function salesBySeller(Request $req)
     {
-        $query = Reservation::query()
+        $query = DB::table('vehicles')
+            ->join('users', 'vehicles.seller_id', '=', 'users.id')
             ->select(
                 'users.name as vendedor',
-                DB::raw('COUNT(reservations.id) as cantidad'),
-                DB::raw('SUM(reservations.price) as total'),
-                DB::raw('SUM(reservations.price - COALESCE((SELECT v.price FROM vehicles v WHERE v.id = used_vehicle_id), 0) - COALESCE(reservations.workshop_expenses, 0)) as ganancia')
+                DB::raw('COUNT(vehicles.id) as cantidad'),
+                DB::raw('SUM(vehicles.price) as total'),
+                DB::raw('SUM(vehicles.price - COALESCE(vehicles.reference_price,0)) as ganancia')
             )
-            ->join('users', 'reservations.seller_id', '=', 'users.id')
-            ->where('reservations.status', 'confirmada');
+            ->where('vehicles.status', 'vendido');
 
-        // 🔹 Rango de fechas
         if ($req->filled('start_date') && $req->filled('end_date')) {
-            $query->whereBetween(DB::raw('DATE(reservations.date)'), [$req->start_date, $req->end_date]);
+            $query->whereBetween(DB::raw('DATE(vehicles.sold_at)'), [$req->start_date, $req->end_date]);
         }
 
-        // 🔹 Año opcional
         if ($req->filled('year')) {
-            $query->whereYear('reservations.date', $req->year);
+            $query->whereYear('vehicles.sold_at', $req->year);
+        } else {
+            $query->whereYear('vehicles.sold_at', date('Y'));
         }
 
         $ventas = $query
@@ -83,29 +86,30 @@ class ReportController extends Controller
     }
 
     /**
-     * 💳 Ventas por forma de pago
+     * 💳 Ventas por forma de pago (si hubo reserva asociada)
      */
     public function salesByPayment(Request $req)
     {
-        $query = Reservation::query()
+        $query = DB::table('vehicles')
+            ->leftJoin('reservations', 'vehicles.id', '=', 'reservations.vehicle_id')
             ->select(
-                'payment_method',
-                DB::raw('COUNT(*) as cantidad'),
-                DB::raw('SUM(price) as total'),
-                DB::raw('SUM(price - COALESCE((SELECT v.price FROM vehicles v WHERE v.id = used_vehicle_id), 0) - COALESCE(workshop_expenses, 0)) as ganancia')
+                'reservations.payment_method',
+                DB::raw('COUNT(vehicles.id) as cantidad'),
+                DB::raw('SUM(vehicles.price) as total'),
+                DB::raw('SUM(vehicles.price - COALESCE(vehicles.reference_price,0)) as ganancia')
             )
-            ->where('status', 'confirmada');
+            ->where('vehicles.status', 'vendido');
 
-        // 🔹 Filtros opcionales
         if ($req->filled('start_date') && $req->filled('end_date')) {
-            $query->whereBetween(DB::raw('DATE(date)'), [$req->start_date, $req->end_date]);
+            $query->whereBetween(DB::raw('DATE(vehicles.sold_at)'), [$req->start_date, $req->end_date]);
         }
+
         if ($req->filled('seller_id')) {
-            $query->where('seller_id', $req->seller_id);
+            $query->where('vehicles.seller_id', $req->seller_id);
         }
 
         $pagos = $query
-            ->groupBy('payment_method')
+            ->groupBy('reservations.payment_method')
             ->orderByDesc('total')
             ->get();
 
@@ -136,47 +140,40 @@ class ReportController extends Controller
         return response()->json(['ok' => true, 'data' => $gastos]);
     }
 
+    /**
+     * 🧾 Exportar reporte de ventas a PDF (basado en vehículos vendidos)
+     */
     public function exportSalesReport(Request $req)
-{
-    $year = $req->year ?? date('Y');
-    $sellerId = $req->seller_id;
-    $startDate = $req->start_date;
-    $endDate = $req->end_date;
+    {
+        $year = $req->year ?? date('Y');
+        $startDate = $req->start_date;
+        $endDate = $req->end_date;
 
-    // 🔎 Filtramos las reservas confirmadas (ventas reales)
-    $query = Reservation::with(['vehicle', 'customer', 'seller'])
-        ->where('status', 'confirmada')
-        ->whereYear('date', $year);
+        $query = Vehicle::with('customer')
+            ->where('status', 'vendido')
+            ->whereYear('sold_at', $year);
 
-    if ($sellerId) {
-        $query->where('seller_id', $sellerId);
+        if ($startDate) {
+            $query->whereDate('sold_at', '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $query->whereDate('sold_at', '<=', $endDate);
+        }
+
+        $vehiculos = $query->orderBy('sold_at', 'asc')->get();
+
+        $totalVentas = $vehiculos->sum('price');
+        $totalGanancia = $vehiculos->sum(fn($v) => $v->price - ($v->reference_price ?? 0));
+
+        $pdf = Pdf::loadView('reports.sales', [
+            'vehiculos' => $vehiculos,
+            'year' => $year,
+            'totalVentas' => $totalVentas,
+            'totalGanancia' => $totalGanancia,
+            'seller' => '—',
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download("reporte_ventas_{$year}.pdf");
     }
-
-    if ($startDate) {
-        $query->whereDate('date', '>=', $startDate);
-    }
-
-    if ($endDate) {
-        $query->whereDate('date', '<=', $endDate);
-    }
-
-    $reservas = $query->orderBy('date', 'asc')->get();
-
-    // Calcular totales
-    $totalVentas = $reservas->sum('price');
-    $totalGanancia = $reservas->sum(fn($r) => $r->profit);
-
-    // Generar PDF con la vista Blade
-    $pdf = Pdf::loadView('reports.sales', [
-        'reservas' => $reservas,
-        'year' => $year,
-        'totalVentas' => $totalVentas,
-        'totalGanancia' => $totalGanancia,
-        'seller' => $reservas->first()?->seller?->name ?? 'Todos los vendedores',
-    ])->setPaper('a4', 'portrait');
-
-    // Descargar el archivo
-    $filename = "reporte_ventas_{$year}.pdf";
-    return $pdf->download($filename);
-}
 }
