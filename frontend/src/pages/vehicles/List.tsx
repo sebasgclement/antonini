@@ -5,6 +5,7 @@ import Pagination from "../../components/ui/Pagination";
 import Toast from "../../components/ui/Toast";
 import usePagedList from "../../hooks/usePagedList";
 import api from "../../lib/api";
+import useAuth from "../../hooks/useAuth";
 
 type Vehicle = {
   id: number;
@@ -52,6 +53,7 @@ export default function VehiclesList() {
   const [toast, setToast] = useState("");
   const [toDelete, setToDelete] = useState<Vehicle | null>(null);
   const [openSections, setOpenSections] = useState<string[]>(["disponible"]);
+  const { isAdmin } = useAuth();
 
   const rows = useMemo(() => items, [items]);
 
@@ -207,7 +209,6 @@ export default function VehiclesList() {
                             color: "var(--color-muted)",
                           }}
                         >
-                          <th style={{ padding: 8 }}>#</th>
                           <th style={{ padding: 8 }}>Patente</th>
                           <th style={{ padding: 8 }}>Marca / Modelo</th>
                           <th style={{ padding: 8 }}>Año</th>
@@ -235,7 +236,7 @@ export default function VehiclesList() {
                                 background: bgColor,
                               }}
                             >
-                              <td style={{ padding: 8 }}>{v.id}</td>
+                              
                               <td style={{ padding: 8 }}>{v.plate}</td>
                               <td style={{ padding: 8 }}>
                                 {v.brand} {v.model}
@@ -427,21 +428,21 @@ export default function VehiclesList() {
                                         }
                                         disabled={v.ownership === "propio"}
                                         onClick={() =>
-                                          v.ownership !== "propio" &&
+                                          isAdmin && v.ownership !== "propio" &&
                                           setToDelete(v)
                                         }
                                         style={{
                                           background: "transparent",
                                           border: "none",
                                           color:
-                                            v.ownership === "propio"
+                                            !isAdmin || v.ownership === "propio"
                                               ? "var(--color-muted)"
                                               : "var(--color-danger)",
                                           opacity:
-                                            v.ownership === "propio" ? 0.4 : 1,
+                                            !isAdmin || v.ownership === "propio" ? 0.4 : 1,
                                           fontSize: "1rem",
                                           cursor:
-                                            v.ownership === "propio"
+                                            !isAdmin || v.ownership === "propio"
                                               ? "not-allowed"
                                               : "pointer",
                                           padding: "4px 6px",

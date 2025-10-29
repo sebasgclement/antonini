@@ -14,7 +14,7 @@ type Vehicle = {
   vin?: string;
   color?: string;
   km?: number;
-  fuel_level?: string; // 🔹 ahora se usa para tipo de combustible
+  fuel_type?: string; // 🔹 ahora se usa para tipo de combustible
   ownership: "propio" | "consignado";
   customer_dni?: string;
   customer_name?: string;
@@ -133,7 +133,7 @@ export default function VehicleEdit() {
       if (v.vin) form.append("vin", v.vin);
       if (v.color) form.append("color", v.color);
       if (v.km) form.append("km", String(v.km));
-      if (v.fuel_level) form.append("fuel_level", v.fuel_level); // 🔹 tipo de combustible
+      if (v.fuel_type) form.append("fuel_type", v.fuel_type); // 🔹 tipo de combustible
       if (v.reference_price)
         form.append("reference_price", String(v.reference_price));
       if (v.price) form.append("price", String(v.price));
@@ -257,9 +257,9 @@ export default function VehicleEdit() {
             <div className="form-group" style={{ flex: 1 }}>
               <label>Tipo de combustible *</label>
               <select
-                value={v.fuel_level || ""}
+                value={v.fuel_type || ""}
                 onChange={(e) =>
-                  setV({ ...v, fuel_level: e.currentTarget.value })
+                  setV({ ...v, fuel_type: e.currentTarget.value })
                 }
                 required
                 style={{

@@ -15,7 +15,7 @@ export default function RegisterVehicle() {
   const [vin, setVin] = useState("");
   const [color, setColor] = useState("");
   const [km, setKm] = useState<number | "">("");
-  const [fuelLevel, setFuelLevel] = useState<string>(""); // 🔹 ahora guarda tipo de combustible
+  const [fuelType, setFuelType] = useState<string>(""); // 🔹 ahora guarda tipo de combustible
 
   const MARCAS = [
     "Toyota",
@@ -107,7 +107,7 @@ export default function RegisterVehicle() {
       if (vin) form.append("vin", vin);
       if (color) form.append("color", color);
       if (km) form.append("km", String(km));
-      if (fuelLevel) form.append("fuel_level", fuelLevel);
+      if (fuelType) form.append("fuel_level", fuelType);
       if (referencePrice)
         form.append("reference_price", String(referencePrice));
       if (price) form.append("price", String(price));
@@ -238,8 +238,8 @@ export default function RegisterVehicle() {
             <div className="form-group" style={{ flex: 1 }}>
               <label>Tipo de combustible *</label>
               <select
-                value={fuelLevel}
-                onChange={(e) => setFuelLevel(e.currentTarget.value)}
+                value={fuelType}
+                onChange={(e) => setFuelType(e.currentTarget.value)}
                 required
                 style={{
                   width: "100%",
