@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
-import Button from "../components/ui/Button";
 import Logo from "../components/ui/Logo";
 
 type HeaderProps = {
@@ -12,6 +11,20 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const nav = useNavigate();
+
+  // 🌗 Control del tema (persistente en localStorage)
+  const [theme, setTheme] = useState(
+    localStorage.getItem("theme") || "dark"
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+  };
 
   return (
     <header>
@@ -44,6 +57,9 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
             <div className="user-dropdown">
               <button onClick={() => nav("/perfil/password")}>
                 🔒 Cambiar contraseña
+              </button>
+              <button onClick={toggleTheme}>
+                {theme === "dark" ? "🌞 Modo claro" : "🌙 Modo oscuro"}
               </button>
               <button onClick={logout}>🚪 Cerrar sesión</button>
             </div>

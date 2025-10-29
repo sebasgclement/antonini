@@ -83,15 +83,9 @@ export default function RegisterCustomer() {
             <div className="form-group" style={{ flex: 1 }}>
               <label>Tipo de documento</label>
               <select
+                className="select-doc"
                 value={docType}
                 onChange={(e) => setDocType(e.currentTarget.value)}
-                style={{
-                  background: "#0c0f14",
-                  color: "var(--color-text)",
-                  border: "1px solid #252b37",
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                }}
               >
                 <option value="DNI">DNI</option>
                 <option value="Pasaporte">Pasaporte</option>

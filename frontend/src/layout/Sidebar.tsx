@@ -6,18 +6,19 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { isAdmin, user, logout } = useAuth();
 
   return (
-    <div className="vstack" style={{ height: "100%" }}>
-      {/* Botón cerrar solo en mobile */}
+    <div className="vstack sidebar-inner" style={{ height: "100%" }}>
+      {/* 🔹 Botón cerrar (solo visible en mobile) */}
       <button className="sidebar-close" onClick={onClose}>
         ✕
       </button>
 
+      {/* 🔹 Navegación principal */}
       <nav className="vstack" style={{ gap: 8 }}>
         <NavLink to="/" end className="nav-link" onClick={onClose}>
           🏠 Inicio
         </NavLink>
 
-        <NavLink to="/clientes" end className="nav-link" onClick={onClose}>
+        <NavLink to="/clientes" className="nav-link" onClick={onClose}>
           📇 Clientes
         </NavLink>
 
@@ -46,19 +47,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         )}
       </nav>
 
-      {/* Footer con usuario + acciones (visible en mobile) */}
+      {/* 🔹 Footer (solo visible en mobile) */}
       <div className="sidebar-footer">
-        <span
-          style={{
-            color: "var(--color-muted)",
-            fontSize: "0.9rem",
-            textAlign: "center",
-          }}
-        >
+        <span className="sidebar-user">
           {user?.name || user?.email}
         </span>
 
-        {/* 🔒 Cambiar contraseña */}
         <button
           className="btn"
           onClick={() => {
@@ -69,7 +63,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           🔒 Cambiar contraseña
         </button>
 
-        {/* 🚪 Cerrar sesión */}
         <Button onClick={logout}>🚪 Salir</Button>
       </div>
     </div>

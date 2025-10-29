@@ -53,21 +53,13 @@ export default function CustomersList() {
       </div>
 
       {/* 🔍 Buscador */}
-      <div className="card hstack" style={{ justifyContent: 'space-between' }}>
-        <input
-          placeholder="Buscar por nombre, email, doc, teléfono…"
-          value={search}
-          onChange={e => setSearch(e.currentTarget.value)}
-          style={{
-            background: '#0c0f14',
-            color: 'var(--color-text)',
-            border: '1px solid #252b37',
-            borderRadius: 10,
-            padding: '10px 12px',
-            width: '100%',
-          }}
-        />
-      </div>
+      <input
+  className="input-search"
+  placeholder="Buscar por nombre, email, doc, teléfono…"
+  value={search}
+  onChange={e => setSearch(e.currentTarget.value)}
+/>
+
 
       <div className="card" style={{ overflowX: 'auto' }}>
         {loading ? (

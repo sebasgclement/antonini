@@ -75,18 +75,12 @@ export default function UsersList() {
 
       <div className="card hstack" style={{ justifyContent: 'space-between' }}>
         <input
-          placeholder="Buscar por nombre o email…"
-          value={search}
-          onChange={e => setSearch(e.currentTarget.value)}
-          style={{
-            background: '#0c0f14',
-            color: 'var(--color-text)',
-            border: '1px solid #252b37',
-            borderRadius: 10,
-            padding: '10px 12px',
-            width: '100%',
-          }}
-        />
+  className="form-control"
+  placeholder="Buscar por nombre o email…"
+  value={search}
+  onChange={e => setSearch(e.currentTarget.value)}
+/>
+
       </div>
 
       <div className="card" style={{ overflowX: 'auto' }}>

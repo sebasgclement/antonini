@@ -194,25 +194,19 @@ export default function VehicleEdit() {
             <div className="form-group" style={{ flex: 1 }}>
               <label>Marca *</label>
               <select
-                value={v.brand || ""}
-                onChange={(e) => setV({ ...v, brand: e.currentTarget.value })}
-                required
-                style={{
-                  width: "100%",
-                  background: "#0c0f14",
-                  color: "var(--color-text)",
-                  border: "1px solid #252b37",
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                }}
-              >
-                <option value="">Seleccionar marca</option>
-                {MARCAS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+  className="form-control"
+  value={v.brand || ""}
+  onChange={(e) => setV({ ...v, brand: e.currentTarget.value })}
+  required
+>
+  <option value="">Seleccionar marca</option>
+  {MARCAS.map((m) => (
+    <option key={m} value={m}>
+      {m}
+    </option>
+  ))}
+</select>
+
             </div>
 
             <Input
@@ -257,26 +251,18 @@ export default function VehicleEdit() {
             <div className="form-group" style={{ flex: 1 }}>
               <label>Tipo de combustible *</label>
               <select
-                value={v.fuel_type || ""}
-                onChange={(e) =>
-                  setV({ ...v, fuel_type: e.currentTarget.value })
-                }
-                required
-                style={{
-                  width: "100%",
-                  background: "#0c0f14",
-                  color: "var(--color-text)",
-                  border: "1px solid #252b37",
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                }}
-              >
-                <option value="">Seleccionar</option>
-                <option value="nafta">Nafta</option>
-                <option value="gasoil">Gasoil</option>
-                <option value="gnc/nafta">GNC / Nafta</option>
-                <option value="eléctrico">Eléctrico</option>
-              </select>
+  className="form-control"
+  value={v.fuel_type || ""}
+  onChange={(e) => setV({ ...v, fuel_type: e.currentTarget.value })}
+  required
+>
+  <option value="">Seleccionar</option>
+  <option value="nafta">Nafta</option>
+  <option value="gasoil">Gasoil</option>
+  <option value="gnc/nafta">GNC / Nafta</option>
+  <option value="eléctrico">Eléctrico</option>
+</select>
+
             </div>
           </div>
 
@@ -474,18 +460,12 @@ export default function VehicleEdit() {
             Documentación
           </label>
           <textarea
-            placeholder="Observaciones"
-            value={v.notes || ""}
-            onChange={(e) => setV({ ...v, notes: e.currentTarget.value })}
-            style={{
-              background: "#0c0f14",
-              color: "var(--color-text)",
-              border: "1px solid #252b37",
-              borderRadius: 10,
-              padding: "10px 12px",
-              minHeight: 80,
-            }}
-          />
+  className="form-control"
+  placeholder="Observaciones"
+  value={v.notes || ""}
+  onChange={(e) => setV({ ...v, notes: e.currentTarget.value })}
+/>
+
         </div>
 
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
