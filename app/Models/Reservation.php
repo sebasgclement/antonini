@@ -17,6 +17,8 @@ class Reservation extends Model
         'date',
         'price',             // precio total de venta
         'deposit',
+        'credit_bank',       // 🆕 nuevo
+        'balance',           // 🆕 nuevo
         'payment_method',
         'payment_details',
         'workshop_expenses', // 💡 nuevo campo: gastos de taller
@@ -27,6 +29,8 @@ class Reservation extends Model
     protected $casts = [
         'price'             => 'decimal:2',
         'deposit'           => 'decimal:2',
+        'credit_bank'       => 'decimal:2', // 🆕
+        'balance'           => 'decimal:2', // 🆕
         'workshop_expenses' => 'decimal:2',
         'date'              => 'datetime',
     ];

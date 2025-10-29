@@ -11,17 +11,16 @@ class Vehicle extends Model
     use HasFactory;
 
     protected $fillable = [
-        'brand','model','year','plate','vin','color','km','fuel_level',
-        'ownership','customer_id','seller_id','reference_price','price','status',
-        'check_spare','check_jack','check_docs','notes',
-        'photo_front','photo_back','photo_left','photo_right',
-        'sold_at',
-    ];
+    'brand','model','year','plate','vin','color','km','fuel_type',
+    'ownership','customer_id','seller_id','reference_price','price','status',
+    'check_spare','check_jack','check_docs','notes',
+    'photo_front','photo_back','photo_left','photo_right','sold_at',
+];
+
 
     protected $casts = [
         'year'            => 'integer',
         'km'              => 'integer',
-        'fuel_level'      => 'integer',
         'reference_price' => 'decimal:2',
         'price'           => 'decimal:2',
         'check_spare'     => 'boolean',
@@ -50,6 +49,22 @@ class Vehicle extends Model
     {
         return $this->belongsTo(User::class, 'seller_id');
     }
+
+    // ================= ATRIBUTOS COMPUTADOS =================
+protected $appends = ['has_unpaid_expenses'];
+
+public function getHasUnpaidExpensesAttribute(): bool
+{
+    try {
+        return $this->expenses()
+            ->where('status', 'no_pagado')
+            ->exists();
+    } catch (\Throwable $e) {
+        \Log::error('Error calculando has_unpaid_expenses: ' . $e->getMessage());
+        return false;
+    }
+}
+
 
     // ================= EVENTOS AUTOMÁTICOS =================
     protected static function booted()

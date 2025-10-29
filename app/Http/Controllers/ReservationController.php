@@ -46,6 +46,8 @@ class ReservationController extends Controller
             'used_vehicle_id'   => 'nullable|exists:vehicles,id',
             'price'             => 'required|numeric|min:0',
             'deposit'           => 'nullable|numeric|min:0',
+            'credit_bank'       => 'nullable|numeric|min:0', // 🆕
+            'balance'           => 'nullable|numeric',       // 🆕
             'payment_method'    => 'required|string|max:50',
             'payment_details'   => 'nullable|string|max:255',
             'workshop_expenses' => 'nullable|numeric|min:0',
@@ -69,14 +71,44 @@ class ReservationController extends Controller
         ], 201);
     }
 
-    // ================= MOSTRAR UNA RESERVA =================
-    public function show(Reservation $reservation)
-    {
-        $reservation->load(['vehicle', 'usedVehicle', 'customer', 'seller']);
-        $reservation->profit = $reservation->profit;
+   // ================= MOSTRAR UNA RESERVA =================
+public function show(Reservation $reservation)
+{
+    $reservation->load(['vehicle', 'usedVehicle', 'customer', 'seller']);
+    $reservation->profit = $reservation->profit;
 
-        return response()->json(['data' => $reservation]);
+    // 🧮 Calcular saldo si no está almacenado o está desactualizado
+    $price   = (float) ($reservation->price ?? 0);
+    $deposit = (float) ($reservation->deposit ?? 0);
+    $credit  = (float) ($reservation->credit_bank ?? 0);
+    $trade   = (float) ($reservation->usedVehicle?->price ?? 0);
+    $balance = $price - $deposit - $credit - $trade;
+
+    // 🪄 Formatear valores monetarios
+    $formatted = [
+        'price_fmt'        => '$ ' . number_format($price, 2, ',', '.'),
+        'deposit_fmt'      => '$ ' . number_format($deposit, 2, ',', '.'),
+        'credit_bank_fmt'  => '$ ' . number_format($credit, 2, ',', '.'),
+        'trade_in_fmt'     => '$ ' . number_format($trade, 2, ',', '.'),
+        'balance_fmt'      => '$ ' . number_format($balance, 2, ',', '.'),
+        'profit_fmt'       => '$ ' . number_format($reservation->profit, 2, ',', '.'),
+    ];
+
+    // 💾 Si el saldo guardado difiere, actualizar en segundo plano
+    if (empty($reservation->balance) || abs($reservation->balance - $balance) > 0.01) {
+        $reservation->updateQuietly(['balance' => $balance]);
     }
+
+    return response()->json([
+        'data' => [
+            ...$reservation->toArray(),
+            ...$formatted,
+            'balance' => $balance, // asegura consistencia en la respuesta
+        ],
+    ]);
+}
+
+
 
     // ================= ACTUALIZAR RESERVA =================
     public function update(Request $request, Reservation $reservation)
@@ -87,6 +119,8 @@ class ReservationController extends Controller
             'used_vehicle_id'   => 'nullable|exists:vehicles,id',
             'price'             => 'sometimes|numeric|min:0',
             'deposit'           => 'nullable|numeric|min:0',
+            'credit_bank'       => 'nullable|numeric|min:0', // 🆕
+            'balance'           => 'nullable|numeric',       // 🆕
             'payment_method'    => 'sometimes|string|max:50',
             'payment_details'   => 'nullable|string|max:255',
             'workshop_expenses' => 'nullable|numeric|min:0',
