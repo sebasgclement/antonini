@@ -1,9 +1,9 @@
-import { useState, type FormEvent, type ChangeEvent } from "react";
-import api from "../../lib/api";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
 import useRedirectAfterSave from "../../hooks/useRedirectAfterSave";
+import api from "../../lib/api";
 
 export default function RegisterVehicle() {
   const { goBack } = useRedirectAfterSave("/vehiculos");
@@ -15,13 +15,35 @@ export default function RegisterVehicle() {
   const [vin, setVin] = useState("");
   const [color, setColor] = useState("");
   const [km, setKm] = useState<number | "">("");
-  const [fuelLevel, setFuelLevel] = useState<number | "">("");
+  const [fuelLevel, setFuelLevel] = useState<string>(""); // 🔹 ahora guarda tipo de combustible
+
+  const MARCAS = [
+    "Toyota",
+    "Ford",
+    "Chevrolet",
+    "Volkswagen",
+    "Renault",
+    "Fiat",
+    "Peugeot",
+    "Citroën",
+    "Nissan",
+    "Honda",
+    "Jeep",
+    "Hyundai",
+    "Kia",
+    "Mercedes-Benz",
+    "BMW",
+    "Audi",
+    "Otros",
+  ];
 
   // 🆕 Nuevos campos
   const [referencePrice, setReferencePrice] = useState<number | "">("");
   const [price, setPrice] = useState<number | "">("");
 
-  const [ownership, setOwnership] = useState<"propio" | "consignado">("consignado");
+  const [ownership, setOwnership] = useState<"propio" | "consignado">(
+    "consignado"
+  );
   const [dni, setDni] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -85,8 +107,9 @@ export default function RegisterVehicle() {
       if (vin) form.append("vin", vin);
       if (color) form.append("color", color);
       if (km) form.append("km", String(km));
-      if (fuelLevel) form.append("fuel_level", String(fuelLevel));
-      if (referencePrice) form.append("reference_price", String(referencePrice));
+      if (fuelLevel) form.append("fuel_level", fuelLevel);
+      if (referencePrice)
+        form.append("reference_price", String(referencePrice));
       if (price) form.append("price", String(price));
 
       form.append("ownership", ownership);
@@ -116,7 +139,9 @@ export default function RegisterVehicle() {
       });
 
       const newId = res.data?.data?.id ?? res.data?.id;
-      const redirect = new URLSearchParams(window.location.search).get("redirect");
+      const redirect = new URLSearchParams(window.location.search).get(
+        "redirect"
+      );
 
       if (redirect?.includes("/reservas/nueva") && newId) {
         window.location.href = `${redirect}?vehicle_id=${newId}`;
@@ -125,7 +150,9 @@ export default function RegisterVehicle() {
         setTimeout(goBack, 800);
       }
     } catch (err: any) {
-      setToast(err?.response?.data?.message || "No se pudo registrar el vehículo");
+      setToast(
+        err?.response?.data?.message || "No se pudo registrar el vehículo"
+      );
     } finally {
       setLoading(false);
     }
@@ -138,11 +165,98 @@ export default function RegisterVehicle() {
 
         {/* Datos básicos */}
         <div className="card vstack" style={{ gap: 16 }}>
-          <Input label="Patente *" value={plate} onChange={(e) => setPlate(e.currentTarget.value)} required />
+          <Input
+            label="Patente *"
+            value={plate}
+            onChange={(e) => setPlate(e.currentTarget.value)}
+            required
+          />
+
           <div className="hstack" style={{ gap: 16 }}>
-            <Input label="Marca *" value={brand} onChange={(e) => setBrand(e.currentTarget.value)} required />
-            <Input label="Modelo *" value={model} onChange={(e) => setModel(e.currentTarget.value)} required />
-            <Input label="Año" type="number" value={year as any} onChange={(e) => setYear(parseInt(e.currentTarget.value) || "")} />
+            {/* 🔹 Marca */}
+            <div className="form-group" style={{ flex: 1 }}>
+              <label>Marca *</label>
+              <select
+                value={brand}
+                onChange={(e) => setBrand(e.currentTarget.value)}
+                required
+                style={{
+                  width: "100%",
+                  background: "#0c0f14",
+                  color: "var(--color-text)",
+                  border: "1px solid #252b37",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                }}
+              >
+                <option value="">Seleccionar marca</option>
+                {MARCAS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <Input
+              label="Modelo *"
+              value={model}
+              onChange={(e) => setModel(e.currentTarget.value)}
+              required
+            />
+            <Input
+              label="Año"
+              type="number"
+              value={year as any}
+              onChange={(e) => setYear(parseInt(e.currentTarget.value) || "")}
+            />
+          </div>
+
+          <div className="hstack" style={{ gap: 16 }}>
+            <Input
+              label="VIN / Chasis"
+              value={vin}
+              onChange={(e) => setVin(e.currentTarget.value)}
+            />
+          </div>
+
+          {/* 🔹 Color, km y combustible */}
+          <div className="hstack" style={{ gap: 16 }}>
+            <Input
+              label="Color"
+              value={color}
+              onChange={(e) => setColor(e.currentTarget.value)}
+            />
+
+            <Input
+              label="Kilometraje (km)"
+              type="number"
+              value={km as any}
+              onChange={(e) => setKm(parseInt(e.currentTarget.value) || "")}
+            />
+
+            <div className="form-group" style={{ flex: 1 }}>
+              <label>Tipo de combustible *</label>
+              <select
+                value={fuelLevel}
+                onChange={(e) => setFuelLevel(e.currentTarget.value)}
+                required
+                style={{
+                  width: "100%",
+                  background: "#0c0f14",
+                  color: "var(--color-text)",
+                  border: "1px solid #252b37",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                }}
+              >
+                <option value="">Seleccionar</option>
+                <option value="nafta">Nafta</option>
+                <option value="gasoil">Gasoil</option>
+                <option value="gnc/nafta">GNC / Nafta</option>
+                <option value="eléctrico">Eléctrico</option>
+              </select>
+            </div>
           </div>
 
           {/* 🆕 Campos de precios */}
@@ -151,13 +265,17 @@ export default function RegisterVehicle() {
               label="Precio de referencia ($)"
               type="number"
               value={referencePrice as any}
-              onChange={(e) => setReferencePrice(parseFloat(e.currentTarget.value) || "")}
+              onChange={(e) =>
+                setReferencePrice(parseFloat(e.currentTarget.value) || "")
+              }
             />
             <Input
               label="Precio de venta ($)"
               type="number"
               value={price as any}
-              onChange={(e) => setPrice(parseFloat(e.currentTarget.value) || "")}
+              onChange={(e) =>
+                setPrice(parseFloat(e.currentTarget.value) || "")
+              }
             />
           </div>
         </div>
@@ -167,12 +285,24 @@ export default function RegisterVehicle() {
           <div className="title">Propiedad</div>
           <div className="hstack" style={{ gap: 16 }}>
             <label>
-              <input type="radio" name="ownership" value="propio"
-                checked={ownership === "propio"} onChange={() => setOwnership("propio")} /> Propio
+              <input
+                type="radio"
+                name="ownership"
+                value="propio"
+                checked={ownership === "propio"}
+                onChange={() => setOwnership("propio")}
+              />{" "}
+              Propio
             </label>
             <label>
-              <input type="radio" name="ownership" value="consignado"
-                checked={ownership === "consignado"} onChange={() => setOwnership("consignado")} /> Consignado
+              <input
+                type="radio"
+                name="ownership"
+                value="consignado"
+                checked={ownership === "consignado"}
+                onChange={() => setOwnership("consignado")}
+              />{" "}
+              Consignado
             </label>
           </div>
         </div>
@@ -184,18 +314,41 @@ export default function RegisterVehicle() {
 
             <div className="form-row" style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
-                <Input label="DNI *" value={dni} onChange={(e) => setDni(e.currentTarget.value)} required />
+                <Input
+                  label="DNI *"
+                  value={dni}
+                  onChange={(e) => setDni(e.currentTarget.value)}
+                  required
+                />
               </div>
-              <Button type="button" onClick={searchByDni}>Buscar</Button>
+              <Button type="button" onClick={searchByDni}>
+                Buscar
+              </Button>
             </div>
 
-            <a href="/clientes/registro?redirect=/vehiculos/registro" className="enlace">
+            <a
+              href="/clientes/registro?redirect=/vehiculos/registro"
+              className="enlace"
+            >
               + Registrar nuevo cliente
             </a>
 
-            <Input label="Nombre completo" value={customerName} onChange={(e) => setCustomerName(e.currentTarget.value)} />
-            <Input label="Email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.currentTarget.value)} />
-            <Input label="Teléfono" value={customerPhone} onChange={(e) => setCustomerPhone(e.currentTarget.value)} />
+            <Input
+              label="Nombre completo"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.currentTarget.value)}
+            />
+            <Input
+              label="Email"
+              type="email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.currentTarget.value)}
+            />
+            <Input
+              label="Teléfono"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.currentTarget.value)}
+            />
           </div>
         )}
 
@@ -204,21 +357,36 @@ export default function RegisterVehicle() {
           <label>Fotos del vehículo (opcional)</label>
           <div className="hstack" style={{ flexWrap: "wrap", gap: 16 }}>
             {["front", "back", "left", "right"].map((side) => (
-              <div key={side} className="form-group" style={{ flex: 1, minWidth: 180 }}>
+              <div
+                key={side}
+                className="form-group"
+                style={{ flex: 1, minWidth: 180 }}
+              >
                 <label>
-                  {{
-                    front: "Frente",
-                    back: "Dorso",
-                    left: "Lateral Izquierdo",
-                    right: "Lateral Derecho",
-                  }[side]}
+                  {
+                    {
+                      front: "Frente",
+                      back: "Dorso",
+                      left: "Lateral Izquierdo",
+                      right: "Lateral Derecho",
+                    }[side]
+                  }
                 </label>
-                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, side)} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, side)}
+                />
                 {preview[side] && (
                   <img
                     src={preview[side]!}
                     alt={side}
-                    style={{ width: "100%", maxWidth: 280, marginTop: 8, borderRadius: 8 }}
+                    style={{
+                      width: "100%",
+                      maxWidth: 280,
+                      marginTop: 8,
+                      borderRadius: 8,
+                    }}
                   />
                 )}
               </div>
@@ -230,13 +398,28 @@ export default function RegisterVehicle() {
         <div className="card vstack" style={{ gap: 8 }}>
           <div className="title">Checklist</div>
           <label>
-            <input type="checkbox" checked={checkSpare} onChange={(e) => setCheckSpare(e.currentTarget.checked)} /> Rueda de auxilio
+            <input
+              type="checkbox"
+              checked={checkSpare}
+              onChange={(e) => setCheckSpare(e.currentTarget.checked)}
+            />{" "}
+            Rueda de auxilio
           </label>
           <label>
-            <input type="checkbox" checked={checkJack} onChange={(e) => setCheckJack(e.currentTarget.checked)} /> Cric / Herramientas
+            <input
+              type="checkbox"
+              checked={checkJack}
+              onChange={(e) => setCheckJack(e.currentTarget.checked)}
+            />{" "}
+            Cric / Herramientas
           </label>
           <label>
-            <input type="checkbox" checked={checkDocs} onChange={(e) => setCheckDocs(e.currentTarget.checked)} /> Documentación
+            <input
+              type="checkbox"
+              checked={checkDocs}
+              onChange={(e) => setCheckDocs(e.currentTarget.checked)}
+            />{" "}
+            Documentación
           </label>
           <textarea
             placeholder="Observaciones"
@@ -254,11 +437,18 @@ export default function RegisterVehicle() {
         </div>
 
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
-          <Button type="submit" loading={loading}>Guardar</Button>
+          <Button type="submit" loading={loading}>
+            Guardar
+          </Button>
         </div>
       </form>
 
-      {toast && <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />}
+      {toast && (
+        <Toast
+          message={toast}
+          type={toast.includes("✅") ? "success" : "error"}
+        />
+      )}
     </div>
   );
 }

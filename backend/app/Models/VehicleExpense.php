@@ -6,9 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class VehicleExpense extends Model
 {
-    protected $fillable = ['vehicle_id','description','amount','date'];
+    protected $fillable = ['vehicle_id','description','amount','date','status'];
 
-    public function vehicle() {
+    protected $casts = [
+        'date' => 'date',
+    ];
+
+    public function vehicle()
+    {
         return $this->belongsTo(Vehicle::class);
     }
 }

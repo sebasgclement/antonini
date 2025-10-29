@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import api from "../../lib/api";
-import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
+import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
+import api from "../../lib/api";
 
 type Vehicle = {
   id: number;
@@ -17,6 +17,7 @@ type Expense = {
   description: string;
   amount: number;
   date: string;
+  status: "pagado" | "no_pagado";
 };
 
 export default function VehicleExpensesForm() {
@@ -75,7 +76,7 @@ export default function VehicleExpensesForm() {
     if (!confirm(`¿Eliminar el gasto "${exp.description}"?`)) return;
     try {
       await api.delete(`/vehicles/${id}/expenses/${exp.id}`);
-      setExpenses(prev => prev.filter(e => e.id !== exp.id));
+      setExpenses((prev) => prev.filter((e) => e.id !== exp.id));
       setToast("Gasto eliminado ✅");
     } catch {
       setToast("No se pudo eliminar el gasto");
@@ -94,21 +95,21 @@ export default function VehicleExpensesForm() {
         <Input
           label="Descripción *"
           value={description}
-          onChange={e => setDescription(e.currentTarget.value)}
+          onChange={(e) => setDescription(e.currentTarget.value)}
           required
         />
         <Input
           label="Monto ($)"
           type="number"
           value={amount as any}
-          onChange={e => setAmount(parseFloat(e.currentTarget.value) || "")}
+          onChange={(e) => setAmount(parseFloat(e.currentTarget.value) || "")}
           required
         />
         <Input
           label="Fecha *"
           type="date"
           value={date}
-          onChange={e => setDate(e.currentTarget.value)}
+          onChange={(e) => setDate(e.currentTarget.value)}
           required
         />
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
@@ -122,7 +123,9 @@ export default function VehicleExpensesForm() {
       <div className="card vstack" style={{ gap: 8 }}>
         <div className="title">Historial de gastos</div>
         {expenses.length === 0 ? (
-          <p style={{ color: "var(--color-muted)" }}>No hay gastos registrados.</p>
+          <p style={{ color: "var(--color-muted)" }}>
+            No hay gastos registrados.
+          </p>
         ) : (
           <table className="report-table">
             <thead>
@@ -130,17 +133,50 @@ export default function VehicleExpensesForm() {
                 <th>Fecha</th>
                 <th>Descripción</th>
                 <th>Monto</th>
+                <th>Estado</th> {/* ✅ */}
                 <th style={{ textAlign: "right" }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {expenses.map(exp => (
+              {expenses.map((exp) => (
                 <tr key={exp.id}>
                   <td>{new Date(exp.date).toLocaleDateString()}</td>
                   <td>{exp.description}</td>
                   <td>${exp.amount.toLocaleString("es-AR")}</td>
                   <td style={{ textAlign: "right" }}>
-                    <Button onClick={() => handleDelete(exp)}>🗑️</Button>
+                    <div
+                      className="hstack"
+                      style={{ gap: 8, justifyContent: "flex-end" }}
+                    >
+                      {exp.status === "no_pagado" ? (
+                        <Button
+                          onClick={async () => {
+                            await api.put(
+                              `/vehicles/${id}/expenses/${exp.id}`,
+                              { status: "pagado" }
+                            );
+                            setToast("Gasto marcado como pagado ✅");
+                            loadData();
+                          }}
+                        >
+                          💰 Pagar
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={async () => {
+                            await api.put(
+                              `/vehicles/${id}/expenses/${exp.id}`,
+                              { status: "no_pagado" }
+                            );
+                            setToast("Gasto marcado como NO pagado ⚠️");
+                            loadData();
+                          }}
+                        >
+                          🔄 Desmarcar
+                        </Button>
+                      )}
+                      <Button onClick={() => handleDelete(exp)}>🗑️</Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -149,12 +185,18 @@ export default function VehicleExpensesForm() {
         )}
       </div>
 
-      <Button onClick={() => nav("/vehiculos")} style={{ alignSelf: "flex-start" }}>
+      <Button
+        onClick={() => nav("/vehiculos")}
+        style={{ alignSelf: "flex-start" }}
+      >
         ← Volver
       </Button>
 
       {toast && (
-        <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />
+        <Toast
+          message={toast}
+          type={toast.includes("✅") ? "success" : "error"}
+        />
       )}
     </div>
   );

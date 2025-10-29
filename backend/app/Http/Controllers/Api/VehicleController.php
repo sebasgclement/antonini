@@ -46,102 +46,115 @@ class VehicleController extends Controller
     }
 
     // POST /vehicles
-    public function store(Request $req)
-    {
-        $data = $req->validate([
-            'brand' => 'required|string',
-            'model' => 'required|string',
-            'year' => 'nullable|integer',
-            'plate' => 'required|string|unique:vehicles,plate',
-            'vin' => 'nullable|string',
-            'color' => 'nullable|string',
-            'km' => 'nullable|integer',
-            'fuel_level' => 'nullable|integer|min:0|max:100',
-            'ownership' => 'required|in:propio,consignado',
-            'customer_id' => 'nullable|exists:customers,id',
-            'reference_price' => 'nullable|numeric',
-            'price' => 'nullable|numeric',
-            'status' => 'in:disponible,reservado,vendido',
-            'check_spare' => 'boolean',
-            'check_jack' => 'boolean',
-            'check_docs' => 'boolean',
-            'notes' => 'nullable|string',
+public function store(Request $req)
+{
+    $data = $req->validate([
+        'brand' => 'required|string',
+        'model' => 'required|string',
+        'year' => 'nullable|integer',
+        'plate' => 'required|string|unique:vehicles,plate',
+        'vin' => 'nullable|string',
+        'color' => 'nullable|string',
+        'km' => 'nullable|integer',
+        'fuel_type' => 'nullable|string|max:50', // ✅ nuevo campo
+        'ownership' => 'required|in:propio,consignado',
+        'customer_id' => 'nullable|exists:customers,id',
+        'reference_price' => 'nullable|numeric',
+        'price' => 'nullable|numeric',
+        'status' => 'in:disponible,reservado,vendido',
+        'check_spare' => 'boolean',
+        'check_jack' => 'boolean',
+        'check_docs' => 'boolean',
+        'notes' => 'nullable|string',
 
-            // 🆕 imágenes opcionales
-            'photo_front' => 'nullable|image|max:4096',
-            'photo_back' => 'nullable|image|max:4096',
-            'photo_left' => 'nullable|image|max:4096',
-            'photo_right' => 'nullable|image|max:4096',
-        ]);
+        'photo_front' => 'nullable|image|max:4096',
+        'photo_back' => 'nullable|image|max:4096',
+        'photo_left' => 'nullable|image|max:4096',
+        'photo_right' => 'nullable|image|max:4096',
+    ]);
 
-        // 🖼️ Guardar imágenes si existen
-        foreach (['front', 'back', 'left', 'right'] as $side) {
-            $key = "photo_{$side}";
-            if ($req->hasFile($key)) {
-                $data[$key] = $req->file($key)->store('vehicles', 'public');
-            }
+    // Guardar imágenes
+    foreach (['front', 'back', 'left', 'right'] as $side) {
+        $key = "photo_{$side}";
+        if ($req->hasFile($key)) {
+            $data[$key] = $req->file($key)->store('vehicles', 'public');
         }
-
-        $vehicle = Vehicle::create($data);
-
-        return response()->json([
-            'ok' => true,
-            'data' => $vehicle->load('customer'),
-        ], 201);
     }
 
-    // PUT /vehicles/{id}
-    public function update(Request $req, Vehicle $vehicle)
-    {
-        $data = $req->validate([
-            'brand' => 'sometimes|string',
-            'model' => 'sometimes|string',
-            'year' => 'nullable|integer',
-            'plate' => 'sometimes|string|unique:vehicles,plate,' . $vehicle->id,
-            'vin' => 'nullable|string',
-            'color' => 'nullable|string',
-            'km' => 'nullable|integer',
-            'fuel_level' => 'nullable|integer|min:0|max:100',
-            'ownership' => 'in:propio,consignado',
-            'customer_id' => 'nullable|exists:customers,id',
-            'reference_price' => 'nullable|numeric',
-            'price' => 'nullable|numeric',
-            'status' => 'in:disponible,reservado,vendido',
-            'check_spare' => 'boolean',
-            'check_jack' => 'boolean',
-            'check_docs' => 'boolean',
-            'notes' => 'nullable|string',
+    $vehicle = Vehicle::create($data);
 
-            // imágenes opcionales
-            'photo_front' => 'nullable|image|max:4096',
-            'photo_back' => 'nullable|image|max:4096',
-            'photo_left' => 'nullable|image|max:4096',
-            'photo_right' => 'nullable|image|max:4096',
-        ]);
+    return response()->json([
+        'ok' => true,
+        'data' => $vehicle->load('customer'),
+    ], 201);
+}
 
-        // 🧹 Eliminar si viene delete_photo_*
-        foreach (['front', 'back', 'left', 'right'] as $side) {
-            $key = "photo_{$side}";
-            if ($req->has("delete_photo_{$side}")) {
+
+// PUT /vehicles/{id}
+public function update(Request $req, Vehicle $vehicle)
+{
+    $data = $req->validate([
+        'brand' => 'sometimes|string',
+        'model' => 'sometimes|string',
+        'year' => 'nullable|integer',
+        'plate' => 'sometimes|string|unique:vehicles,plate,' . $vehicle->id,
+        'vin' => 'nullable|string',
+        'color' => 'nullable|string',
+        'km' => 'nullable|integer',
+        'fuel_type' => 'nullable|string|max:50', // ✅ reemplaza fuel_level
+        'ownership' => 'in:propio,consignado',
+        'customer_id' => 'nullable|exists:customers,id',
+        'reference_price' => 'nullable|numeric',
+        'price' => 'nullable|numeric',
+        'status' => 'in:disponible,reservado,vendido',
+        'check_spare' => 'boolean',
+        'check_jack' => 'boolean',
+        'check_docs' => 'boolean',
+        'notes' => 'nullable|string',
+
+        'photo_front' => 'nullable|image|max:4096',
+        'photo_back' => 'nullable|image|max:4096',
+        'photo_left' => 'nullable|image|max:4096',
+        'photo_right' => 'nullable|image|max:4096',
+    ]);
+
+    // 🧩 Si intenta devolver el vehículo (reservado → disponible)
+    if (($req->status ?? null) === 'disponible' && $vehicle->status === 'reservado') {
+        $pendientes = $vehicle->expenses()->where('status', 'no_pagado')->count();
+
+        if ($pendientes > 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => "No se puede devolver el vehículo: hay $pendientes gasto(s) de taller sin pagar.",
+            ], 422);
+        }
+    }
+
+    // 📸 Manejo de imágenes (igual que antes)
+    foreach (['front', 'back', 'left', 'right'] as $side) {
+        $key = "photo_{$side}";
+        if ($req->has("delete_photo_{$side}")) {
+            Storage::disk('public')->delete($vehicle->{$key});
+            $vehicle->{$key} = null;
+        }
+
+        if ($req->hasFile($key)) {
+            if ($vehicle->{$key}) {
                 Storage::disk('public')->delete($vehicle->{$key});
-                $vehicle->{$key} = null;
             }
-
-            if ($req->hasFile($key)) {
-                if ($vehicle->{$key}) {
-                    Storage::disk('public')->delete($vehicle->{$key});
-                }
-                $data[$key] = $req->file($key)->store('vehicles', 'public');
-            }
+            $data[$key] = $req->file($key)->store('vehicles', 'public');
         }
-
-        $vehicle->update($data);
-
-        return response()->json([
-            'ok' => true,
-            'data' => $vehicle->load('customer'),
-        ]);
     }
+
+    $vehicle->update($data);
+
+    return response()->json([
+        'ok' => true,
+        'data' => $vehicle->load('customer', 'expenses'),
+    ]);
+}
+
+
 
     // DELETE /vehicles/{id}
     public function destroy(Vehicle $vehicle)
