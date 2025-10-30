@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import useAuth from "../hooks/useAuth";
@@ -14,6 +14,13 @@ export default function Login() {
   const [password, setPassword] = useState("secret123");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // 🌓 Fuerza modo oscuro al entrar a la pantalla de login
+  useEffect(() => {
+    const html = document.documentElement;
+    html.setAttribute("data-theme", "dark");
+    html.style.background = "#0f1115"; // previene flash blanco en carga
+  }, []);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -97,6 +104,7 @@ export default function Login() {
             fontSize: "1.4rem",
             fontWeight: 600,
             marginBottom: 4,
+            color: "var(--color-text)",
           }}
         >
           Ingresar a la Intranet
