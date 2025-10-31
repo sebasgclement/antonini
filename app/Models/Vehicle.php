@@ -14,8 +14,11 @@ class Vehicle extends Model
     'brand','model','year','plate','vin','color','km','fuel_type',
     'ownership','customer_id','seller_id','reference_price','price','status',
     'check_spare','check_jack','check_docs','notes',
-    'photo_front','photo_back','photo_left','photo_right','sold_at',
+    'photo_front','photo_back','photo_left','photo_right',
+    'photo_interior_front','photo_interior_back','photo_trunk',
+    'sold_at',
 ];
+
 
 
     protected $casts = [

@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\VehicleBrandController;
+
 
 // ================== AUTH ==================
 Route::post('/auth/login',  [AuthController::class, 'login']);
@@ -25,6 +27,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ Vehículos (reemplaza a Recepción)
     Route::apiResource('vehicles', VehicleController::class);
+
+    // ✅ Marcas de vehículo (CRUD simple)
+    Route::get('/brands', [VehicleBrandController::class, 'index']);
+    Route::post('/brands', [VehicleBrandController::class, 'store']);
+    Route::put('/brands/{brand}', [VehicleBrandController::class, 'update']);
+    Route::delete('/brands/{brand}', [VehicleBrandController::class, 'destroy']);
 
     // ✅ Gastos por vehículo
     Route::get   ('/vehicles/{vehicle}/expenses',           [VehicleExpenseController::class, 'index']);
