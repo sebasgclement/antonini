@@ -46,22 +46,11 @@ export default function VehicleView() {
       <div className="detail-card">
         <div className="detail-section-title">Datos generales</div>
         <div className="detail-group">
-          <p>
-            <strong>Patente:</strong> {vehicle.plate || "—"}
-          </p>
-          <p>
-            <strong>Año:</strong> {vehicle.year || "—"}
-          </p>
-          <p>
-            <strong>Color:</strong> {vehicle.color || "—"}
-          </p>
-          <p>
-            <strong>Kilometraje:</strong>{" "}
-            {vehicle.km ? `${vehicle.km.toLocaleString()} km` : "—"}
-          </p>
-          <p>
-            <strong>Combustible:</strong> {vehicle.fuel_type || "—"}
-          </p>
+          <p><strong>Patente:</strong> {vehicle.plate || "—"}</p>
+          <p><strong>Año:</strong> {vehicle.year || "—"}</p>
+          <p><strong>Color:</strong> {vehicle.color || "—"}</p>
+          <p><strong>Kilometraje:</strong> {vehicle.km ? `${vehicle.km.toLocaleString()} km` : "—"}</p>
+          <p><strong>Combustible:</strong> {vehicle.fuel_type || "—"}</p>
         </div>
       </div>
 
@@ -69,9 +58,7 @@ export default function VehicleView() {
       <div className="detail-card">
         <div className="detail-section-title">Propiedad / Cliente</div>
         <div className="detail-group">
-          <p>
-            <strong>Tipo de propiedad:</strong> {vehicle.ownership}
-          </p>
+          <p><strong>Tipo de propiedad:</strong> {vehicle.ownership}</p>
           {vehicle.ownership === "consignado" && (
             <p>
               <strong>Cliente consignante:</strong>{" "}
@@ -82,9 +69,7 @@ export default function VehicleView() {
                 `#${vehicle.customer_id}`}
             </p>
           )}
-          <p>
-            <strong>VIN:</strong> {vehicle.vin || "—"}
-          </p>
+          <p><strong>VIN:</strong> {vehicle.vin || "—"}</p>
         </div>
       </div>
 
@@ -108,11 +93,8 @@ export default function VehicleView() {
       {/* === Gastos de taller === */}
       <div className="detail-card">
         <div className="detail-section-title">Gastos de taller</div>
-
         {expenses.length === 0 ? (
-          <p className="text-muted">
-            No hay gastos registrados para este vehículo.
-          </p>
+          <p className="text-muted">No hay gastos registrados para este vehículo.</p>
         ) : (
           <table className="report-table">
             <thead>
@@ -126,9 +108,7 @@ export default function VehicleView() {
               {expenses.map((exp, i) => (
                 <tr key={i}>
                   <td>
-                    {new Date(exp.date || exp.created_at).toLocaleDateString(
-                      "es-AR"
-                    )}
+                    {new Date(exp.date || exp.created_at).toLocaleDateString("es-AR")}
                   </td>
                   <td>{exp.description || "—"}</td>
                   <td>{exp.amount ? exp.amount.toLocaleString() : "—"}</td>
@@ -162,14 +142,21 @@ export default function VehicleView() {
       <div className="detail-card">
         <div className="detail-section-title">Fotos del vehículo</div>
         <div className="photo-gallery">
-          {["front", "back", "left", "right"].map((side) => {
-            const url =
-              vehicle[`photo_${side}_url`] || vehicle[`photo_${side}`];
+          {[
+            { key: "front", label: "Frente" },
+            { key: "back", label: "Dorso" },
+            { key: "left", label: "Lateral Izquierdo" },
+            { key: "right", label: "Lateral Derecho" },
+            { key: "interior_front", label: "Interior Adelante" },
+            { key: "interior_back", label: "Interior Atrás" },
+            { key: "trunk", label: "Baúl" },
+          ].map(({ key, label }) => {
+            const url = vehicle[`photo_${key}_url`] || vehicle[`photo_${key}`];
             return (
               url && (
-                <div className="photo-item" key={side}>
-                  <img src={url} alt={side} />
-                  <p>{side}</p>
+                <div className="photo-item" key={key}>
+                  <img src={url} alt={label} />
+                  <p>{label}</p>
                 </div>
               )
             );

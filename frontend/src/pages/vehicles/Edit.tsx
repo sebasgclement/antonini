@@ -14,7 +14,7 @@ type Vehicle = {
   vin?: string;
   color?: string;
   km?: number;
-  fuel_type?: string; // 🔹 ahora se usa para tipo de combustible
+  fuel_type?: string;
   ownership: "propio" | "consignado";
   customer_dni?: string;
   customer_name?: string;
@@ -30,38 +30,26 @@ type Vehicle = {
   photo_back_url?: string | null;
   photo_left_url?: string | null;
   photo_right_url?: string | null;
+  photo_interior_front_url?: string | null;
+  photo_interior_back_url?: string | null;
+  photo_trunk_url?: string | null;
 };
-
-const MARCAS = [
-  "Toyota",
-  "Ford",
-  "Chevrolet",
-  "Volkswagen",
-  "Renault",
-  "Fiat",
-  "Peugeot",
-  "Citroën",
-  "Nissan",
-  "Honda",
-  "Jeep",
-  "Hyundai",
-  "Kia",
-  "Mercedes-Benz",
-  "BMW",
-  "Audi",
-  "Otros",
-];
 
 export default function VehicleEdit() {
   const { id } = useParams();
   const nav = useNavigate();
 
   const [v, setV] = useState<Partial<Vehicle>>({});
+  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [newPhotos, setNewPhotos] = useState<Record<string, File | null>>({});
   const [preview, setPreview] = useState<Record<string, string | null>>({});
+
+  // 🔹 Modal nueva marca
+  const [showModal, setShowModal] = useState(false);
+  const [newBrand, setNewBrand] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -69,16 +57,37 @@ export default function VehicleEdit() {
         const { data } = await api.get(`/vehicles/${id}`);
         const vehicle = data?.data ?? data ?? {};
         setV(vehicle);
+
+        // 🔹 Preview de todas las fotos, incluidas las nuevas
         setPreview({
           front: vehicle.photo_front_url || null,
           back: vehicle.photo_back_url || null,
           left: vehicle.photo_left_url || null,
           right: vehicle.photo_right_url || null,
+          interior_front: vehicle.photo_interior_front_url || null,
+          interior_back: vehicle.photo_interior_back_url || null,
+          trunk: vehicle.photo_trunk_url || null,
         });
+
+        const brandsRes = await api.get("/brands");
+        setBrands(brandsRes.data);
+
+        // 🔹 Si acaba de registrarse un cliente, cargarlo automáticamente
+        const newClient = localStorage.getItem("lastRegisteredCustomer");
+        if (newClient) {
+          const c = JSON.parse(newClient);
+          setV((prev) => ({
+            ...prev,
+            customer_dni: c.dni || "",
+            customer_name: c.name || "",
+            customer_email: c.email || "",
+            customer_phone: c.phone || "",
+          }));
+          localStorage.removeItem("lastRegisteredCustomer");
+          setToast("Cliente cargado automáticamente ✅");
+        }
       } catch (err: any) {
-        setToast(
-          err?.response?.data?.message || "No se pudo cargar el vehículo"
-        );
+        setToast(err?.response?.data?.message || "No se pudo cargar el vehículo");
       } finally {
         setLoading(false);
       }
@@ -99,7 +108,6 @@ export default function VehicleEdit() {
     setV((prev) => ({ ...prev, [`photo_${side}_url`]: null }));
   };
 
-  // 🔍 Buscar cliente por DNI
   const searchByDni = async () => {
     if (!v.customer_dni?.trim()) return;
     try {
@@ -121,6 +129,20 @@ export default function VehicleEdit() {
     }
   };
 
+  const addBrand = async () => {
+    if (!newBrand.trim()) return;
+    try {
+      const { data } = await api.post("/brands", { name: newBrand });
+      setBrands((prev) => [...prev, data]);
+      setV((prev) => ({ ...prev, brand: data.name }));
+      setNewBrand("");
+      setToast("Marca agregada ✅");
+      setShowModal(false);
+    } catch {
+      setToast("No se pudo agregar la marca");
+    }
+  };
+
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
@@ -133,11 +155,9 @@ export default function VehicleEdit() {
       if (v.vin) form.append("vin", v.vin);
       if (v.color) form.append("color", v.color);
       if (v.km) form.append("km", String(v.km));
-      if (v.fuel_type) form.append("fuel_type", v.fuel_type); // 🔹 tipo de combustible
-      if (v.reference_price)
-        form.append("reference_price", String(v.reference_price));
+      if (v.fuel_type) form.append("fuel_type", v.fuel_type);
+      if (v.reference_price) form.append("reference_price", String(v.reference_price));
       if (v.price) form.append("price", String(v.price));
-
       form.append("ownership", v.ownership || "propio");
 
       if (v.ownership === "consignado" && v.customer_dni) {
@@ -147,17 +167,21 @@ export default function VehicleEdit() {
         if (v.customer_phone) form.append("customer_phone", v.customer_phone);
       }
 
-      // ✅ Enviar booleanos como 1/0
       form.append("check_spare", v.check_spare ? "1" : "0");
       form.append("check_jack", v.check_jack ? "1" : "0");
       form.append("check_docs", v.check_docs ? "1" : "0");
-
       if (v.notes) form.append("notes", v.notes);
 
-      // Adjuntar nuevas fotos o eliminar
-      Object.entries(newPhotos).forEach(([side, file]) => {
+      // 📸 Todas las fotos
+      const sides = [
+        "front", "back", "left", "right",
+        "interior_front", "interior_back", "trunk",
+      ];
+
+      sides.forEach((side) => {
+        const file = newPhotos[side];
         if (file) form.append(`photo_${side}`, file);
-        else form.append(`delete_photo_${side}`, "1");
+        else if (preview[side] === null) form.append(`delete_photo_${side}`, "1");
       });
 
       await api.post(`/vehicles/${id}?_method=PUT`, form, {
@@ -180,7 +204,7 @@ export default function VehicleEdit() {
       <form onSubmit={onSubmit} className="vstack" style={{ gap: 16 }}>
         <div className="title">Editar vehículo #{id}</div>
 
-        {/* Datos vehículo */}
+        {/* Datos básicos */}
         <div className="card vstack" style={{ gap: 16 }}>
           <Input
             label="Patente *"
@@ -190,23 +214,24 @@ export default function VehicleEdit() {
           />
 
           <div className="hstack" style={{ gap: 16 }}>
-            {/* 🔹 Marca */}
             <div className="form-group" style={{ flex: 1 }}>
               <label>Marca *</label>
-              <select
-  className="form-control"
-  value={v.brand || ""}
-  onChange={(e) => setV({ ...v, brand: e.currentTarget.value })}
-  required
->
-  <option value="">Seleccionar marca</option>
-  {MARCAS.map((m) => (
-    <option key={m} value={m}>
-      {m}
-    </option>
-  ))}
-</select>
-
+              <div className="hstack" style={{ gap: 8 }}>
+                <select
+                  className="form-control"
+                  value={v.brand || ""}
+                  onChange={(e) => setV({ ...v, brand: e.currentTarget.value })}
+                  required
+                >
+                  <option value="">Seleccionar marca</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                <Button type="button" onClick={() => setShowModal(true)}>+</Button>
+              </div>
             </div>
 
             <Input
@@ -220,15 +245,11 @@ export default function VehicleEdit() {
               type="number"
               value={v.year || ""}
               onChange={(e) =>
-                setV({
-                  ...v,
-                  year: parseInt(e.currentTarget.value) || undefined,
-                })
+                setV({ ...v, year: parseInt(e.currentTarget.value) || undefined })
               }
             />
           </div>
 
-          {/* 🔹 Color, km y combustible */}
           <div className="hstack" style={{ gap: 16 }}>
             <Input
               label="VIN / Chasis"
@@ -251,174 +272,46 @@ export default function VehicleEdit() {
             <div className="form-group" style={{ flex: 1 }}>
               <label>Tipo de combustible *</label>
               <select
-  className="form-control"
-  value={v.fuel_type || ""}
-  onChange={(e) => setV({ ...v, fuel_type: e.currentTarget.value })}
-  required
->
-  <option value="">Seleccionar</option>
-  <option value="nafta">Nafta</option>
-  <option value="gasoil">Gasoil</option>
-  <option value="gnc/nafta">GNC / Nafta</option>
-  <option value="eléctrico">Eléctrico</option>
-</select>
-
-            </div>
-          </div>
-
-          {/* 🆕 Campos de precio */}
-          <div className="hstack" style={{ gap: 16 }}>
-            <Input
-              label="Precio de referencia ($)"
-              type="number"
-              value={v.reference_price || ""}
-              onChange={(e) =>
-                setV({
-                  ...v,
-                  reference_price:
-                    parseFloat(e.currentTarget.value) || undefined,
-                })
-              }
-            />
-            <Input
-              label="Precio de venta ($)"
-              type="number"
-              value={v.price || ""}
-              onChange={(e) =>
-                setV({
-                  ...v,
-                  price: parseFloat(e.currentTarget.value) || undefined,
-                })
-              }
-            />
-          </div>
-        </div>
-
-        {/* Propiedad */}
-        <div className="card vstack">
-          <div className="hstack" style={{ gap: 16 }}>
-            <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="propio"
-                checked={v.ownership === "propio"}
-                onChange={() =>
-                  setV({ ...v, ownership: "propio", customer_dni: undefined })
+                className="form-control"
+                value={v.fuel_type || ""}
+                onChange={(e) =>
+                  setV({ ...v, fuel_type: e.currentTarget.value })
                 }
-              />
-              Propio
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="consignado"
-                checked={v.ownership === "consignado"}
-                onChange={() => setV({ ...v, ownership: "consignado" })}
-              />
-              Consignado
-            </label>
+                required
+              >
+                <option value="">Seleccionar</option>
+                <option value="nafta">Nafta</option>
+                <option value="gasoil">Gasoil</option>
+                <option value="gnc/nafta">GNC / Nafta</option>
+                <option value="eléctrico">Eléctrico</option>
+              </select>
+            </div>
           </div>
         </div>
-
-        {/* Cliente consignado */}
-        {v.ownership === "consignado" && (
-          <div className="card vstack" style={{ gap: 16 }}>
-            <div className="title">Datos del cliente</div>
-
-            <div className="form-row" style={{ alignItems: "flex-end" }}>
-              <div style={{ flex: 1 }}>
-                <Input
-                  label="DNI *"
-                  value={v.customer_dni || ""}
-                  onChange={(e) =>
-                    setV({ ...v, customer_dni: e.currentTarget.value })
-                  }
-                  required
-                />
-              </div>
-              <Button type="button" onClick={searchByDni}>
-                Buscar
-              </Button>
-            </div>
-
-            <Input
-              label="Nombre completo"
-              value={v.customer_name || ""}
-              onChange={(e) =>
-                setV({ ...v, customer_name: e.currentTarget.value })
-              }
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={v.customer_email || ""}
-              onChange={(e) =>
-                setV({ ...v, customer_email: e.currentTarget.value })
-              }
-            />
-            <Input
-              label="Teléfono"
-              value={v.customer_phone || ""}
-              onChange={(e) =>
-                setV({ ...v, customer_phone: e.currentTarget.value })
-              }
-            />
-          </div>
-        )}
 
         {/* Fotos */}
         <div className="card vstack" style={{ gap: 12 }}>
           <div className="title">Fotos del vehículo</div>
           <div className="hstack" style={{ flexWrap: "wrap", gap: 16 }}>
-            {["front", "back", "left", "right"].map((side) => (
-              <div
-                key={side}
-                className="form-group"
-                style={{ flex: 1, minWidth: 180 }}
-              >
-                <label>
-                  {
-                    {
-                      front: "Frente",
-                      back: "Dorso",
-                      left: "Lateral Izquierdo",
-                      right: "Lateral Derecho",
-                    }[side]
-                  }
-                </label>
-                {preview[side] ? (
-                  <div style={{ position: "relative" }}>
-                    <img
-                      src={preview[side]!}
-                      alt={side}
-                      style={{
-                        width: "100%",
-                        maxWidth: 280,
-                        marginTop: 8,
-                        borderRadius: 8,
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => handleRemovePhoto(side)}
-                      style={{
-                        position: "absolute",
-                        top: 6,
-                        right: 6,
-                        padding: "4px 8px",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Quitar
-                    </Button>
-                  </div>
-                ) : (
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileChange(e, side)}
+            {[
+              { key: "front", label: "Frente" },
+              { key: "back", label: "Dorso" },
+              { key: "left", label: "Lateral Izquierdo" },
+              { key: "right", label: "Lateral Derecho" },
+              { key: "interior_front", label: "Interior Adelante" },
+              { key: "interior_back", label: "Interior Atrás" },
+              { key: "trunk", label: "Baúl" },
+            ].map(({ key, label }) => (
+              <div key={key} className="form-group" style={{ flex: 1, minWidth: 180 }}>
+                <label>{label}</label>
+                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, key)} />
+                {preview[key] && (
+                  <img
+                    src={preview[key]!}
+                    alt={key}
+                    style={{ width: "100%", maxWidth: 280, marginTop: 8, borderRadius: 8 }}
+                    onClick={() => handleRemovePhoto(key)}
+                    title="Click para eliminar"
                   />
                 )}
               </div>
@@ -426,60 +319,33 @@ export default function VehicleEdit() {
           </div>
         </div>
 
-        {/* Checklist */}
-        <div className="card vstack" style={{ gap: 8 }}>
-          <div className="title">Checklist</div>
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_spare || false}
-              onChange={(e) =>
-                setV({ ...v, check_spare: e.currentTarget.checked })
-              }
-            />{" "}
-            Rueda de auxilio
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_jack || false}
-              onChange={(e) =>
-                setV({ ...v, check_jack: e.currentTarget.checked })
-              }
-            />{" "}
-            Cric / Herramientas
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_docs || false}
-              onChange={(e) =>
-                setV({ ...v, check_docs: e.currentTarget.checked })
-              }
-            />{" "}
-            Documentación
-          </label>
-          <textarea
-  className="form-control"
-  placeholder="Observaciones"
-  value={v.notes || ""}
-  onChange={(e) => setV({ ...v, notes: e.currentTarget.value })}
-/>
-
-        </div>
-
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
-          <Button type="submit" loading={saving}>
-            Guardar cambios
-          </Button>
+          <Button type="submit" loading={saving}>Guardar cambios</Button>
         </div>
       </form>
 
+      {/* Modal visual para nueva marca */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3>Agregar nueva marca</h3>
+            <input
+              type="text"
+              className="form-control"
+              value={newBrand}
+              onChange={(e) => setNewBrand(e.currentTarget.value)}
+              placeholder="Nombre de marca"
+            />
+            <div className="hstack" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <Button type="button" onClick={addBrand}>Guardar</Button>
+              <Button type="button" onClick={() => setShowModal(false)}>Cerrar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
-        <Toast
-          message={toast}
-          type={toast.includes("✅") ? "success" : "error"}
-        />
+        <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />
       )}
     </div>
   );

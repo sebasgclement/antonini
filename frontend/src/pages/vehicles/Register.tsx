@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
@@ -8,70 +8,126 @@ import api from "../../lib/api";
 export default function RegisterVehicle() {
   const { goBack } = useRedirectAfterSave("/vehiculos");
 
-  const [plate, setPlate] = useState("");
+  // 🔹 Estado de marcas (desde BD)
+  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [brand, setBrand] = useState("");
+  const [newBrand, setNewBrand] = useState("");
+
+  const [plate, setPlate] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState<number | "">("");
   const [vin, setVin] = useState("");
   const [color, setColor] = useState("");
   const [km, setKm] = useState<number | "">("");
-  const [fuelType, setFuelType] = useState<string>(""); // 🔹 ahora guarda tipo de combustible
-
-  const MARCAS = [
-    "Toyota",
-    "Ford",
-    "Chevrolet",
-    "Volkswagen",
-    "Renault",
-    "Fiat",
-    "Peugeot",
-    "Citroën",
-    "Nissan",
-    "Honda",
-    "Jeep",
-    "Hyundai",
-    "Kia",
-    "Mercedes-Benz",
-    "BMW",
-    "Audi",
-    "Otros",
-  ];
-
-  // 🆕 Nuevos campos
+  const [fuelType, setFuelType] = useState<string>("");
   const [referencePrice, setReferencePrice] = useState<number | "">("");
   const [price, setPrice] = useState<number | "">("");
-
-  const [ownership, setOwnership] = useState<"propio" | "consignado">(
-    "consignado"
-  );
+  const [ownership, setOwnership] = useState<"propio" | "consignado">("consignado");
   const [dni, setDni] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-
   const [checkSpare, setCheckSpare] = useState(true);
   const [checkJack, setCheckJack] = useState(true);
   const [checkDocs, setCheckDocs] = useState(true);
   const [notes, setNotes] = useState("");
 
+  // 📸 Fotos
   const [photoFront, setPhotoFront] = useState<File | null>(null);
   const [photoBack, setPhotoBack] = useState<File | null>(null);
   const [photoLeft, setPhotoLeft] = useState<File | null>(null);
   const [photoRight, setPhotoRight] = useState<File | null>(null);
+  const [photoInteriorFront, setPhotoInteriorFront] = useState<File | null>(null);
+  const [photoInteriorBack, setPhotoInteriorBack] = useState<File | null>(null);
+  const [photoTrunk, setPhotoTrunk] = useState<File | null>(null);
   const [preview, setPreview] = useState<Record<string, string | null>>({});
 
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState("");
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    // 🔹 Restaurar formulario si se había guardado antes
+    const saved = localStorage.getItem("vehicleFormBackup");
+    if (saved) {
+      const data = JSON.parse(saved);
+      setPlate(data.plate || "");
+      setBrand(data.brand || "");
+      setModel(data.model || "");
+      setYear(data.year || "");
+      setVin(data.vin || "");
+      setColor(data.color || "");
+      setKm(data.km || "");
+      setFuelType(data.fuelType || "");
+      setReferencePrice(data.referencePrice || "");
+      setPrice(data.price || "");
+      setOwnership(data.ownership || "consignado");
+      setDni(data.dni || "");
+      setCustomerName(data.customerName || "");
+      setCustomerEmail(data.customerEmail || "");
+      setCustomerPhone(data.customerPhone || "");
+      setCheckSpare(data.checkSpare ?? true);
+      setCheckJack(data.checkJack ?? true);
+      setCheckDocs(data.checkDocs ?? true);
+      setNotes(data.notes || "");
+      localStorage.removeItem("vehicleFormBackup");
+    }
+
+    // 🔹 Si acaba de registrarse un cliente, cargarlo automáticamente
+    const newClient = localStorage.getItem("lastRegisteredCustomer");
+    if (newClient) {
+      const c = JSON.parse(newClient);
+      setDni(c.dni || "");
+      setCustomerName(c.name || "");
+      setCustomerEmail(c.email || "");
+      setCustomerPhone(c.phone || "");
+      localStorage.removeItem("lastRegisteredCustomer");
+      setToast("Cliente cargado automáticamente ✅");
+    }
+  }, []);
+
+  // 🔹 Cargar marcas
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/brands");
+        setBrands(data);
+      } catch {
+        console.error("No se pudieron cargar las marcas");
+      }
+    })();
+  }, []);
+
+  // 🔹 Agregar nueva marca
+  const addBrand = async () => {
+    if (!newBrand.trim()) return;
+    try {
+      const { data } = await api.post("/brands", { name: newBrand });
+      setBrands((prev) => [...prev, data]);
+      setBrand(data.name);
+      setNewBrand("");
+      setToast("Marca agregada ✅");
+      setShowModal(false);
+    } catch {
+      setToast("No se pudo agregar la marca");
+    }
+  };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>, key: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
     setPreview((prev) => ({ ...prev, [key]: url }));
-    if (key === "front") setPhotoFront(file);
-    if (key === "back") setPhotoBack(file);
-    if (key === "left") setPhotoLeft(file);
-    if (key === "right") setPhotoRight(file);
+
+    switch (key) {
+      case "front": setPhotoFront(file); break;
+      case "back": setPhotoBack(file); break;
+      case "left": setPhotoLeft(file); break;
+      case "right": setPhotoRight(file); break;
+      case "interior_front": setPhotoInteriorFront(file); break;
+      case "interior_back": setPhotoInteriorBack(file); break;
+      case "trunk": setPhotoTrunk(file); break;
+    }
   };
 
   const searchByDni = async () => {
@@ -92,7 +148,7 @@ export default function RegisterVehicle() {
     }
   };
 
-  // ✅ onSubmit actualizado
+  // ✅ Envío del formulario
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -108,19 +164,13 @@ export default function RegisterVehicle() {
       if (color) form.append("color", color);
       if (km) form.append("km", String(km));
       if (fuelType) form.append("fuel_level", fuelType);
-      if (referencePrice)
-        form.append("reference_price", String(referencePrice));
+      if (referencePrice) form.append("reference_price", String(referencePrice));
       if (price) form.append("price", String(price));
-
       form.append("ownership", ownership);
-
-      // ✅ Enviar 1/0 en lugar de true/false
       form.append("check_spare", checkSpare ? "1" : "0");
       form.append("check_jack", checkJack ? "1" : "0");
       form.append("check_docs", checkDocs ? "1" : "0");
-
       if (notes) form.append("notes", notes);
-
       if (ownership === "consignado") {
         form.append("customer_dni", dni);
         form.append("customer_name", customerName);
@@ -128,31 +178,41 @@ export default function RegisterVehicle() {
         if (customerPhone) form.append("customer_phone", customerPhone);
       }
 
-      // 📸 Fotos
-      if (photoFront) form.append("photo_front", photoFront);
-      if (photoBack) form.append("photo_back", photoBack);
-      if (photoLeft) form.append("photo_left", photoLeft);
-      if (photoRight) form.append("photo_right", photoRight);
+      // 📸 Agregar todas las fotos
+      const photos = {
+        photo_front: photoFront,
+        photo_back: photoBack,
+        photo_left: photoLeft,
+        photo_right: photoRight,
+        photo_interior_front: photoInteriorFront,
+        photo_interior_back: photoInteriorBack,
+        photo_trunk: photoTrunk,
+      };
+      Object.entries(photos).forEach(([key, file]) => {
+        if (file) form.append(key, file);
+      });
 
       const res = await api.post("/vehicles", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const newId = res.data?.data?.id ?? res.data?.id;
-      const redirect = new URLSearchParams(window.location.search).get(
-        "redirect"
-      );
+      const newVehicle = res.data?.data || res.data;
+const redirect = new URLSearchParams(window.location.search).get("redirect");
 
-      if (redirect?.includes("/reservas/nueva") && newId) {
-        window.location.href = `${redirect}?vehicle_id=${newId}`;
-      } else {
-        setToast("Vehículo registrado con éxito ✅");
-        setTimeout(goBack, 800);
-      }
+// 💾 Guardar el vehículo recién registrado en localStorage
+if (newVehicle) {
+  localStorage.setItem("lastRegisteredVehicle", JSON.stringify(newVehicle));
+}
+
+if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
+  window.location.href = `${redirect}?vehicle_id=${newVehicle.id}`;
+} else {
+  setToast("Vehículo registrado con éxito ✅");
+  setTimeout(goBack, 800);
+}
+
     } catch (err: any) {
-      setToast(
-        err?.response?.data?.message || "No se pudo registrar el vehículo"
-      );
+      setToast(err?.response?.data?.message || "No se pudo registrar el vehículo");
     } finally {
       setLoading(false);
     }
@@ -165,39 +225,30 @@ export default function RegisterVehicle() {
 
         {/* Datos básicos */}
         <div className="card vstack" style={{ gap: 16 }}>
-          <Input
-            label="Patente *"
-            value={plate}
-            onChange={(e) => setPlate(e.currentTarget.value)}
-            required
-          />
+          <Input label="Patente *" value={plate} onChange={(e) => setPlate(e.currentTarget.value)} required />
 
           <div className="hstack" style={{ gap: 16 }}>
-            {/* 🔹 Marca */}
             <div className="form-group" style={{ flex: 1 }}>
               <label>Marca *</label>
-              <select
-  className="form-control"
-  value={brand}
-  onChange={(e) => setBrand(e.currentTarget.value)}
-  required
->
-  <option value="">Seleccionar marca</option>
-  {MARCAS.map((m) => (
-    <option key={m} value={m}>
-      {m}
-    </option>
-  ))}
-</select>
-
+              <div className="hstack" style={{ gap: 8 }}>
+                <select
+                  className="form-control"
+                  value={brand}
+                  onChange={(e) => setBrand(e.currentTarget.value)}
+                  required
+                >
+                  <option value="">Seleccionar marca</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                <Button type="button" onClick={() => setShowModal(true)}>+</Button>
+              </div>
             </div>
 
-            <Input
-              label="Modelo *"
-              value={model}
-              onChange={(e) => setModel(e.currentTarget.value)}
-              required
-            />
+            <Input label="Modelo *" value={model} onChange={(e) => setModel(e.currentTarget.value)} required />
             <Input
               label="Año"
               type="number"
@@ -207,63 +258,48 @@ export default function RegisterVehicle() {
           </div>
 
           <div className="hstack" style={{ gap: 16 }}>
-            <Input
-              label="VIN / Chasis"
-              value={vin}
-              onChange={(e) => setVin(e.currentTarget.value)}
-            />
+            <Input label="VIN / Chasis" value={vin} onChange={(e) => setVin(e.currentTarget.value)} />
           </div>
 
-          {/* 🔹 Color, km y combustible */}
+          {/* Color, km y combustible */}
           <div className="hstack" style={{ gap: 16 }}>
-            <Input
-              label="Color"
-              value={color}
-              onChange={(e) => setColor(e.currentTarget.value)}
-            />
-
+            <Input label="Color" value={color} onChange={(e) => setColor(e.currentTarget.value)} />
             <Input
               label="Kilometraje (km)"
               type="number"
               value={km as any}
               onChange={(e) => setKm(parseInt(e.currentTarget.value) || "")}
             />
-
             <div className="form-group" style={{ flex: 1 }}>
               <label>Tipo de combustible *</label>
               <select
-  className="form-control"
-  value={fuelType}
-  onChange={(e) => setFuelType(e.currentTarget.value)}
-  required
->
-  <option value="">Seleccionar</option>
-  <option value="nafta">Nafta</option>
-  <option value="gasoil">Gasoil</option>
-  <option value="gnc/nafta">GNC / Nafta</option>
-  <option value="eléctrico">Eléctrico</option>
-</select>
-
+                className="form-control"
+                value={fuelType}
+                onChange={(e) => setFuelType(e.currentTarget.value)}
+                required
+              >
+                <option value="">Seleccionar</option>
+                <option value="nafta">Nafta</option>
+                <option value="gasoil">Gasoil</option>
+                <option value="gnc/nafta">GNC / Nafta</option>
+                <option value="eléctrico">Eléctrico</option>
+              </select>
             </div>
           </div>
 
-          {/* 🆕 Campos de precios */}
+          {/* Campos de precios */}
           <div className="hstack" style={{ gap: 16 }}>
             <Input
               label="Precio de referencia ($)"
               type="number"
               value={referencePrice as any}
-              onChange={(e) =>
-                setReferencePrice(parseFloat(e.currentTarget.value) || "")
-              }
+              onChange={(e) => setReferencePrice(parseFloat(e.currentTarget.value) || "")}
             />
             <Input
               label="Precio de venta ($)"
               type="number"
               value={price as any}
-              onChange={(e) =>
-                setPrice(parseFloat(e.currentTarget.value) || "")
-              }
+              onChange={(e) => setPrice(parseFloat(e.currentTarget.value) || "")}
             />
           </div>
         </div>
@@ -273,24 +309,10 @@ export default function RegisterVehicle() {
           <div className="title">Propiedad</div>
           <div className="hstack" style={{ gap: 16 }}>
             <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="propio"
-                checked={ownership === "propio"}
-                onChange={() => setOwnership("propio")}
-              />{" "}
-              Propio
+              <input type="radio" name="ownership" value="propio" checked={ownership === "propio"} onChange={() => setOwnership("propio")} /> Propio
             </label>
             <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="consignado"
-                checked={ownership === "consignado"}
-                onChange={() => setOwnership("consignado")}
-              />{" "}
-              Consignado
+              <input type="radio" name="ownership" value="consignado" checked={ownership === "consignado"} onChange={() => setOwnership("consignado")} /> Consignado
             </label>
           </div>
         </div>
@@ -302,41 +324,30 @@ export default function RegisterVehicle() {
 
             <div className="form-row" style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
-                <Input
-                  label="DNI *"
-                  value={dni}
-                  onChange={(e) => setDni(e.currentTarget.value)}
-                  required
-                />
+                <Input label="DNI *" value={dni} onChange={(e) => setDni(e.currentTarget.value)} required />
               </div>
-              <Button type="button" onClick={searchByDni}>
-                Buscar
-              </Button>
+              <Button type="button" onClick={searchByDni}>Buscar</Button>
             </div>
 
-            <a
-              href="/clientes/registro?redirect=/vehiculos/registro"
-              className="enlace"
+            <Button
+              type="button"
+              onClick={() => {
+                const state = {
+                  plate, brand, model, year, vin, color, km,
+                  fuelType, referencePrice, price, ownership,
+                  dni, customerName, customerEmail, customerPhone,
+                  checkSpare, checkJack, checkDocs, notes,
+                };
+                localStorage.setItem("vehicleFormBackup", JSON.stringify(state));
+                window.location.href = "/clientes/registro?redirect=/vehiculos/registro";
+              }}
             >
               + Registrar nuevo cliente
-            </a>
+            </Button>
 
-            <Input
-              label="Nombre completo"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.currentTarget.value)}
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.currentTarget.value)}
-            />
-            <Input
-              label="Teléfono"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.currentTarget.value)}
-            />
+            <Input label="Nombre completo" value={customerName} onChange={(e) => setCustomerName(e.currentTarget.value)} />
+            <Input label="Email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.currentTarget.value)} />
+            <Input label="Teléfono" value={customerPhone} onChange={(e) => setCustomerPhone(e.currentTarget.value)} />
           </div>
         )}
 
@@ -344,37 +355,23 @@ export default function RegisterVehicle() {
         <div className="card vstack" style={{ gap: 12 }}>
           <label>Fotos del vehículo (opcional)</label>
           <div className="hstack" style={{ flexWrap: "wrap", gap: 16 }}>
-            {["front", "back", "left", "right"].map((side) => (
-              <div
-                key={side}
-                className="form-group"
-                style={{ flex: 1, minWidth: 180 }}
-              >
-                <label>
-                  {
-                    {
-                      front: "Frente",
-                      back: "Dorso",
-                      left: "Lateral Izquierdo",
-                      right: "Lateral Derecho",
-                    }[side]
-                  }
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileChange(e, side)}
-                />
-                {preview[side] && (
+            {[
+              { key: "front", label: "Frente" },
+              { key: "back", label: "Dorso" },
+              { key: "left", label: "Lateral Izquierdo" },
+              { key: "right", label: "Lateral Derecho" },
+              { key: "interior_front", label: "Interior Adelante" },
+              { key: "interior_back", label: "Interior Atrás" },
+              { key: "trunk", label: "Baúl" },
+            ].map(({ key, label }) => (
+              <div key={key} className="form-group" style={{ flex: 1, minWidth: 180 }}>
+                <label>{label}</label>
+                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, key)} />
+                {preview[key] && (
                   <img
-                    src={preview[side]!}
-                    alt={side}
-                    style={{
-                      width: "100%",
-                      maxWidth: 280,
-                      marginTop: 8,
-                      borderRadius: 8,
-                    }}
+                    src={preview[key]!}
+                    alt={key}
+                    style={{ width: "100%", maxWidth: 280, marginTop: 8, borderRadius: 8 }}
                   />
                 )}
               </div>
@@ -386,36 +383,15 @@ export default function RegisterVehicle() {
         <div className="card vstack" style={{ gap: 8 }}>
           <div className="title">Checklist</div>
           <label>
-            <input
-              type="checkbox"
-              checked={checkSpare}
-              onChange={(e) => setCheckSpare(e.currentTarget.checked)}
-            />{" "}
-            Rueda de auxilio
+            <input type="checkbox" checked={checkSpare} onChange={(e) => setCheckSpare(e.currentTarget.checked)} /> Rueda de auxilio
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={checkJack}
-              onChange={(e) => setCheckJack(e.currentTarget.checked)}
-            />{" "}
-            Cric / Herramientas
+            <input type="checkbox" checked={checkJack} onChange={(e) => setCheckJack(e.currentTarget.checked)} /> Cric / Herramientas
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={checkDocs}
-              onChange={(e) => setCheckDocs(e.currentTarget.checked)}
-            />{" "}
-            Documentación
+            <input type="checkbox" checked={checkDocs} onChange={(e) => setCheckDocs(e.currentTarget.checked)} /> Documentación
           </label>
-          <textarea
-  className="form-control"
-  placeholder="Observaciones"
-  value={notes}
-  onChange={(e) => setNotes(e.currentTarget.value)}
-/>
-
+          <textarea className="form-control" placeholder="Observaciones" value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
         </div>
 
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
@@ -425,12 +401,27 @@ export default function RegisterVehicle() {
         </div>
       </form>
 
-      {toast && (
-        <Toast
-          message={toast}
-          type={toast.includes("✅") ? "success" : "error"}
-        />
+      {/* Modal para nueva marca */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3>Agregar nueva marca</h3>
+            <input
+              type="text"
+              value={newBrand}
+              onChange={(e) => setNewBrand(e.currentTarget.value)}
+              className="form-control"
+              placeholder="Nombre de marca"
+            />
+            <div className="hstack" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <Button type="button" onClick={addBrand}>Guardar</Button>
+              <Button type="button" onClick={() => setShowModal(false)}>Cerrar</Button>
+            </div>
+          </div>
+        </div>
       )}
+
+      {toast && <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />}
     </div>
   );
 }
