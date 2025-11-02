@@ -46,8 +46,6 @@ export default function VehicleEdit() {
   const [toast, setToast] = useState("");
   const [newPhotos, setNewPhotos] = useState<Record<string, File | null>>({});
   const [preview, setPreview] = useState<Record<string, string | null>>({});
-
-  // 🔹 Modal nueva marca
   const [showModal, setShowModal] = useState(false);
   const [newBrand, setNewBrand] = useState("");
 
@@ -58,7 +56,6 @@ export default function VehicleEdit() {
         const vehicle = data?.data ?? data ?? {};
         setV(vehicle);
 
-        // 🔹 Preview de todas las fotos, incluidas las nuevas
         setPreview({
           front: vehicle.photo_front_url || null,
           back: vehicle.photo_back_url || null,
@@ -71,23 +68,10 @@ export default function VehicleEdit() {
 
         const brandsRes = await api.get("/brands");
         setBrands(brandsRes.data);
-
-        // 🔹 Si acaba de registrarse un cliente, cargarlo automáticamente
-        const newClient = localStorage.getItem("lastRegisteredCustomer");
-        if (newClient) {
-          const c = JSON.parse(newClient);
-          setV((prev) => ({
-            ...prev,
-            customer_dni: c.dni || "",
-            customer_name: c.name || "",
-            customer_email: c.email || "",
-            customer_phone: c.phone || "",
-          }));
-          localStorage.removeItem("lastRegisteredCustomer");
-          setToast("Cliente cargado automáticamente ✅");
-        }
       } catch (err: any) {
-        setToast(err?.response?.data?.message || "No se pudo cargar el vehículo");
+        setToast(
+          err?.response?.data?.message || "No se pudo cargar el vehículo"
+        );
       } finally {
         setLoading(false);
       }
@@ -156,9 +140,14 @@ export default function VehicleEdit() {
       if (v.color) form.append("color", v.color);
       if (v.km) form.append("km", String(v.km));
       if (v.fuel_type) form.append("fuel_type", v.fuel_type);
-      if (v.reference_price) form.append("reference_price", String(v.reference_price));
+      if (v.reference_price)
+        form.append("reference_price", String(v.reference_price));
       if (v.price) form.append("price", String(v.price));
       form.append("ownership", v.ownership || "propio");
+      form.append("check_spare", v.check_spare ? "1" : "0");
+      form.append("check_jack", v.check_jack ? "1" : "0");
+      form.append("check_docs", v.check_docs ? "1" : "0");
+      if (v.notes) form.append("notes", v.notes);
 
       if (v.ownership === "consignado" && v.customer_dni) {
         form.append("customer_dni", v.customer_dni);
@@ -167,21 +156,20 @@ export default function VehicleEdit() {
         if (v.customer_phone) form.append("customer_phone", v.customer_phone);
       }
 
-      form.append("check_spare", v.check_spare ? "1" : "0");
-      form.append("check_jack", v.check_jack ? "1" : "0");
-      form.append("check_docs", v.check_docs ? "1" : "0");
-      if (v.notes) form.append("notes", v.notes);
-
-      // 📸 Todas las fotos
       const sides = [
-        "front", "back", "left", "right",
-        "interior_front", "interior_back", "trunk",
+        "front",
+        "back",
+        "left",
+        "right",
+        "interior_front",
+        "interior_back",
+        "trunk",
       ];
-
       sides.forEach((side) => {
         const file = newPhotos[side];
         if (file) form.append(`photo_${side}`, file);
-        else if (preview[side] === null) form.append(`delete_photo_${side}`, "1");
+        else if (preview[side] === null)
+          form.append(`delete_photo_${side}`, "1");
       });
 
       await api.post(`/vehicles/${id}?_method=PUT`, form, {
@@ -230,7 +218,9 @@ export default function VehicleEdit() {
                     </option>
                   ))}
                 </select>
-                <Button type="button" onClick={() => setShowModal(true)}>+</Button>
+                <Button type="button" onClick={() => setShowModal(true)}>
+                  +
+                </Button>
               </div>
             </div>
 
@@ -245,7 +235,10 @@ export default function VehicleEdit() {
               type="number"
               value={v.year || ""}
               onChange={(e) =>
-                setV({ ...v, year: parseInt(e.currentTarget.value) || undefined })
+                setV({
+                  ...v,
+                  year: parseInt(e.currentTarget.value) || undefined,
+                })
               }
             />
           </div>
@@ -287,6 +280,147 @@ export default function VehicleEdit() {
               </select>
             </div>
           </div>
+
+          {/* Campos de precios */}
+          <div className="hstack" style={{ gap: 16 }}>
+            <Input
+              label="Precio de referencia ($)"
+              type="number"
+              value={v.reference_price || ""}
+              onChange={(e) =>
+                setV({
+                  ...v,
+                  reference_price:
+                    parseFloat(e.currentTarget.value) || undefined,
+                })
+              }
+            />
+            <Input
+              label="Precio de venta ($)"
+              type="number"
+              value={v.price || ""}
+              onChange={(e) =>
+                setV({
+                  ...v,
+                  price: parseFloat(e.currentTarget.value) || undefined,
+                })
+              }
+            />
+          </div>
+        </div>
+
+        {/* Propiedad */}
+        <div className="card vstack" style={{ gap: 8 }}>
+          <div className="title">Propiedad</div>
+          <div className="hstack" style={{ gap: 16 }}>
+            <label>
+              <input
+                type="radio"
+                name="ownership"
+                value="propio"
+                checked={v.ownership === "propio"}
+                onChange={() => setV({ ...v, ownership: "propio" })}
+              />{" "}
+              Propio
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="ownership"
+                value="consignado"
+                checked={v.ownership === "consignado"}
+                onChange={() => setV({ ...v, ownership: "consignado" })}
+              />{" "}
+              Consignado
+            </label>
+          </div>
+        </div>
+
+        {/* Cliente consignado */}
+        {v.ownership === "consignado" && (
+          <div className="card vstack" style={{ gap: 16 }}>
+            <div className="title">Datos del cliente</div>
+
+            <div className="form-row" style={{ alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <Input
+                  label="DNI *"
+                  value={v.customer_dni || ""}
+                  onChange={(e) =>
+                    setV({ ...v, customer_dni: e.currentTarget.value })
+                  }
+                  required
+                />
+              </div>
+              <Button type="button" onClick={searchByDni}>
+                Buscar
+              </Button>
+            </div>
+
+            <Input
+              label="Nombre completo"
+              value={v.customer_name || ""}
+              onChange={(e) =>
+                setV({ ...v, customer_name: e.currentTarget.value })
+              }
+            />
+            <Input
+              label="Email"
+              type="email"
+              value={v.customer_email || ""}
+              onChange={(e) =>
+                setV({ ...v, customer_email: e.currentTarget.value })
+              }
+            />
+            <Input
+              label="Teléfono"
+              value={v.customer_phone || ""}
+              onChange={(e) =>
+                setV({ ...v, customer_phone: e.currentTarget.value })
+              }
+            />
+          </div>
+        )}
+
+        {/* Checklist */}
+        <div className="card vstack" style={{ gap: 8 }}>
+          <div className="title">Checklist</div>
+          <label>
+            <input
+              type="checkbox"
+              checked={v.check_spare ?? false}
+              onChange={(e) =>
+                setV({ ...v, check_spare: e.currentTarget.checked })
+              }
+            />{" "}
+            Rueda de auxilio
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={v.check_jack ?? false}
+              onChange={(e) =>
+                setV({ ...v, check_jack: e.currentTarget.checked })
+              }
+            />{" "}
+            Cric / Herramientas
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={v.check_docs ?? false}
+              onChange={(e) =>
+                setV({ ...v, check_docs: e.currentTarget.checked })
+              }
+            />{" "}
+            Documentación
+          </label>
+          <textarea
+            className="form-control"
+            placeholder="Observaciones"
+            value={v.notes || ""}
+            onChange={(e) => setV({ ...v, notes: e.currentTarget.value })}
+          />
         </div>
 
         {/* Fotos */}
@@ -302,14 +436,27 @@ export default function VehicleEdit() {
               { key: "interior_back", label: "Interior Atrás" },
               { key: "trunk", label: "Baúl" },
             ].map(({ key, label }) => (
-              <div key={key} className="form-group" style={{ flex: 1, minWidth: 180 }}>
+              <div
+                key={key}
+                className="form-group"
+                style={{ flex: 1, minWidth: 180 }}
+              >
                 <label>{label}</label>
-                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, key)} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, key)}
+                />
                 {preview[key] && (
                   <img
                     src={preview[key]!}
                     alt={key}
-                    style={{ width: "100%", maxWidth: 280, marginTop: 8, borderRadius: 8 }}
+                    style={{
+                      width: "100%",
+                      maxWidth: 280,
+                      marginTop: 8,
+                      borderRadius: 8,
+                    }}
                     onClick={() => handleRemovePhoto(key)}
                     title="Click para eliminar"
                   />
@@ -320,7 +467,9 @@ export default function VehicleEdit() {
         </div>
 
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
-          <Button type="submit" loading={saving}>Guardar cambios</Button>
+          <Button type="submit" loading={saving}>
+            Guardar cambios
+          </Button>
         </div>
       </form>
 
@@ -336,16 +485,26 @@ export default function VehicleEdit() {
               onChange={(e) => setNewBrand(e.currentTarget.value)}
               placeholder="Nombre de marca"
             />
-            <div className="hstack" style={{ justifyContent: "flex-end", gap: 8 }}>
-              <Button type="button" onClick={addBrand}>Guardar</Button>
-              <Button type="button" onClick={() => setShowModal(false)}>Cerrar</Button>
+            <div
+              className="hstack"
+              style={{ justifyContent: "flex-end", gap: 8 }}
+            >
+              <Button type="button" onClick={addBrand}>
+                Guardar
+              </Button>
+              <Button type="button" onClick={() => setShowModal(false)}>
+                Cerrar
+              </Button>
             </div>
           </div>
         </div>
       )}
 
       {toast && (
-        <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />
+        <Toast
+          message={toast}
+          type={toast.includes("✅") ? "success" : "error"}
+        />
       )}
     </div>
   );

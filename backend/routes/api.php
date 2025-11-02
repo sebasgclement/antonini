@@ -6,6 +6,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleExpenseController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Admin\RoleController;
@@ -19,13 +20,14 @@ Route::get ('/auth/me',     [AuthController::class, 'me'])->middleware('auth:san
 
 Route::get('/ping', fn () => response()->json(['pong' => true]));
 
+
 // ================== ZONA AUTENTICADA ==================
 Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ Clientes
     Route::apiResource('customers', CustomerController::class);
 
-    // ✅ Vehículos (reemplaza a Recepción)
+    // ✅ Vehículos
     Route::apiResource('vehicles', VehicleController::class);
 
     // ✅ Marcas de vehículo (CRUD simple)
@@ -45,12 +47,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ Cambio de contraseña
     Route::post('/user/change-password', [AuthController::class, 'changePassword']);
+
+    // ✅ 📄 Listar métodos de pago (visible para vendedores, reservas, etc.)
+    Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 });
+
 
 // ================== ZONA ADMIN ==================
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
-    // ================== ROLES (CRUD COMPLETO) ==================
+    // ================== ROLES ==================
     Route::prefix('admin/roles')->group(function () {
         Route::get   ('/',          [RoleController::class, 'index']);
         Route::post  ('/',          [RoleController::class, 'store']);
@@ -71,9 +77,12 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
         Route::delete('/{user}',  [AdminUserController::class, 'destroy']);
     });
 
+    // ✅ CRUD completo de métodos de pago (solo admin)
+    Route::apiResource('payment-methods', PaymentMethodController::class)
+        ->except(['index']);
+
     // ================== REPORTES ==================
     Route::prefix('reports')->group(function () {
-        // Reportes dinámicos en JSON
         Route::get('/sales/monthly',    [ReportController::class, 'salesMonthly']);
         Route::get('/sales/by-seller',  [ReportController::class, 'salesBySeller']);
         Route::get('/sales/by-payment', [ReportController::class, 'salesByPayment']);

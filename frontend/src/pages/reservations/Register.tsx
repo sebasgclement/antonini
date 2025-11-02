@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import PaymentMethodModal from "../../components/modals/PaymentMethodModal"; // ✅ usa el modal nuevo
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
@@ -24,12 +25,21 @@ type Customer = {
 };
 
 type Payment = {
-  method: string;
+  method_id: number | "";
   amount: number | "";
 };
 
+type PaymentMethod = {
+  id: number;
+  name: string;
+  type: string;
+  requires_details?: boolean;
+};
+
+/* ========= COMPONENTE PRINCIPAL ========= */
 export default function RegisterReservation() {
   const nav = useNavigate();
+  const location = useLocation();
 
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [usedVehicle, setUsedVehicle] = useState<Vehicle | null>(null);
@@ -40,113 +50,21 @@ export default function RegisterReservation() {
   const [searchDni, setSearchDni] = useState("");
 
   const [price, setPrice] = useState<number | "">("");
-  const [deposit, setDeposit] = useState<number | "">("");
   const [comments, setComments] = useState("");
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [payments, setPayments] = useState<Payment[]>([{ method: "", amount: "" }]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [balance, setBalance] = useState<number>(0);
 
-  // ==================== CARGA INICIAL ====================
-  useEffect(() => {
-    (async () => {
-      try {
-        const storedVehicle = localStorage.getItem("reservation_vehicle");
-        const storedUsed = localStorage.getItem("reservation_used_vehicle");
-        const storedCustomer = localStorage.getItem("reservation_customer");
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [showModal, setShowModal] = useState(false);
 
-        if (storedVehicle) setVehicle(JSON.parse(storedVehicle));
-        if (storedUsed) setUsedVehicle(JSON.parse(storedUsed));
-        if (storedCustomer) {
-          const c = JSON.parse(storedCustomer);
-          setCustomer(c);
-          // ✅ Reflejar DNI visualmente
-          setSearchDni(c.doc_number || c.dni || "");
-        }
+  // toggles
+  const [includeUsed, setIncludeUsed] = useState(false);
+  const [includeDeposit, setIncludeDeposit] = useState(false);
 
-        // Vehículo recién registrado (nuevo o usado)
-        const savedVehicle = localStorage.getItem("lastRegisteredVehicle");
-        if (savedVehicle) {
-          const v = JSON.parse(savedVehicle);
-          localStorage.removeItem("lastRegisteredVehicle");
-
-          try {
-            let found = null;
-            if (v.id) {
-              const res = await api.get(`/vehicles/${v.id}`);
-              found = res.data?.data || res.data;
-            } else if (v.plate) {
-              const res = await api.get(`/vehicles?search=${v.plate}`);
-              found = res.data?.data?.data?.[0] || res.data?.data?.[0];
-            }
-
-            // ✅ Determinar si se registró para parte de pago
-            const redirect = new URLSearchParams(window.location.search).get("redirect");
-            if (found) {
-              if (redirect?.includes("used")) {
-                setUsedVehicle(found);
-                setSearchUsedPlate(found.plate);
-                localStorage.setItem("reservation_used_vehicle", JSON.stringify(found));
-                setToast("Vehículo usado cargado automáticamente ✅");
-              } else {
-                setVehicle(found);
-                setSearchPlate(found.plate);
-                setPrice(found.price || "");
-                localStorage.setItem("reservation_vehicle", JSON.stringify(found));
-                setToast("Vehículo cargado automáticamente ✅");
-              }
-            }
-          } catch {
-            setToast("Error al cargar vehículo registrado");
-          }
-        }
-
-        // Cliente recién registrado
-        const savedCustomer = localStorage.getItem("lastRegisteredCustomer");
-        if (savedCustomer) {
-          const c = JSON.parse(savedCustomer);
-          setCustomer(c);
-          setSearchDni(c.doc_number || c.dni || "");
-          localStorage.setItem("reservation_customer", JSON.stringify(c));
-          localStorage.removeItem("lastRegisteredCustomer");
-          setToast("Cliente cargado automáticamente ✅");
-        }
-      } catch {
-        setToast("Error al cargar datos iniciales");
-      }
-    })();
-  }, []);
-
-  // ==================== EFECTOS ====================
-  useEffect(() => {
-    const total = Number(price) || 0;
-    const paid = Number(deposit) || 0;
-    const pagos = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-    const tradeIn = usedVehicle?.price || 0;
-    setBalance(total - paid - pagos - tradeIn);
-  }, [price, deposit, payments, usedVehicle]);
-
-  // Guardar en localStorage
-  useEffect(() => {
-    if (vehicle) localStorage.setItem("reservation_vehicle", JSON.stringify(vehicle));
-  }, [vehicle]);
-  useEffect(() => {
-    if (usedVehicle)
-      localStorage.setItem("reservation_used_vehicle", JSON.stringify(usedVehicle));
-  }, [usedVehicle]);
-  useEffect(() => {
-    if (customer) localStorage.setItem("reservation_customer", JSON.stringify(customer));
-  }, [customer]);
-  useEffect(() => {
-    if (price !== "") localStorage.setItem("reservation_price", JSON.stringify(price));
-  }, [price]);
-  useEffect(() => {
-    const storedPrice = localStorage.getItem("reservation_price");
-    if (storedPrice) setPrice(JSON.parse(storedPrice));
-  }, []);
-
-  // ==================== BUSCAR VEHÍCULO ====================
+  /* ====== Helpers búsqueda ====== */
   const searchVehicle = async () => {
     if (!searchPlate.trim()) return;
     try {
@@ -156,7 +74,10 @@ export default function RegisterReservation() {
         setVehicle(found);
         setPrice(found.price || "");
         localStorage.setItem("reservation_vehicle", JSON.stringify(found));
-        localStorage.setItem("reservation_price", JSON.stringify(found.price || ""));
+        localStorage.setItem(
+          "reservation_price",
+          JSON.stringify(found.price || "")
+        );
         setToast("Vehículo encontrado ✅");
       } else {
         setVehicle(null);
@@ -168,8 +89,7 @@ export default function RegisterReservation() {
     }
   };
 
-  // ==================== BUSCAR VEHÍCULO USADO ====================
-  const searchUsedVehicle = async () => {
+  const searchUsed = async () => {
     if (!searchUsedPlate.trim()) return;
     try {
       const res = await api.get(`/vehicles?search=${searchUsedPlate}`);
@@ -181,143 +101,323 @@ export default function RegisterReservation() {
       } else {
         setUsedVehicle(null);
         localStorage.removeItem("reservation_used_vehicle");
-        setToast("No se encontró vehículo usado con esa patente");
+        setToast("No se encontró vehículo usado");
       }
     } catch {
       setToast("Error al buscar vehículo usado");
     }
   };
 
-  // ==================== BUSCAR CLIENTE ====================
-const searchCustomer = async () => {
-  if (!searchDni.trim()) return;
-
-  try {
-    const res = await api.get(`/customers?dni=${searchDni}`);
-    const found = res.data?.data?.[0];
-
-    if (found) {
-      // ✅ Guardamos el cliente completo con id real
-      setCustomer(found);
-      setSearchDni(found.doc_number || "");
-      localStorage.setItem("reservation_customer", JSON.stringify(found));
-      setToast("Cliente encontrado ✅");
-    } else {
-      setCustomer(null);
-      localStorage.removeItem("reservation_customer");
-      setToast("No se encontró cliente con ese DNI");
+  const searchCustomer = async () => {
+    if (!searchDni.trim()) return;
+    try {
+      const res = await api.get(`/customers?dni=${searchDni}`);
+      const found = res.data?.data?.[0];
+      if (found) {
+        setCustomer(found);
+        setSearchDni(found.doc_number || "");
+        localStorage.setItem("reservation_customer", JSON.stringify(found));
+        setToast("Cliente encontrado ✅");
+      } else {
+        setCustomer(null);
+        localStorage.removeItem("reservation_customer");
+        setToast("No se encontró cliente con ese DNI");
+      }
+    } catch {
+      setToast("Error al buscar cliente");
     }
-  } catch {
-    setToast("Error al buscar cliente");
-  }
-};
+  };
 
+  /* ====== Carga inicial / redirect usado / métodos ====== */
+  useEffect(() => {
+    (async () => {
+      try {
+        const params = new URLSearchParams(location.search);
+        const fromUsed = params.get("used");
+        const vehicleId = params.get("vehicle_id"); // 🆕 nuevo parámetro
 
-  // ==================== GESTIÓN DE PAGOS ====================
-  const addPayment = () => setPayments([...payments, { method: "", amount: "" }]);
+        // 🔹 Si llega un vehículo desde el listado (reservar)
+        if (vehicleId) {
+          try {
+            const res = await api.get(`/vehicles/${vehicleId}`);
+            const v = res.data?.data || res.data;
+            if (v) {
+              setVehicle(v);
+              setPrice(v.price || "");
+              setSearchPlate(v.plate);
+              localStorage.setItem("reservation_vehicle", JSON.stringify(v));
+              localStorage.setItem(
+                "reservation_price",
+                JSON.stringify(v.price || "")
+              );
+              setToast("Vehículo cargado automáticamente ✅");
+            }
+          } catch {
+            setToast("No se pudo cargar el vehículo seleccionado");
+          }
+        }
+
+        const storedVehicle = localStorage.getItem("reservation_vehicle");
+        const storedUsed = localStorage.getItem("reservation_used_vehicle");
+        const storedCustomer = localStorage.getItem("reservation_customer");
+        const storedPrice = localStorage.getItem("reservation_price");
+
+        if (storedVehicle && !vehicleId) setVehicle(JSON.parse(storedVehicle));
+        if (storedUsed) {
+          setUsedVehicle(JSON.parse(storedUsed));
+          setIncludeUsed(true);
+        }
+        if (storedCustomer) {
+          const c = JSON.parse(storedCustomer);
+          setCustomer(c);
+          setSearchDni(c.doc_number || c.dni || "");
+        }
+        if (storedPrice && !vehicleId) setPrice(JSON.parse(storedPrice));
+
+        // 🔹 Vehículo recién registrado
+        const savedVehicle = localStorage.getItem("lastRegisteredVehicle");
+        if (savedVehicle) {
+          const v = JSON.parse(savedVehicle);
+          localStorage.removeItem("lastRegisteredVehicle");
+          let found = null;
+          try {
+            if (v.id) {
+              const res = await api.get(`/vehicles/${v.id}`);
+              found = res.data?.data || res.data;
+            } else if (v.plate) {
+              const res = await api.get(`/vehicles?search=${v.plate}`);
+              found = res.data?.data?.data?.[0] || res.data?.data?.[0];
+            }
+          } catch {
+            /* noop */
+          }
+          if (found) {
+            if (fromUsed) {
+              setIncludeUsed(true);
+              setUsedVehicle(found);
+              setSearchUsedPlate(found.plate);
+              localStorage.setItem(
+                "reservation_used_vehicle",
+                JSON.stringify(found)
+              );
+              setToast("Vehículo usado cargado automáticamente ✅");
+            } else {
+              setVehicle(found);
+              setSearchPlate(found.plate);
+              setPrice(found.price || "");
+              localStorage.setItem(
+                "reservation_vehicle",
+                JSON.stringify(found)
+              );
+              localStorage.setItem(
+                "reservation_price",
+                JSON.stringify(found.price || "")
+              );
+              setToast("Vehículo cargado automáticamente ✅");
+            }
+          }
+        }
+
+        // 🔹 Métodos de pago
+        const methods = await api.get("/payment-methods");
+        setPaymentMethods(methods.data?.data || methods.data || []);
+      } catch {
+        setToast("Error al cargar datos iniciales");
+      }
+    })();
+  }, [location.search]);
+
+  /* ====== Balance ====== */
+  useEffect(() => {
+    const total = Number(price) || 0;
+    const pagos = includeDeposit
+      ? payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+      : 0;
+    const tradeIn = includeUsed && usedVehicle?.price ? usedVehicle.price : 0;
+    setBalance(total - pagos - tradeIn);
+  }, [price, payments, usedVehicle, includeUsed, includeDeposit]);
+
+  /* ====== Gestión pagos ====== */
+  const addPayment = () =>
+    setPayments((p) => [...p, { method_id: "", amount: "" }]);
   const updatePayment = (index: number, key: keyof Payment, value: any) => {
-    const updated = [...payments];
-    updated[index][key] = value;
-    setPayments(updated);
+    setPayments((prev) => {
+      const copy = [...prev];
+      copy[index][key] = value;
+      return copy;
+    });
   };
   const removePayment = (index: number) =>
-    setPayments(payments.filter((_, i) => i !== index));
+    setPayments((prev) => prev.filter((_, i) => i !== index));
 
-  // ==================== SUBMIT ====================
-const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  setLoading(true);
+  useEffect(() => {
+    if (!includeDeposit) setPayments([]);
+    if (includeDeposit && payments.length === 0)
+      setPayments([{ method_id: "", amount: "" }]);
+  }, [includeDeposit]); // eslint-disable-line
 
-  // 🚨 Validaciones previas
-  if (!vehicle?.id) {
-    setToast("Debe seleccionar un vehículo válido");
-    setLoading(false);
-    return;
-  }
+  /* ====== Submit ====== */
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
 
-  if (!customer?.id) {
-    setToast("Debe seleccionar un cliente válido");
-    setLoading(false);
-    return;
-  }
+    if (!vehicle?.id) {
+      setToast("Debe seleccionar un vehículo válido");
+      setLoading(false);
+      return;
+    }
+    if (!customer?.id) {
+      setToast("Debe seleccionar un cliente válido");
+      setLoading(false);
+      return;
+    }
 
-  try {
-    await api.post("/reservations", {
-      vehicle_id: vehicle.id,
-      used_vehicle_id: usedVehicle?.id || null,
-      customer_id: customer.id,
-      seller_id: 1, // ⚠️ reemplazar por el usuario logueado más adelante
-      price,
-      deposit,
-      payment_methods: payments,
-      balance,
-      comments,
-    });
+    const validPayments = includeDeposit
+      ? payments
+          .filter((p) => p.method_id && Number(p.amount) > 0)
+          .map((p) => ({
+            method_id: Number(p.method_id),
+            amount: Number(p.amount),
+          }))
+      : [];
 
-    setToast("Reserva creada correctamente ✅");
+    if (includeDeposit && validPayments.length === 0) {
+      setToast("Agregá al menos un medio de pago con monto válido");
+      setLoading(false);
+      return;
+    }
 
-    // 🧹 Limpiamos solo los datos de esta reserva
-    localStorage.removeItem("reservation_vehicle");
-    localStorage.removeItem("reservation_used_vehicle");
-    localStorage.removeItem("reservation_customer");
-    localStorage.removeItem("reservation_price");
+    try {
+      await api.post("/reservations", {
+        vehicle_id: vehicle.id,
+        used_vehicle_id: includeUsed ? usedVehicle?.id || null : null,
+        customer_id: customer.id,
+        seller_id: 1, // TODO: usuario logueado
+        price,
+        deposit: includeDeposit
+          ? validPayments.reduce((a, p) => a + p.amount, 0)
+          : null,
+        payment_methods: validPayments,
+        balance,
+        comments,
+      });
 
-    setTimeout(() => nav("/reservas"), 800);
-  } catch (err: any) {
-    setToast(err?.response?.data?.message || "No se pudo registrar la reserva");
-  } finally {
-    setLoading(false);
-  }
-};
+      setToast("Reserva creada correctamente ✅");
+      [
+        "reservation_vehicle",
+        "reservation_used_vehicle",
+        "reservation_customer",
+        "reservation_price",
+      ].forEach((k) => localStorage.removeItem(k));
+      setTimeout(() => nav("/reservas"), 800);
+    } catch (err: any) {
+      setToast(
+        err?.response?.data?.message || "No se pudo registrar la reserva"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  /* ====== Cancelar ====== */
+  const handleCancel = () => {
+    setToast(
+      "¿Cancelar la reserva y limpiar los datos? 🔄 Click nuevamente en 'Cancelar' para confirmar"
+    );
+    const confirmTimeout = setTimeout(() => setToast(""), 3000);
 
-  // ==================== RENDER ====================
+    const confirmHandler = () => {
+      clearTimeout(confirmTimeout);
+      [
+        "reservation_vehicle",
+        "reservation_used_vehicle",
+        "reservation_customer",
+        "reservation_price",
+      ].forEach((k) => localStorage.removeItem(k));
+
+      setVehicle(null);
+      setUsedVehicle(null);
+      setCustomer(null);
+      setPrice("");
+      setPayments([]);
+      setComments("");
+      setIncludeUsed(false);
+      setIncludeDeposit(false);
+
+      setToast("Reserva cancelada correctamente ✅");
+      document.removeEventListener("click", confirmHandler);
+      setTimeout(() => nav("/reservas"), 800);
+    };
+
+    document.addEventListener("click", confirmHandler, { once: true });
+  };
+
+  /* ========= RENDER ========= */
   return (
     <div className="container">
-      <form onSubmit={onSubmit} className="vstack" style={{ gap: 16 }}>
+      <form onSubmit={onSubmit} className="vstack">
         <div className="title">Registrar reserva</div>
 
-        {/* VEHÍCULO PRINCIPAL */}
-        <div className="card vstack" style={{ gap: 16 }}>
+        {/* VEHÍCULO */}
+        <div className="card vstack">
           <label>Vehículo principal *</label>
-          <a href="/vehiculos/registro?redirect=/reservas/nueva" className="enlace">
+          <a
+            href="/vehiculos/registro?redirect=/reservas/nueva"
+            className="enlace"
+          >
             + Registrar vehículo
           </a>
-          <div className="hstack" style={{ gap: 8 }}>
+          <div className="hstack">
             <Input
               label="Buscar por patente"
               value={searchPlate}
               onChange={(e) => setSearchPlate(e.currentTarget.value)}
               placeholder="Ej: AB123CD"
             />
-            <Button type="button" onClick={searchVehicle}>Buscar</Button>
+            <Button type="button" onClick={searchVehicle}>
+              Buscar
+            </Button>
           </div>
           {vehicle && (
-            <div className="card" style={{ background: "#11161f", padding: 12 }}>
-              <p><strong>{vehicle.brand} {vehicle.model}</strong> — {vehicle.plate}</p>
+            <div className="card">
+              <p>
+                <strong>
+                  {vehicle.brand} {vehicle.model}
+                </strong>{" "}
+                — {vehicle.plate}
+              </p>
               <p>Precio: ${vehicle.price?.toLocaleString() || "—"}</p>
             </div>
           )}
         </div>
 
         {/* CLIENTE */}
-        <div className="card vstack" style={{ gap: 16 }}>
+        <div className="card vstack">
           <label>Cliente *</label>
-          <a href="/clientes/registro?redirect=/reservas/nueva" className="enlace">
+          <a
+            href="/clientes/registro?redirect=/reservas/nueva"
+            className="enlace"
+          >
             + Registrar cliente
           </a>
-          <div className="hstack" style={{ gap: 8 }}>
+          <div className="hstack">
             <Input
               label="Buscar por DNI"
               value={searchDni}
               onChange={(e) => setSearchDni(e.currentTarget.value)}
               placeholder="Ej: 30123456"
             />
-            <Button type="button" onClick={searchCustomer}>Buscar</Button>
+            <Button type="button" onClick={searchCustomer}>
+              Buscar
+            </Button>
           </div>
           {customer && (
-            <div className="card" style={{ background: "#11161f", padding: 12 }}>
-              <p><strong>{customer.first_name} {customer.last_name}</strong></p>
+            <div className="card">
+              <p>
+                <strong>
+                  {customer.first_name} {customer.last_name}
+                </strong>
+              </p>
               <p>DNI: {customer.doc_number}</p>
               {customer.email && <p>Email: {customer.email}</p>}
               {customer.phone && <p>Tel: {customer.phone}</p>}
@@ -326,59 +426,82 @@ const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
         </div>
 
         {/* VEHÍCULO USADO */}
-        <div className="card vstack" style={{ gap: 16 }}>
-          <label>Vehículo usado (opcional)</label>
-          <a href="/vehiculos/registro?redirect=/reservas/nueva?type=used" className="enlace">
-            + Registrar vehículo usado
-          </a>
-          <div className="hstack" style={{ gap: 8 }}>
-            <Input
-              label="Buscar por patente"
-              value={searchUsedPlate}
-              onChange={(e) => setSearchUsedPlate(e.currentTarget.value)}
-              placeholder="Ej: AC987EF"
-            />
-            <Button type="button" onClick={searchUsedVehicle}>Buscar</Button>
-          </div>
-          {usedVehicle && (
-            <div className="card" style={{ background: "#11161f", padding: 12 }}>
-              <p><strong>{usedVehicle.brand} {usedVehicle.model}</strong> — {usedVehicle.plate}</p>
-              <p>Valor tomado: ${usedVehicle.price?.toLocaleString() || "—"}</p>
+        <label>
+          <input
+            type="checkbox"
+            checked={includeUsed}
+            onChange={() => setIncludeUsed(!includeUsed)}
+          />{" "}
+          Incluir vehículo usado como parte de pago
+        </label>
+
+        {includeUsed && (
+          <div className="card vstack">
+            <label>Vehículo usado (opcional)</label>
+            <a
+              href="/vehiculos/registro?redirect=/reservas/nueva?used=1"
+              className="enlace"
+            >
+              + Registrar vehículo usado
+            </a>
+            <div className="hstack">
+              <Input
+                label="Buscar por patente"
+                value={searchUsedPlate}
+                onChange={(e) => setSearchUsedPlate(e.currentTarget.value)}
+                placeholder="Ej: AC987EF"
+              />
+              <Button type="button" onClick={searchUsed}>
+                Buscar
+              </Button>
             </div>
-          )}
-        </div>
+            {usedVehicle && (
+              <div className="card">
+                <p>
+                  <strong>
+                    {usedVehicle.brand} {usedVehicle.model}
+                  </strong>{" "}
+                  — {usedVehicle.plate}
+                </p>
+                <p>
+                  Valor tomado: ${usedVehicle.price?.toLocaleString() || "—"}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* DATOS ECONÓMICOS */}
-        <div className="card vstack" style={{ gap: 16 }}>
-          <Input
-            label="Precio de venta ($)"
-            type="number"
-            value={price as any}
-            onChange={(e) => setPrice(parseFloat(e.currentTarget.value) || "")}
-            required
-          />
-          <Input
-            label="Seña / anticipo ($)"
-            type="number"
-            value={deposit as any}
-            onChange={(e) => setDeposit(parseFloat(e.currentTarget.value) || "")}
-          />
+        {/* SEÑA */}
+        <label>
+          <input
+            type="checkbox"
+            checked={includeDeposit}
+            onChange={() => setIncludeDeposit(!includeDeposit)}
+          />{" "}
+          Registrar seña / anticipo
+        </label>
 
-          <div className="vstack" style={{ gap: 8 }}>
+        {includeDeposit && (
+          <div className="card vstack">
             <label>Medios de pago</label>
             {payments.map((p, i) => (
-              <div key={i} className="hstack" style={{ gap: 8 }}>
+              <div key={i} className="hstack">
                 <select
-                  value={p.method}
-                  onChange={(e) => updatePayment(i, "method", e.currentTarget.value)}
-                  required
+                  value={p.method_id}
+                  onChange={(e) =>
+                    updatePayment(
+                      i,
+                      "method_id",
+                      Number(e.currentTarget.value) || ""
+                    )
+                  }
                 >
                   <option value="">Seleccionar…</option>
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="tarjeta_debito">Tarjeta Débito</option>
-                  <option value="tarjeta_credito">Tarjeta Crédito</option>
+                  {paymentMethods.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
                 </select>
                 <Input
                   type="number"
@@ -388,25 +511,41 @@ const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
                     updatePayment(
                       i,
                       "amount",
-                      parseFloat(e.currentTarget.value) || ""
+                      e.currentTarget.value === ""
+                        ? ""
+                        : Number(e.currentTarget.value)
                     )
                   }
                 />
-                <Button type="button" onClick={() => removePayment(i)}>🗑</Button>
+                <Button type="button" onClick={() => removePayment(i)}>
+                  🗑
+                </Button>
               </div>
             ))}
-            <Button type="button" onClick={addPayment}>+ Agregar medio</Button>
+            <div className="hstack">
+              <a className="enlace" onClick={addPayment}>
+                + Agregar medio
+              </a>
+              <a className="enlace" onClick={() => setShowModal(true)}>
+                + Nuevo método
+              </a>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* SALDO */}
-        <div className="card vstack" style={{ gap: 12 }}>
+        <div className="card vstack">
           <label>Saldo restante ($)</label>
-          <input type="number" value={balance} readOnly className="input-readonly" />
+          <input
+            type="number"
+            value={balance}
+            readOnly
+            className="input-readonly"
+          />
         </div>
 
         {/* COMENTARIOS */}
-        <div className="card vstack" style={{ gap: 12 }}>
+        <div className="card vstack">
           <label>Comentarios</label>
           <textarea
             placeholder="Observaciones adicionales, condiciones de pago, etc."
@@ -416,13 +555,36 @@ const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
           />
         </div>
 
+        {/* ACCIONES */}
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
-          <Button type="submit" loading={loading}>Guardar</Button>
+          <Button type="submit" loading={loading}>
+            Guardar
+          </Button>
+          <Button
+            type="button"
+            onClick={handleCancel}
+            className="btn-secondary"
+          >
+            Cancelar
+          </Button>
         </div>
       </form>
 
+      {showModal && (
+        <PaymentMethodModal
+          onClose={() => setShowModal(false)}
+          onCreated={(m) => {
+            setPaymentMethods((prev) => [...prev, m]);
+            setToast("Método agregado correctamente ✅");
+          }}
+        />
+      )}
+
       {toast && (
-        <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />
+        <Toast
+          message={toast}
+          type={toast.includes("✅") ? "success" : "error"}
+        />
       )}
     </div>
   );

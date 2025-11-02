@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
         VehicleSeeder::class,
         VehicleExpenseSeeder::class,
         AdminUserSeeder::class,
+        PaymentMethodSeeder::class,
     ]);
 }
 

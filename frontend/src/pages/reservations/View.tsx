@@ -7,20 +7,22 @@ import api from "../../lib/api";
 type Reservation = {
   id: number;
   date: string;
-  status: "pendiente" | "confirmada" | "anulada";
-  price: number; // precio venta
+  status: "pendiente" | "confirmada" | "anulada" | "vendida";
+  price: number; // precio de venta
   deposit?: number; // seña
+  credit_bank?: number;
+  balance?: number;
   payment_method?: string;
   comments?: string;
   vehicle?: { id: number; plate: string; brand: string; model: string };
   customer?: { id: number; first_name: string; last_name: string };
   seller?: { id: number; name: string };
-  used_vehicle?: {
+  usedVehicle?: {
     id: number;
     brand: string;
     model: string;
     plate: string;
-    valuation: number; // valor del usado tomado como parte de pago
+    price: number; // valor tomado
   };
 };
 
@@ -55,7 +57,7 @@ export default function ReservationView() {
     );
 
   // --- Cálculo del saldo final ---
-  const valorUsado = reservation.used_vehicle?.valuation || 0;
+  const valorUsado = reservation.usedVehicle?.price || 0;
   const senia = reservation.deposit || 0;
   const precioVenta = reservation.price || 0;
   const saldo = precioVenta - senia - valorUsado;
@@ -102,25 +104,25 @@ export default function ReservationView() {
       </div>
 
       {/* === Vehículo tomado en parte de pago === */}
-      {reservation.used_vehicle && (
+      {reservation.usedVehicle && ( // 🆕
         <div className="detail-card">
           <div className="detail-section-title">
             🔁 Vehículo en parte de pago
           </div>
           <p>
-            {reservation.used_vehicle.brand} {reservation.used_vehicle.model} (
-            {reservation.used_vehicle.plate})
+            {reservation.usedVehicle.brand} {reservation.usedVehicle.model} (
+            {reservation.usedVehicle.plate})
           </p>
           <p>
             <strong>Valor tomado:</strong> $
-            {reservation.used_vehicle.valuation.toLocaleString("es-AR", {
+            {reservation.usedVehicle.price.toLocaleString("es-AR", {
               minimumFractionDigits: 2,
             })}
           </p>
           <div className="detail-actions">
             <Button
               onClick={() =>
-                nav(`/vehiculos/${reservation.used_vehicle?.id}/ver`)
+                nav(`/vehiculos/${reservation.usedVehicle?.id}/ver`)
               }
             >
               Ver vehículo usado
