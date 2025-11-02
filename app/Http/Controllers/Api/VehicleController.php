@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
+use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -149,6 +150,22 @@ class VehicleController extends Controller
                     Storage::disk('public')->delete($vehicle->{$key});
                 }
                 $data[$key] = $req->file($key)->store('vehicles', 'public');
+            }
+        }
+
+        // 🔹 Si el vehículo se marca como "disponible", eliminar reserva asociada
+        if (isset($data['status']) && $data['status'] === 'disponible') {
+            Reservation::where('vehicle_id', $vehicle->id)->delete();
+        }
+
+        // 🚫 Si intentan venderlo mientras tiene una reserva, bloquear
+        if (isset($data['status']) && $data['status'] === 'vendido') {
+            $hasReservation = Reservation::where('vehicle_id', $vehicle->id)->exists();
+            if ($hasReservation) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'No se puede marcar como vendido: el vehículo tiene una reserva activa.',
+                ], 422);
             }
         }
 
