@@ -8,21 +8,26 @@ type Reservation = {
   id: number;
   date: string;
   status: "pendiente" | "confirmada" | "anulada" | "vendida";
-  price: number; // precio de venta
-  deposit?: number; // seña
-  credit_bank?: number;
+  price: number;
+  deposit?: number;
   balance?: number;
   payment_method?: string;
   comments?: string;
   vehicle?: { id: number; plate: string; brand: string; model: string };
-  customer?: { id: number; first_name: string; last_name: string };
+  customer?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email?: string;
+    phone?: string;
+  };
   seller?: { id: number; name: string };
   usedVehicle?: {
     id: number;
     brand: string;
     model: string;
     plate: string;
-    price: number; // valor tomado
+    price: number;
   };
 };
 
@@ -56,7 +61,6 @@ export default function ReservationView() {
       </div>
     );
 
-  // --- Cálculo del saldo final ---
   const valorUsado = reservation.usedVehicle?.price || 0;
   const senia = reservation.deposit || 0;
   const precioVenta = reservation.price || 0;
@@ -104,7 +108,7 @@ export default function ReservationView() {
       </div>
 
       {/* === Vehículo tomado en parte de pago === */}
-      {reservation.usedVehicle && ( // 🆕
+      {reservation.usedVehicle && (
         <div className="detail-card">
           <div className="detail-section-title">
             🔁 Vehículo en parte de pago
@@ -135,9 +139,16 @@ export default function ReservationView() {
       <div className="detail-card">
         <div className="detail-section-title">👤 Cliente</div>
         {reservation.customer ? (
-          <p>
-            {reservation.customer.first_name} {reservation.customer.last_name}
-          </p>
+          <>
+            <p>
+              <strong>
+                {reservation.customer.first_name}{" "}
+                {reservation.customer.last_name}
+              </strong>
+            </p>
+            {reservation.customer.email && <p>Email: {reservation.customer.email}</p>}
+            {reservation.customer.phone && <p>Tel: {reservation.customer.phone}</p>}
+          </>
         ) : (
           <p style={{ color: "var(--color-muted)" }}>No asociado.</p>
         )}
