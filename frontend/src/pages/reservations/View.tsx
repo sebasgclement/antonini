@@ -4,13 +4,40 @@ import Button from "../../components/ui/Button";
 import Toast from "../../components/ui/Toast";
 import api from "../../lib/api";
 
+type PaymentDetails = {
+  bank_name?: string;
+  check_number?: string;
+  check_due_date?: string;
+  account_alias?: string;
+  account_holder?: string;
+  card_last4?: string;
+  card_holder?: string;
+  installments?: number;
+  operation_number?: string;
+  raw?: string;
+};
+
+type ReservationPayment = {
+  id: number;
+  amount: number;
+  details?: PaymentDetails | null;
+  method?: {
+    id: number;
+    name: string;
+    type: string;
+  } | null;
+};
+
 type Reservation = {
   id: number;
   date: string;
-  status: "pendiente" | "confirmada" | "anulada" | "vendida";
+  status: "pendiente" | "confirmada" | "anulada" | "vendida" | "vendido";
   price: number;
   deposit?: number;
+  credit_bank?: number;
   balance?: number;
+  paid_amount?: number;
+  remaining_amount?: number;
   payment_method?: string;
   comments?: string;
   vehicle?: { id: number; plate: string; brand: string; model: string };
@@ -29,6 +56,7 @@ type Reservation = {
     plate: string;
     price: number;
   };
+  payments?: ReservationPayment[];
 };
 
 export default function ReservationView() {
@@ -42,6 +70,7 @@ export default function ReservationView() {
     (async () => {
       try {
         const { data } = await api.get(`/reservations/${id}`);
+        // el backend viene como { data: {...} } o directo
         setReservation(data.data || data);
       } catch {
         setToast("No se pudo cargar la reserva");
@@ -50,6 +79,12 @@ export default function ReservationView() {
       }
     })();
   }, [id]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   if (loading) return <div className="container">Cargando…</div>;
 
@@ -62,9 +97,38 @@ export default function ReservationView() {
     );
 
   const valorUsado = reservation.usedVehicle?.price || 0;
-  const senia = reservation.deposit || 0;
   const precioVenta = reservation.price || 0;
-  const saldo = precioVenta - senia - valorUsado;
+
+  // Total pagado: priorizo lo que venga del backend, si no lo calculo de los pagos, si no de la seña
+  const totalPagosDesdeLista =
+    reservation.payments?.reduce(
+      (acc, p) => acc + (Number(p.amount) || 0),
+      0
+    ) ?? 0;
+
+  const totalPagado =
+    reservation.paid_amount ??
+    totalPagosDesdeLista ??
+    (reservation.deposit || 0);
+
+  const creditoBanco = reservation.credit_bank || 0;
+
+  // Saldo: primero lo que mande el backend, si no, lo calculo
+  const saldo =
+    reservation.remaining_amount ??
+    reservation.balance ??
+    precioVenta - totalPagado - valorUsado - creditoBanco;
+
+  const fmtMoney = (n: number | undefined | null) =>
+    typeof n === "number"
+      ? n.toLocaleString("es-AR", { minimumFractionDigits: 2 })
+      : "—";
+
+  const statusLabel =
+    reservation.status === "vendido" || reservation.status === "vendida"
+      ? "Vendido"
+      : reservation.status.charAt(0).toUpperCase() +
+        reservation.status.slice(1);
 
   return (
     <div className="container vstack" style={{ gap: 20 }}>
@@ -79,9 +143,7 @@ export default function ReservationView() {
         </p>
         <p>
           <strong>Estado:</strong>{" "}
-          <span style={{ textTransform: "capitalize" }}>
-            {reservation.status}
-          </span>
+          <span style={{ textTransform: "capitalize" }}>{statusLabel}</span>
         </p>
       </div>
 
@@ -119,9 +181,7 @@ export default function ReservationView() {
           </p>
           <p>
             <strong>Valor tomado:</strong> $
-            {reservation.usedVehicle.price.toLocaleString("es-AR", {
-              minimumFractionDigits: 2,
-            })}
+            {fmtMoney(reservation.usedVehicle.price)}
           </p>
           <div className="detail-actions">
             <Button
@@ -146,8 +206,12 @@ export default function ReservationView() {
                 {reservation.customer.last_name}
               </strong>
             </p>
-            {reservation.customer.email && <p>Email: {reservation.customer.email}</p>}
-            {reservation.customer.phone && <p>Tel: {reservation.customer.phone}</p>}
+            {reservation.customer.email && (
+              <p>Email: {reservation.customer.email}</p>
+            )}
+            {reservation.customer.phone && (
+              <p>Tel: {reservation.customer.phone}</p>
+            )}
           </>
         ) : (
           <p style={{ color: "var(--color-muted)" }}>No asociado.</p>
@@ -158,24 +222,16 @@ export default function ReservationView() {
       <div className="detail-card">
         <div className="detail-section-title">💰 Datos económicos</div>
         <p>
-          <strong>Precio venta:</strong> $
-          {precioVenta.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+          <strong>Precio venta:</strong> ${fmtMoney(precioVenta)}
         </p>
         <p>
-          <strong>Seña:</strong>{" "}
-          {senia
-            ? `$${senia.toLocaleString("es-AR", {
-                minimumFractionDigits: 2,
-              })}`
-            : "—"}
+          <strong>Total pagado:</strong> ${fmtMoney(totalPagado)}
         </p>
         <p>
-          <strong>Valor usado:</strong>{" "}
-          {valorUsado
-            ? `$${valorUsado.toLocaleString("es-AR", {
-                minimumFractionDigits: 2,
-              })}`
-            : "—"}
+          <strong>Crédito bancario:</strong> ${fmtMoney(creditoBanco)}
+        </p>
+        <p>
+          <strong>Valor usado:</strong> ${fmtMoney(valorUsado)}
         </p>
         <hr />
         <p>
@@ -183,16 +239,69 @@ export default function ReservationView() {
           <span
             style={{
               color:
-                saldo > 0 ? "var(--color-success)" : "var(--color-warning)",
+                saldo > 0 ? "var(--color-warning)" : "var(--color-success)",
               fontSize: "1.1em",
             }}
           >
-            ${saldo.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+            ${fmtMoney(saldo)}
           </span>
         </p>
         <p>
-          <strong>Forma de pago:</strong> {reservation.payment_method || "—"}
+          <strong>Forma de pago (resumen):</strong>{" "}
+          {reservation.payment_method || "—"}
         </p>
+      </div>
+
+      {/* === Pagos registrados === */}
+      <div className="detail-card">
+        <div className="detail-section-title">💳 Pagos registrados</div>
+
+        {reservation.payments && reservation.payments.length > 0 ? (
+          <div className="vstack" style={{ gap: 12 }}>
+            {reservation.payments.map((pago) => {
+              const d = pago.details || {};
+              return (
+                <div
+                  key={pago.id}
+                  className="card"
+                  style={{ padding: 12, gap: 4 }}
+                >
+                  <p>
+                    <strong>{pago.method?.name || "Medio de pago"}:</strong> $
+                    {fmtMoney(pago.amount)}
+                  </p>
+
+                  {/* Detalles específicos según lo que haya */}
+                  <div
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "var(--color-muted)",
+                    }}
+                  >
+                    {d.bank_name && <p>Banco: {d.bank_name}</p>}
+                    {d.account_alias && <p>Alias/CBU: {d.account_alias}</p>}
+                    {d.account_holder && <p>Titular: {d.account_holder}</p>}
+                    {d.check_number && <p>Nº de cheque: {d.check_number}</p>}
+                    {d.check_due_date && <p>Vencimiento: {d.check_due_date}</p>}
+                    {d.card_holder && <p>Titular tarjeta: {d.card_holder}</p>}
+                    {d.card_last4 && <p>Últimos 4 dígitos: {d.card_last4}</p>}
+                    {typeof d.installments === "number" &&
+                      d.installments > 0 && <p>Cuotas: {d.installments}</p>}
+                    {d.operation_number && (
+                      <p>Nº de operación: {d.operation_number}</p>
+                    )}
+                    {d.raw && <p>{d.raw}</p>}
+                    {/* Si no hay ningún detalle, no mostramos nada extra */}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={{ color: "var(--color-muted)" }}>
+            No hay pagos registrados para esta reserva.
+          </p>
+        )}
       </div>
 
       {/* === Comentarios === */}

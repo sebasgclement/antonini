@@ -35,6 +35,13 @@ class Reservation extends Model
         'date'              => 'datetime',
     ];
 
+    protected $appends = [
+    'profit',        // si ya lo estás usando
+    'paid_amount',
+    'remaining_amount',
+    ];
+
+
     // ================= RELACIONES =================
 
     public function vehicle()
@@ -72,6 +79,26 @@ class Reservation extends Model
         return (float) $this->price - $tradeInValue - $workshop;
     }
 
+        // ================= MÉTODOS DE PAGO =================
+
+        public function payments()
+{
+    return $this->hasMany(\App\Models\ReservationPayment::class);
+}
+
+// Opcional: helpers para ver lo pagado y lo pendiente
+public function getPaidAmountAttribute(): float
+{
+    return (float) $this->payments()->sum('amount');
+}
+
+public function getRemainingAmountAttribute(): float
+{
+    $total = (float) ($this->price ?? 0);
+    return max(0, $total - $this->paid_amount);
+}
+
+
     // ================= EVENTOS AUTOMÁTICOS =================
 
     protected static function booted()
@@ -99,6 +126,8 @@ class Reservation extends Model
                     break;
             }
         });
+
+        
 
         // Al eliminar una reserva pendiente → liberar vehículo
         static::deleted(function ($reservation) {

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import PaymentMethodModal from "../../components/modals/PaymentMethodModal"; // ✅ usa el modal nuevo
+import PaymentMethodModal from "../../components/modals/PaymentMethodModal";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
@@ -24,9 +24,22 @@ type Customer = {
   phone?: string;
 };
 
+type PaymentDetails = {
+  bank_name?: string;
+  check_number?: string;
+  check_due_date?: string;
+  account_alias?: string;
+  account_holder?: string;
+  card_last4?: string;
+  card_holder?: string;
+  installments?: number | "";
+  operation_number?: string;
+};
+
 type Payment = {
   method_id: number | "";
   amount: number | "";
+  details?: PaymentDetails;
 };
 
 type PaymentMethod = {
@@ -134,7 +147,7 @@ export default function RegisterReservation() {
       try {
         const params = new URLSearchParams(location.search);
         const fromUsed = params.get("used");
-        const vehicleId = params.get("vehicle_id"); // 🆕 nuevo parámetro
+        const vehicleId = params.get("vehicle_id");
 
         // 🔹 Si llega un vehículo desde el listado (reservar)
         if (vehicleId) {
@@ -179,7 +192,7 @@ export default function RegisterReservation() {
         if (savedVehicle) {
           const v = JSON.parse(savedVehicle);
           localStorage.removeItem("lastRegisteredVehicle");
-          let found = null;
+          let found: any = null;
           try {
             if (v.id) {
               const res = await api.get(`/vehicles/${v.id}`);
@@ -240,6 +253,7 @@ export default function RegisterReservation() {
   /* ====== Gestión pagos ====== */
   const addPayment = () =>
     setPayments((p) => [...p, { method_id: "", amount: "" }]);
+
   const updatePayment = (index: number, key: keyof Payment, value: any) => {
     setPayments((prev) => {
       const copy = [...prev];
@@ -247,6 +261,20 @@ export default function RegisterReservation() {
       return copy;
     });
   };
+
+  const updatePaymentDetail = (
+    index: number,
+    field: keyof PaymentDetails,
+    value: any
+  ) => {
+    setPayments((prev) => {
+      const copy = [...prev];
+      const current = copy[index].details || {};
+      copy[index].details = { ...current, [field]: value };
+      return copy;
+    });
+  };
+
   const removePayment = (index: number) =>
     setPayments((prev) => prev.filter((_, i) => i !== index));
 
@@ -254,7 +282,8 @@ export default function RegisterReservation() {
     if (!includeDeposit) setPayments([]);
     if (includeDeposit && payments.length === 0)
       setPayments([{ method_id: "", amount: "" }]);
-  }, [includeDeposit]); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeDeposit]);
 
   /* ====== Submit ====== */
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -275,10 +304,18 @@ export default function RegisterReservation() {
     const validPayments = includeDeposit
       ? payments
           .filter((p) => p.method_id && Number(p.amount) > 0)
-          .map((p) => ({
-            method_id: Number(p.method_id),
-            amount: Number(p.amount),
-          }))
+          .map((p) => {
+            const details = p.details || {};
+            const hasDetails = Object.values(details).some(
+              (v) => v !== "" && v !== null && v !== undefined
+            );
+
+            return {
+              method_id: Number(p.method_id),
+              amount: Number(p.amount),
+              ...(hasDetails ? { details } : {}),
+            };
+          })
       : [];
 
     if (includeDeposit && validPayments.length === 0) {
@@ -484,44 +521,248 @@ export default function RegisterReservation() {
         {includeDeposit && (
           <div className="card vstack">
             <label>Medios de pago</label>
-            {payments.map((p, i) => (
-              <div key={i} className="hstack">
-                <select
-                  value={p.method_id}
-                  onChange={(e) =>
-                    updatePayment(
-                      i,
-                      "method_id",
-                      Number(e.currentTarget.value) || ""
-                    )
-                  }
-                >
-                  <option value="">Seleccionar…</option>
-                  {paymentMethods.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-                <Input
-                  type="number"
-                  label="Monto"
-                  value={p.amount as any}
-                  onChange={(e) =>
-                    updatePayment(
-                      i,
-                      "amount",
-                      e.currentTarget.value === ""
-                        ? ""
-                        : Number(e.currentTarget.value)
-                    )
-                  }
-                />
-                <Button type="button" onClick={() => removePayment(i)}>
-                  🗑
-                </Button>
-              </div>
-            ))}
+            {payments.map((p, i) => {
+              const selectedMethod = paymentMethods.find(
+                (m) => m.id === Number(p.method_id)
+              );
+
+              return (
+                <div key={i} className="vstack" style={{ gap: 8 }}>
+                  <div className="hstack">
+                    <select
+                      value={p.method_id}
+                      onChange={(e) =>
+                        updatePayment(
+                          i,
+                          "method_id",
+                          Number(e.currentTarget.value) || ""
+                        )
+                      }
+                    >
+                      <option value="">Seleccionar…</option>
+                      {paymentMethods.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <Input
+                      type="number"
+                      label="Monto"
+                      value={p.amount as any}
+                      onChange={(e) =>
+                        updatePayment(
+                          i,
+                          "amount",
+                          e.currentTarget.value === ""
+                            ? ""
+                            : Number(e.currentTarget.value)
+                        )
+                      }
+                    />
+
+                    <Button type="button" onClick={() => removePayment(i)}>
+                      🗑
+                    </Button>
+                  </div>
+
+                  {/* Campos específicos según tipo de medio */}
+                  {selectedMethod?.requires_details && (
+                    <div className="card vstack">
+                      {/* TRANSFERENCIA BANCARIA */}
+                      {selectedMethod.type === "bank" && (
+                        <>
+                          <Input
+                            label="Banco"
+                            value={p.details?.bank_name || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "bank_name",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            label="Alias / CBU"
+                            value={p.details?.account_alias || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "account_alias",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            label="Titular"
+                            value={p.details?.account_holder || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "account_holder",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            label="N° de operación"
+                            value={p.details?.operation_number || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "operation_number",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                        </>
+                      )}
+
+                      {/* CHEQUE */}
+                      {selectedMethod.type === "check" && (
+                        <>
+                          <Input
+                            label="Banco"
+                            value={p.details?.bank_name || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "bank_name",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            label="N° de cheque"
+                            value={p.details?.check_number || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "check_number",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            type="date"
+                            label="Fecha de vencimiento"
+                            value={p.details?.check_due_date || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "check_due_date",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            label="Titular"
+                            value={p.details?.account_holder || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "account_holder",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                        </>
+                      )}
+
+                      {/* TARJETA */}
+                      {selectedMethod.type === "card" && (
+                        <>
+                          <Input
+                            label="Titular"
+                            value={p.details?.card_holder || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "card_holder",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            label="Últimos 4 dígitos"
+                            value={p.details?.card_last4 || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "card_last4",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            type="number"
+                            label="Cuotas"
+                            value={p.details?.installments ?? ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "installments",
+                                e.currentTarget.value === ""
+                                  ? ""
+                                  : Number(e.currentTarget.value)
+                              )
+                            }
+                          />
+                        </>
+                      )}
+
+                      {/* CRÉDITO BANCARIO */}
+                      {selectedMethod.type === "credit_bank" && (
+                        <>
+                          <Input
+                            label="Banco"
+                            value={p.details?.bank_name || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "bank_name",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                          <Input
+                            label="N° de crédito / legajo"
+                            value={p.details?.operation_number || ""}
+                            onChange={(e) =>
+                              updatePaymentDetail(
+                                i,
+                                "operation_number",
+                                e.currentTarget.value
+                              )
+                            }
+                          />
+                        </>
+                      )}
+
+                      {/* Fallback genérico si requiere detalles pero no matchea tipo */}
+                      {!["bank", "check", "card", "credit_bank"].includes(
+                        selectedMethod.type
+                      ) && (
+                        <textarea
+                          placeholder="Detalles del pago (CBU, referencia, etc.)"
+                          value={p.details?.operation_number || ""}
+                          onChange={(e) =>
+                            updatePaymentDetail(
+                              i,
+                              "operation_number",
+                              e.currentTarget.value
+                            )
+                          }
+                          className="textarea"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div className="hstack">
               <a className="enlace" onClick={addPayment}>
                 + Agregar medio

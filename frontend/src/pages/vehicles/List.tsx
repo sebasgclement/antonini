@@ -3,9 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import Confirm from "../../components/ui/Confirm";
 import Pagination from "../../components/ui/Pagination";
 import Toast from "../../components/ui/Toast";
+import useAuth from "../../hooks/useAuth";
 import usePagedList from "../../hooks/usePagedList";
 import api from "../../lib/api";
-import useAuth from "../../hooks/useAuth";
 
 type Vehicle = {
   id: number;
@@ -23,8 +23,11 @@ type Vehicle = {
   price?: number;
   status: "disponible" | "reservado" | "vendido";
   check_spare: boolean;
-  check_jack: boolean;
+  check_jack: boolean; // Cric
+  check_tools: boolean; // Herramientas
   check_docs: boolean;
+  check_key_copy: boolean;
+  check_manual: boolean;
   notes?: string;
   has_unpaid_expenses?: boolean; // ✅ nuevo
   customer?: {
@@ -123,12 +126,11 @@ export default function VehiclesList() {
 
       <div className="card hstack" style={{ justifyContent: "space-between" }}>
         <input
-  className="input-search"
-  placeholder="Buscar por patente, marca, modelo…"
-  value={search}
-  onChange={(e) => setSearch(e.currentTarget.value)}
-/>
-
+          className="input-search"
+          placeholder="Buscar por patente, marca, modelo…"
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+        />
       </div>
 
       <div className="card" style={{ overflowX: "auto" }}>
@@ -230,7 +232,6 @@ export default function VehiclesList() {
                                 background: bgColor,
                               }}
                             >
-                              
                               <td style={{ padding: 8 }}>{v.plate}</td>
                               <td style={{ padding: 8 }}>
                                 {v.brand} {v.model}
@@ -243,12 +244,75 @@ export default function VehiclesList() {
                                 {v.fuel_type || "—"}
                               </td>
                               <td style={{ padding: 8 }}>
-                                {[
-                                  v.check_spare ? "🛞" : "—",
-                                  v.check_jack ? "🛠️" : "—",
-                                  v.check_docs ? "📄" : "—",
-                                ].join(" ")}
+                                <div className="checklist-badges">
+                                  <span
+                                    className={`check-badge ${
+                                      v.check_spare ? "on" : "off"
+                                    }`}
+                                  >
+                                    <span className="check-badge-icon">🛞</span>
+                                    <span className="check-badge-tooltip">
+                                      Rueda de auxilio
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    className={`check-badge ${
+                                      v.check_jack ? "on" : "off"
+                                    }`}
+                                  >
+                                    <span className="check-badge-icon">🪜</span>
+                                    <span className="check-badge-tooltip">
+                                      Crique
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    className={`check-badge ${
+                                      v.check_tools ? "on" : "off"
+                                    }`}
+                                  >
+                                    <span className="check-badge-icon">🛠️</span>
+                                    <span className="check-badge-tooltip">
+                                      Herramientas
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    className={`check-badge ${
+                                      v.check_docs ? "on" : "off"
+                                    }`}
+                                  >
+                                    <span className="check-badge-icon">📄</span>
+                                    <span className="check-badge-tooltip">
+                                      Documentación completa
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    className={`check-badge ${
+                                      v.check_key_copy ? "on" : "off"
+                                    }`}
+                                  >
+                                    <span className="check-badge-icon">🔑</span>
+                                    <span className="check-badge-tooltip">
+                                      Duplicado de llave
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    className={`check-badge ${
+                                      v.check_manual ? "on" : "off"
+                                    }`}
+                                  >
+                                    <span className="check-badge-icon">📘</span>
+                                    <span className="check-badge-tooltip">
+                                      Manual del vehículo
+                                    </span>
+                                  </span>
+                                </div>
                               </td>
+
                               <td style={{ padding: 8 }}>
                                 {v.price?.toLocaleString() || "—"}
                               </td>
@@ -422,7 +486,8 @@ export default function VehiclesList() {
                                         }
                                         disabled={v.ownership === "propio"}
                                         onClick={() =>
-                                          isAdmin && v.ownership !== "propio" &&
+                                          isAdmin &&
+                                          v.ownership !== "propio" &&
                                           setToDelete(v)
                                         }
                                         style={{
@@ -433,7 +498,9 @@ export default function VehiclesList() {
                                               ? "var(--color-muted)"
                                               : "var(--color-danger)",
                                           opacity:
-                                            !isAdmin || v.ownership === "propio" ? 0.4 : 1,
+                                            !isAdmin || v.ownership === "propio"
+                                              ? 0.4
+                                              : 1,
                                           fontSize: "1rem",
                                           cursor:
                                             !isAdmin || v.ownership === "propio"

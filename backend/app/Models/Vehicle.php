@@ -12,8 +12,8 @@ class Vehicle extends Model
 
     protected $fillable = [
     'brand','model','year','plate','vin','color','km','fuel_type',
-    'ownership','customer_id','seller_id','reference_price','price','status',
-    'check_spare','check_jack','check_docs','notes',
+    'ownership','customer_id','seller_id','reference_price', 'take_price', 'price','status',
+    'check_spare','check_jack', 'chek_tools', 'check_docs','notes',
     'photo_front','photo_back','photo_left','photo_right',
     'photo_interior_front','photo_interior_back','photo_trunk',
     'sold_at',
@@ -25,9 +25,11 @@ class Vehicle extends Model
         'year'            => 'integer',
         'km'              => 'integer',
         'reference_price' => 'decimal:2',
+        'take_price' => 'decimal:2',
         'price'           => 'decimal:2',
         'check_spare'     => 'boolean',
         'check_jack'      => 'boolean',
+        'check_tools'    => 'boolean',
         'check_docs'      => 'boolean',
         'sold_at'         => 'datetime',
     ];

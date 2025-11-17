@@ -1,4 +1,4 @@
-import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
@@ -21,15 +21,22 @@ export default function RegisterVehicle() {
   const [km, setKm] = useState<number | "">("");
   const [fuelType, setFuelType] = useState<string>("");
   const [referencePrice, setReferencePrice] = useState<number | "">("");
+  const [takePrice, setTakePrice] = useState<number | "">("");
   const [price, setPrice] = useState<number | "">("");
-  const [ownership, setOwnership] = useState<"propio" | "consignado">("consignado");
+  const [ownership, setOwnership] = useState<"propio" | "consignado">(
+    "consignado"
+  );
   const [dni, setDni] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [checkSpare, setCheckSpare] = useState(true);
-  const [checkJack, setCheckJack] = useState(true);
+  const [checkJack, setCheckJack] = useState(true); // Cric
+  const [checkTools, setCheckTools] = useState(true); // 🆕 Herramientas
   const [checkDocs, setCheckDocs] = useState(true);
+  const [checkKeyCopy, setCheckKeyCopy] = useState(true);
+  const [checkManual, setCheckManual] = useState(true);
+
   const [notes, setNotes] = useState("");
 
   // 📸 Fotos
@@ -37,7 +44,9 @@ export default function RegisterVehicle() {
   const [photoBack, setPhotoBack] = useState<File | null>(null);
   const [photoLeft, setPhotoLeft] = useState<File | null>(null);
   const [photoRight, setPhotoRight] = useState<File | null>(null);
-  const [photoInteriorFront, setPhotoInteriorFront] = useState<File | null>(null);
+  const [photoInteriorFront, setPhotoInteriorFront] = useState<File | null>(
+    null
+  );
   const [photoInteriorBack, setPhotoInteriorBack] = useState<File | null>(null);
   const [photoTrunk, setPhotoTrunk] = useState<File | null>(null);
   const [preview, setPreview] = useState<Record<string, string | null>>({});
@@ -60,6 +69,7 @@ export default function RegisterVehicle() {
       setKm(data.km || "");
       setFuelType(data.fuelType || "");
       setReferencePrice(data.referencePrice || "");
+      setTakePrice(data.takePrice || "");
       setPrice(data.price || "");
       setOwnership(data.ownership || "consignado");
       setDni(data.dni || "");
@@ -69,6 +79,11 @@ export default function RegisterVehicle() {
       setCheckSpare(data.checkSpare ?? true);
       setCheckJack(data.checkJack ?? true);
       setCheckDocs(data.checkDocs ?? true);
+      setCheckKeyCopy(data.checkKeyCopy ?? true); // 🆕
+      setCheckManual(data.checkManual ?? true); // 🆕
+      setCheckTools(data.checkTools ?? true);
+      setCheckKeyCopy(data.checkKeyCopy ?? true);
+      setCheckManual(data.checkManual ?? true);
       setNotes(data.notes || "");
       localStorage.removeItem("vehicleFormBackup");
     }
@@ -120,13 +135,27 @@ export default function RegisterVehicle() {
     setPreview((prev) => ({ ...prev, [key]: url }));
 
     switch (key) {
-      case "front": setPhotoFront(file); break;
-      case "back": setPhotoBack(file); break;
-      case "left": setPhotoLeft(file); break;
-      case "right": setPhotoRight(file); break;
-      case "interior_front": setPhotoInteriorFront(file); break;
-      case "interior_back": setPhotoInteriorBack(file); break;
-      case "trunk": setPhotoTrunk(file); break;
+      case "front":
+        setPhotoFront(file);
+        break;
+      case "back":
+        setPhotoBack(file);
+        break;
+      case "left":
+        setPhotoLeft(file);
+        break;
+      case "right":
+        setPhotoRight(file);
+        break;
+      case "interior_front":
+        setPhotoInteriorFront(file);
+        break;
+      case "interior_back":
+        setPhotoInteriorBack(file);
+        break;
+      case "trunk":
+        setPhotoTrunk(file);
+        break;
     }
   };
 
@@ -164,12 +193,17 @@ export default function RegisterVehicle() {
       if (color) form.append("color", color);
       if (km) form.append("km", String(km));
       if (fuelType) form.append("fuel_level", fuelType);
-      if (referencePrice) form.append("reference_price", String(referencePrice));
+      if (referencePrice)
+        form.append("reference_price", String(referencePrice));
+      if (takePrice) form.append("take_price", String(takePrice));
       if (price) form.append("price", String(price));
       form.append("ownership", ownership);
       form.append("check_spare", checkSpare ? "1" : "0");
-      form.append("check_jack", checkJack ? "1" : "0");
+      form.append("check_jack", checkJack ? "1" : "0"); // Cric
+      form.append("check_tools", checkTools ? "1" : "0"); // Herramientas
       form.append("check_docs", checkDocs ? "1" : "0");
+      form.append("check_key_copy", checkKeyCopy ? "1" : "0");
+      form.append("check_manual", checkManual ? "1" : "0");
       if (notes) form.append("notes", notes);
       if (ownership === "consignado") {
         form.append("customer_dni", dni);
@@ -197,22 +231,28 @@ export default function RegisterVehicle() {
       });
 
       const newVehicle = res.data?.data || res.data;
-const redirect = new URLSearchParams(window.location.search).get("redirect");
+      const redirect = new URLSearchParams(window.location.search).get(
+        "redirect"
+      );
 
-// 💾 Guardar el vehículo recién registrado en localStorage
-if (newVehicle) {
-  localStorage.setItem("lastRegisteredVehicle", JSON.stringify(newVehicle));
-}
+      // 💾 Guardar el vehículo recién registrado en localStorage
+      if (newVehicle) {
+        localStorage.setItem(
+          "lastRegisteredVehicle",
+          JSON.stringify(newVehicle)
+        );
+      }
 
-if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
-  window.location.href = `${redirect}?vehicle_id=${newVehicle.id}`;
-} else {
-  setToast("Vehículo registrado con éxito ✅");
-  setTimeout(goBack, 800);
-}
-
+      if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
+        window.location.href = `${redirect}?vehicle_id=${newVehicle.id}`;
+      } else {
+        setToast("Vehículo registrado con éxito ✅");
+        setTimeout(goBack, 800);
+      }
     } catch (err: any) {
-      setToast(err?.response?.data?.message || "No se pudo registrar el vehículo");
+      setToast(
+        err?.response?.data?.message || "No se pudo registrar el vehículo"
+      );
     } finally {
       setLoading(false);
     }
@@ -225,7 +265,12 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
 
         {/* Datos básicos */}
         <div className="card vstack" style={{ gap: 16 }}>
-          <Input label="Patente *" value={plate} onChange={(e) => setPlate(e.currentTarget.value)} required />
+          <Input
+            label="Patente *"
+            value={plate}
+            onChange={(e) => setPlate(e.currentTarget.value)}
+            required
+          />
 
           <div className="hstack" style={{ gap: 16 }}>
             <div className="form-group" style={{ flex: 1 }}>
@@ -244,11 +289,18 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
                     </option>
                   ))}
                 </select>
-                <Button type="button" onClick={() => setShowModal(true)}>+</Button>
+                <Button type="button" onClick={() => setShowModal(true)}>
+                  +
+                </Button>
               </div>
             </div>
 
-            <Input label="Modelo *" value={model} onChange={(e) => setModel(e.currentTarget.value)} required />
+            <Input
+              label="Modelo *"
+              value={model}
+              onChange={(e) => setModel(e.currentTarget.value)}
+              required
+            />
             <Input
               label="Año"
               type="number"
@@ -258,12 +310,20 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
           </div>
 
           <div className="hstack" style={{ gap: 16 }}>
-            <Input label="VIN / Chasis" value={vin} onChange={(e) => setVin(e.currentTarget.value)} />
+            <Input
+              label="VIN / Chasis"
+              value={vin}
+              onChange={(e) => setVin(e.currentTarget.value)}
+            />
           </div>
 
           {/* Color, km y combustible */}
           <div className="hstack" style={{ gap: 16 }}>
-            <Input label="Color" value={color} onChange={(e) => setColor(e.currentTarget.value)} />
+            <Input
+              label="Color"
+              value={color}
+              onChange={(e) => setColor(e.currentTarget.value)}
+            />
             <Input
               label="Kilometraje (km)"
               type="number"
@@ -293,13 +353,25 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
               label="Precio de referencia ($)"
               type="number"
               value={referencePrice as any}
-              onChange={(e) => setReferencePrice(parseFloat(e.currentTarget.value) || "")}
+              onChange={(e) =>
+                setReferencePrice(parseFloat(e.currentTarget.value) || "")
+              }
+            />
+            <Input
+              label="Valor de toma ($)"
+              type="number"
+              value={takePrice as any}
+              onChange={(e) =>
+                setTakePrice(parseFloat(e.currentTarget.value) || "")
+              }
             />
             <Input
               label="Precio de venta ($)"
               type="number"
               value={price as any}
-              onChange={(e) => setPrice(parseFloat(e.currentTarget.value) || "")}
+              onChange={(e) =>
+                setPrice(parseFloat(e.currentTarget.value) || "")
+              }
             />
           </div>
         </div>
@@ -309,10 +381,24 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
           <div className="title">Propiedad</div>
           <div className="hstack" style={{ gap: 16 }}>
             <label>
-              <input type="radio" name="ownership" value="propio" checked={ownership === "propio"} onChange={() => setOwnership("propio")} /> Propio
+              <input
+                type="radio"
+                name="ownership"
+                value="propio"
+                checked={ownership === "propio"}
+                onChange={() => setOwnership("propio")}
+              />{" "}
+              Propio
             </label>
             <label>
-              <input type="radio" name="ownership" value="consignado" checked={ownership === "consignado"} onChange={() => setOwnership("consignado")} /> Consignado
+              <input
+                type="radio"
+                name="ownership"
+                value="consignado"
+                checked={ownership === "consignado"}
+                onChange={() => setOwnership("consignado")}
+              />{" "}
+              Consignado
             </label>
           </div>
         </div>
@@ -324,30 +410,74 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
 
             <div className="form-row" style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
-                <Input label="DNI *" value={dni} onChange={(e) => setDni(e.currentTarget.value)} required />
+                <Input
+                  label="DNI *"
+                  value={dni}
+                  onChange={(e) => setDni(e.currentTarget.value)}
+                  required
+                />
               </div>
-              <Button type="button" onClick={searchByDni}>Buscar</Button>
+              <Button type="button" onClick={searchByDni}>
+                Buscar
+              </Button>
             </div>
 
             <Button
               type="button"
               onClick={() => {
                 const state = {
-                  plate, brand, model, year, vin, color, km,
-                  fuelType, referencePrice, price, ownership,
-                  dni, customerName, customerEmail, customerPhone,
-                  checkSpare, checkJack, checkDocs, notes,
+                  plate,
+                  brand,
+                  model,
+                  year,
+                  vin,
+                  color,
+                  km,
+                  fuelType,
+                  referencePrice,
+                  takePrice,
+                  price,
+                  ownership,
+                  dni,
+                  customerName,
+                  customerEmail,
+                  customerPhone,
+                  checkSpare,
+                  checkJack,
+                  checkTools,
+                  checkDocs,
+                  checkKeyCopy,
+                  checkManual, // 🆕
+                  notes,
                 };
-                localStorage.setItem("vehicleFormBackup", JSON.stringify(state));
-                window.location.href = "/clientes/registro?redirect=/vehiculos/registro";
+
+                localStorage.setItem(
+                  "vehicleFormBackup",
+                  JSON.stringify(state)
+                );
+                window.location.href =
+                  "/clientes/registro?redirect=/vehiculos/registro";
               }}
             >
               + Registrar nuevo cliente
             </Button>
 
-            <Input label="Nombre completo" value={customerName} onChange={(e) => setCustomerName(e.currentTarget.value)} />
-            <Input label="Email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.currentTarget.value)} />
-            <Input label="Teléfono" value={customerPhone} onChange={(e) => setCustomerPhone(e.currentTarget.value)} />
+            <Input
+              label="Nombre completo"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.currentTarget.value)}
+            />
+            <Input
+              label="Email"
+              type="email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.currentTarget.value)}
+            />
+            <Input
+              label="Teléfono"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.currentTarget.value)}
+            />
           </div>
         )}
 
@@ -364,14 +494,27 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
               { key: "interior_back", label: "Interior Atrás" },
               { key: "trunk", label: "Baúl" },
             ].map(({ key, label }) => (
-              <div key={key} className="form-group" style={{ flex: 1, minWidth: 180 }}>
+              <div
+                key={key}
+                className="form-group"
+                style={{ flex: 1, minWidth: 180 }}
+              >
                 <label>{label}</label>
-                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, key)} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, key)}
+                />
                 {preview[key] && (
                   <img
                     src={preview[key]!}
                     alt={key}
-                    style={{ width: "100%", maxWidth: 280, marginTop: 8, borderRadius: 8 }}
+                    style={{
+                      width: "100%",
+                      maxWidth: 280,
+                      marginTop: 8,
+                      borderRadius: 8,
+                    }}
                   />
                 )}
               </div>
@@ -382,16 +525,67 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
         {/* Checklist */}
         <div className="card vstack" style={{ gap: 8 }}>
           <div className="title">Checklist</div>
+
           <label>
-            <input type="checkbox" checked={checkSpare} onChange={(e) => setCheckSpare(e.currentTarget.checked)} /> Rueda de auxilio
+            <input
+              type="checkbox"
+              checked={checkSpare}
+              onChange={(e) => setCheckSpare(e.currentTarget.checked)}
+            />{" "}
+            Rueda de auxilio
           </label>
+
           <label>
-            <input type="checkbox" checked={checkJack} onChange={(e) => setCheckJack(e.currentTarget.checked)} /> Cric / Herramientas
+            <input
+              type="checkbox"
+              checked={checkJack}
+              onChange={(e) => setCheckJack(e.currentTarget.checked)}
+            />{" "}
+            Crique
           </label>
+
           <label>
-            <input type="checkbox" checked={checkDocs} onChange={(e) => setCheckDocs(e.currentTarget.checked)} /> Documentación
+            <input
+              type="checkbox"
+              checked={checkTools}
+              onChange={(e) => setCheckTools(e.currentTarget.checked)}
+            />{" "}
+            Herramientas
           </label>
-          <textarea className="form-control" placeholder="Observaciones" value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
+
+          <label>
+            <input
+              type="checkbox"
+              checked={checkDocs}
+              onChange={(e) => setCheckDocs(e.currentTarget.checked)}
+            />{" "}
+            Documentación
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={checkKeyCopy}
+              onChange={(e) => setCheckKeyCopy(e.currentTarget.checked)}
+            />{" "}
+            Duplicado de llave
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={checkManual}
+              onChange={(e) => setCheckManual(e.currentTarget.checked)}
+            />{" "}
+            Manual
+          </label>
+
+          <textarea
+            className="form-control"
+            placeholder="Observaciones"
+            value={notes}
+            onChange={(e) => setNotes(e.currentTarget.value)}
+          />
         </div>
 
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
@@ -413,15 +607,27 @@ if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
               className="form-control"
               placeholder="Nombre de marca"
             />
-            <div className="hstack" style={{ justifyContent: "flex-end", gap: 8 }}>
-              <Button type="button" onClick={addBrand}>Guardar</Button>
-              <Button type="button" onClick={() => setShowModal(false)}>Cerrar</Button>
+            <div
+              className="hstack"
+              style={{ justifyContent: "flex-end", gap: 8 }}
+            >
+              <Button type="button" onClick={addBrand}>
+                Guardar
+              </Button>
+              <Button type="button" onClick={() => setShowModal(false)}>
+                Cerrar
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {toast && <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />}
+      {toast && (
+        <Toast
+          message={toast}
+          type={toast.includes("✅") ? "success" : "error"}
+        />
+      )}
     </div>
   );
 }

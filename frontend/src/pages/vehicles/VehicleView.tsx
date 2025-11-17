@@ -46,11 +46,22 @@ export default function VehicleView() {
       <div className="detail-card">
         <div className="detail-section-title">Datos generales</div>
         <div className="detail-group">
-          <p><strong>Patente:</strong> {vehicle.plate || "—"}</p>
-          <p><strong>Año:</strong> {vehicle.year || "—"}</p>
-          <p><strong>Color:</strong> {vehicle.color || "—"}</p>
-          <p><strong>Kilometraje:</strong> {vehicle.km ? `${vehicle.km.toLocaleString()} km` : "—"}</p>
-          <p><strong>Combustible:</strong> {vehicle.fuel_type || "—"}</p>
+          <p>
+            <strong>Patente:</strong> {vehicle.plate || "—"}
+          </p>
+          <p>
+            <strong>Año:</strong> {vehicle.year || "—"}
+          </p>
+          <p>
+            <strong>Color:</strong> {vehicle.color || "—"}
+          </p>
+          <p>
+            <strong>Kilometraje:</strong>{" "}
+            {vehicle.km ? `${vehicle.km.toLocaleString()} km` : "—"}
+          </p>
+          <p>
+            <strong>Combustible:</strong> {vehicle.fuel_type || "—"}
+          </p>
         </div>
       </div>
 
@@ -58,7 +69,9 @@ export default function VehicleView() {
       <div className="detail-card">
         <div className="detail-section-title">Propiedad / Cliente</div>
         <div className="detail-group">
-          <p><strong>Tipo de propiedad:</strong> {vehicle.ownership}</p>
+          <p>
+            <strong>Tipo de propiedad:</strong> {vehicle.ownership}
+          </p>
           {vehicle.ownership === "consignado" && (
             <p>
               <strong>Cliente consignante:</strong>{" "}
@@ -69,7 +82,9 @@ export default function VehicleView() {
                 `#${vehicle.customer_id}`}
             </p>
           )}
-          <p><strong>VIN:</strong> {vehicle.vin || "—"}</p>
+          <p>
+            <strong>VIN:</strong> {vehicle.vin || "—"}
+          </p>
         </div>
       </div>
 
@@ -84,6 +99,12 @@ export default function VehicleView() {
               : "—"}
           </p>
           <p>
+            <strong>Valor de toma:</strong>{" "}
+            {vehicle.take_price != null
+              ? `$${Number(vehicle.take_price).toLocaleString("es-AR")}`
+              : "—"}
+          </p>
+          <p>
             <strong>Precio actual:</strong>{" "}
             {vehicle.price ? `$${vehicle.price.toLocaleString()}` : "—"}
           </p>
@@ -94,7 +115,9 @@ export default function VehicleView() {
       <div className="detail-card">
         <div className="detail-section-title">Gastos de taller</div>
         {expenses.length === 0 ? (
-          <p className="text-muted">No hay gastos registrados para este vehículo.</p>
+          <p className="text-muted">
+            No hay gastos registrados para este vehículo.
+          </p>
         ) : (
           <table className="report-table">
             <thead>
@@ -108,7 +131,9 @@ export default function VehicleView() {
               {expenses.map((exp, i) => (
                 <tr key={i}>
                   <td>
-                    {new Date(exp.date || exp.created_at).toLocaleDateString("es-AR")}
+                    {new Date(exp.date || exp.created_at).toLocaleDateString(
+                      "es-AR"
+                    )}
                   </td>
                   <td>{exp.description || "—"}</td>
                   <td>{exp.amount ? exp.amount.toLocaleString() : "—"}</td>
@@ -128,12 +153,22 @@ export default function VehicleView() {
             {vehicle.check_spare ? "✅ Sí" : "❌ No"}
           </p>
           <p>
-            <strong>Gato / criquet:</strong>{" "}
-            {vehicle.check_jack ? "✅ Sí" : "❌ No"}
+            <strong>Crique:</strong> {vehicle.check_jack ? "✅ Sí" : "❌ No"}
+          </p>
+          <p>
+            <strong>Herramientas:</strong>{" "}
+            {vehicle.check_tools ? "✅ Sí" : "❌ No"}
           </p>
           <p>
             <strong>Documentación:</strong>{" "}
             {vehicle.check_docs ? "✅ Completa" : "❌ Incompleta"}
+          </p>
+          <p>
+            <strong>Duplicado de llave:</strong>{" "}
+            {vehicle.check_key_copy ? "✅ Sí" : "❌ No"}
+          </p>
+          <p>
+            <strong>Manual:</strong> {vehicle.check_manual ? "✅ Sí" : "❌ No"}
           </p>
         </div>
       </div>

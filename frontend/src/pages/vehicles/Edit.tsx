@@ -21,10 +21,14 @@ type Vehicle = {
   customer_email?: string;
   customer_phone?: string;
   reference_price?: number;
+  take_price?: number;
   price?: number;
   check_spare: boolean;
   check_jack: boolean;
+  check_tools: boolean;
   check_docs: boolean;
+  check_key_copy: boolean;
+  check_manual: boolean;
   notes?: string;
   photo_front_url?: string | null;
   photo_back_url?: string | null;
@@ -142,11 +146,15 @@ export default function VehicleEdit() {
       if (v.fuel_type) form.append("fuel_type", v.fuel_type);
       if (v.reference_price)
         form.append("reference_price", String(v.reference_price));
+      if (v.take_price) form.append("take_price", String(v.take_price));
       if (v.price) form.append("price", String(v.price));
       form.append("ownership", v.ownership || "propio");
       form.append("check_spare", v.check_spare ? "1" : "0");
       form.append("check_jack", v.check_jack ? "1" : "0");
+      form.append("check_tools", v.check_tools ? "1" : "0");
       form.append("check_docs", v.check_docs ? "1" : "0");
+      form.append("check_key_copy", v.check_key_copy ? "1" : "0");
+      form.append("check_manual", v.check_manual ? "1" : "0");
       if (v.notes) form.append("notes", v.notes);
 
       if (v.ownership === "consignado" && v.customer_dni) {
@@ -259,7 +267,10 @@ export default function VehicleEdit() {
               type="number"
               value={v.km || ""}
               onChange={(e) =>
-                setV({ ...v, km: parseInt(e.currentTarget.value) || undefined })
+                setV({
+                  ...v,
+                  km: parseInt(e.currentTarget.value) || undefined,
+                })
               }
             />
             <div className="form-group" style={{ flex: 1 }}>
@@ -292,6 +303,17 @@ export default function VehicleEdit() {
                   ...v,
                   reference_price:
                     parseFloat(e.currentTarget.value) || undefined,
+                })
+              }
+            />
+            <Input
+              label="Valor de toma ($)"
+              type="number"
+              value={v.take_price || ""}
+              onChange={(e) =>
+                setV({
+                  ...v,
+                  take_price: parseFloat(e.currentTarget.value) || undefined,
                 })
               }
             />
@@ -385,6 +407,7 @@ export default function VehicleEdit() {
         {/* Checklist */}
         <div className="card vstack" style={{ gap: 8 }}>
           <div className="title">Checklist</div>
+
           <label>
             <input
               type="checkbox"
@@ -395,6 +418,7 @@ export default function VehicleEdit() {
             />{" "}
             Rueda de auxilio
           </label>
+
           <label>
             <input
               type="checkbox"
@@ -403,8 +427,20 @@ export default function VehicleEdit() {
                 setV({ ...v, check_jack: e.currentTarget.checked })
               }
             />{" "}
-            Cric / Herramientas
+            Crique
           </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={v.check_tools ?? false}
+              onChange={(e) =>
+                setV({ ...v, check_tools: e.currentTarget.checked })
+              }
+            />{" "}
+            Herramientas
+          </label>
+
           <label>
             <input
               type="checkbox"
@@ -415,6 +451,29 @@ export default function VehicleEdit() {
             />{" "}
             Documentación
           </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={v.check_key_copy ?? false}
+              onChange={(e) =>
+                setV({ ...v, check_key_copy: e.currentTarget.checked })
+              }
+            />{" "}
+            Duplicado de llave
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={v.check_manual ?? false}
+              onChange={(e) =>
+                setV({ ...v, check_manual: e.currentTarget.checked })
+              }
+            />{" "}
+            Manual
+          </label>
+
           <textarea
             className="form-control"
             placeholder="Observaciones"

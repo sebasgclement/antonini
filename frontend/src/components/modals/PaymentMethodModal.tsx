@@ -8,12 +8,27 @@ type Props = {
   onCreated: (method: any) => void;
 };
 
+type MethodType = "" | "cash" | "bank" | "check" | "card" | "credit_bank";
+
 export default function PaymentMethodModal({ onClose, onCreated }: Props) {
   const [name, setName] = useState("");
-  const [type, setType] = useState("");
+  const [type, setType] = useState<MethodType>("");
   const [requiresDetails, setRequiresDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const handleChangeType = (value: MethodType) => {
+    setType(value);
+
+    // Pequeña ayudita de UX:
+    // - cash: normalmente no hace falta detalle → lo apagamos
+    // - otros: lo prendemos por defecto (se puede desmarcar)
+    if (value === "cash") {
+      setRequiresDetails(false);
+    } else if (value) {
+      setRequiresDetails(true);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,12 +37,15 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
     if (!type) return setError("Seleccioná un tipo de método");
 
     setLoading(true);
+    setError("");
+
     try {
       const res = await api.post("/payment-methods", {
         name,
         type,
         requires_details: requiresDetails,
       });
+
       onCreated(res.data.data || res.data);
       onClose();
     } catch (err: any) {
@@ -63,7 +81,12 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
           />
 
           <label>Tipo *</label>
-          <select value={type} onChange={(e) => setType(e.currentTarget.value)}>
+          <select
+            value={type}
+            onChange={(e) =>
+              handleChangeType(e.currentTarget.value as MethodType)
+            }
+          >
             <option value="">Seleccionar…</option>
             <option value="cash">Efectivo</option>
             <option value="bank">Transferencia Bancaria</option>
@@ -77,6 +100,8 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
               type="checkbox"
               checked={requiresDetails}
               onChange={(e) => setRequiresDetails(e.target.checked)}
+              // Podrías bloquearlo en efectivo si querés:
+              // disabled={type === "cash"}
             />
             Requiere datos adicionales (CBU, N° de cheque, etc.)
           </label>
