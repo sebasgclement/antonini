@@ -61,11 +61,15 @@ class VehicleController extends Controller
             'ownership' => 'required|in:propio,consignado',
             'customer_id' => 'nullable|exists:customers,id',
             'reference_price' => 'nullable|numeric',
+            'take_price' => 'nullable|numeric',
             'price' => 'nullable|numeric',
             'status' => 'in:disponible,reservado,vendido',
             'check_spare' => 'boolean',
             'check_jack' => 'boolean',
+            'check_tools'    => 'boolean',
             'check_docs' => 'boolean',
+            'check_key_copy' => 'boolean', // 🆕 duplicado llave
+            'check_manual'   => 'boolean', // 🆕 manual
             'notes' => 'nullable|string',
 
             // 📸 Validaciones nuevas
@@ -112,11 +116,15 @@ class VehicleController extends Controller
             'ownership' => 'in:propio,consignado',
             'customer_id' => 'nullable|exists:customers,id',
             'reference_price' => 'nullable|numeric',
+            'take_price' => 'nullable|numeric',
             'price' => 'nullable|numeric',
             'status' => 'in:disponible,reservado,vendido',
             'check_spare' => 'boolean',
             'check_jack' => 'boolean',
+            'check_tools'    => 'boolean',
             'check_docs' => 'boolean',
+            'check_key_copy' => 'boolean', // 🆕 duplicado llave
+            'check_manual'   => 'boolean', // 🆕 manual
             'notes' => 'nullable|string',
 
             // 📸 Validaciones nuevas
