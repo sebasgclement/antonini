@@ -11,6 +11,7 @@ use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\VehicleBrandController;
+use App\Http\Controllers\Api\ReservationPaymentController;
 
 
 // ================== AUTH ==================
@@ -44,6 +45,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // ✅ Reservas
     Route::get('/reservations/create', [ReservationController::class, 'create']);
     Route::apiResource('reservations', ReservationController::class);
+
+    // ✅ PAGOS DE RESERVAS
+    Route::get   ('/reservation-payments',              [ReservationPaymentController::class, 'index']);
+    Route::post  ('/reservation-payments',              [ReservationPaymentController::class, 'store']);
+    Route::put   ('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'update']);
+    Route::delete('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'destroy']);
+
 
     // ✅ Cambio de contraseña
     Route::post('/user/change-password', [AuthController::class, 'changePassword']);
