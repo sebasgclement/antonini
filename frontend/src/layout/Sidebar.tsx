@@ -2,68 +2,109 @@ import { NavLink } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import Button from "../components/ui/Button";
 
+// 🔹 Íconos SVG (Diseño limpio tipo Feather/Lucide)
+const Icons = {
+  Home: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
+  Clients: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
+  Vehicles: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><circle cx="10" cy="14" r="2"></circle><path d="M20 8h-6V2"></path></svg>, // Usé un ícono de File/Listado que queda mejor para admin
+  Reservations: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>,
+  Users: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>,
+  Roles: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>,
+  Reports: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>,
+  Close: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+};
+
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { isAdmin, user, logout } = useAuth();
 
   return (
-    <div className="vstack sidebar-inner" style={{ height: "100%" }}>
-      {/* 🔹 Botón cerrar (solo visible en mobile) */}
-      <button className="sidebar-close" onClick={onClose}>
-        ✕
+    <div className="sidebar-inner" style={{ height: "100%", display: 'flex', flexDirection: 'column' }}>
+      
+      {/* 🔹 Botón cerrar (solo visible en mobile gracias al CSS) */}
+      <button className="sidebar-close" onClick={onClose} style={{marginBottom: 20}}>
+        <Icons.Close />
       </button>
 
       {/* 🔹 Navegación principal */}
-      <nav className="vstack" style={{ gap: 8 }}>
+      <nav style={{ flex: 1 }}> {/* flex: 1 empuja el footer hacia abajo */}
+        
+        {/* Sección Principal */}
+        <div className="sidebar-section">Menu Principal</div>
+        
         <NavLink to="/" end className="nav-link" onClick={onClose}>
-          🏠 Inicio
+          <Icons.Home />
+          <span>Inicio</span>
         </NavLink>
 
         <NavLink to="/clientes" className="nav-link" onClick={onClose}>
-          📇 Clientes
+          <Icons.Clients />
+          <span>Clientes</span>
         </NavLink>
 
         <NavLink to="/vehiculos" className="nav-link" onClick={onClose}>
-          🚙 Administración de Vehículos
+          <Icons.Vehicles /> {/* Usé un icono de documento/lista que se ve mejor que el auto a veces */}
+          <span>Vehículos</span>
         </NavLink>
 
         <NavLink to="/reservas" className="nav-link" onClick={onClose}>
-          📅 Reservas de Unidades
+          <Icons.Reservations />
+          <span>Reservas</span>
         </NavLink>
 
+        {/* Sección Administración */}
         {isAdmin && (
           <>
             <hr className="sidebar-separator" />
             <div className="sidebar-section">Administración</div>
+            
             <NavLink to="/admin/usuarios" className="nav-link" onClick={onClose}>
-              👤 Usuarios
+              <Icons.Users />
+              <span>Usuarios</span>
             </NavLink>
+            
             <NavLink to="/admin/roles" className="nav-link" onClick={onClose}>
-              🔑 Roles
+              <Icons.Roles />
+              <span>Roles y Permisos</span>
             </NavLink>
+            
             <NavLink to="/admin/reportes" className="nav-link" onClick={onClose}>
-              📊 Reportes
+              <Icons.Reports />
+              <span>Reportes</span>
             </NavLink>
           </>
         )}
       </nav>
 
-      {/* 🔹 Footer (solo visible en mobile) */}
-      <div className="sidebar-footer">
-        <span className="sidebar-user">
-          {user?.name || user?.email}
-        </span>
+      {/* 🔹 Footer (Mobile Only - según tu CSS actual) */}
+      <div className="sidebar-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 16 }}>
+        <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12}}>
+            <div className="avatar-circle" style={{background: 'var(--color-primary)', color: '#fff'}}>
+                {user?.name?.[0] || 'U'}
+            </div>
+            <div style={{display: 'flex', flexDirection: 'column'}}>
+                <span style={{fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)'}}>
+                    {user?.name?.split(' ')[0] || 'Usuario'}
+                </span>
+                <span style={{fontSize: '0.75rem', color: 'var(--color-muted)'}}>
+                    {isAdmin ? 'Administrador' : 'Vendedor'}
+                </span>
+            </div>
+        </div>
 
         <button
           className="btn"
+          style={{width: '100%', marginBottom: 8, background: 'var(--color-card)', color: 'var(--color-text)', border: '1px solid var(--color-border)'}}
           onClick={() => {
             onClose?.();
             window.location.href = "/perfil/password";
           }}
         >
-          🔒 Cambiar contraseña
+          🔒 Mi Cuenta
         </button>
 
-        <Button onClick={logout}>🚪 Salir</Button>
+        <Button onClick={logout} style={{width: '100%'}}>
+            Cerrar Sesión
+        </Button>
       </div>
     </div>
   );

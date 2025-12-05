@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import api from '../../../lib/api'
 import Toast from '../../../components/ui/Toast'
 import RoleForm from './Form'
+import Button from '../../../components/ui/Button'
 
 export default function RolesCreate() {
   const nav = useNavigate()
@@ -22,15 +23,18 @@ export default function RolesCreate() {
   }
 
   return (
-    <div className="vstack" style={{ gap: 12 }}>
-      <div className="hstack" style={{ justifyContent: 'space-between' }}>
-        <div className="title">Nuevo rol</div>
-        <Link className="enlace" to="/admin/roles">Volver</Link>
+    <div className="vstack" style={{ gap: 20 }}>
+      
+      {/* Header */}
+      <div className="hstack" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="title" style={{margin: 0}}>Nuevo Rol</div>
+        <Button onClick={() => nav('/admin/roles')} style={{background: 'transparent', color: 'var(--color-muted)', border: 'none'}}>
+            Cancelar
+        </Button>
       </div>
 
-      <div className="card vstack" style={{ gap: 16, maxWidth: 600 }}>
-        <RoleForm onSubmit={handleSubmit} submitting={saving} />
-      </div>
+      {/* Formulario */}
+      <RoleForm onSubmit={handleSubmit} submitting={saving} />
 
       {toast && <Toast message={toast} type="error" />}
     </div>

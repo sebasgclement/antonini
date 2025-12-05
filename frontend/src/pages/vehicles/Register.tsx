@@ -2,11 +2,15 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
+import Toggle from "../../components/ui/Toggle"; // 👈 Asegurate de importar el Toggle que creamos
 import useRedirectAfterSave from "../../hooks/useRedirectAfterSave";
 import api from "../../lib/api";
 
 export default function RegisterVehicle() {
   const { goBack } = useRedirectAfterSave("/vehiculos");
+
+  // 🔹 ESTADO: Controla si el auto está físico o es solo un dato
+  const [locationStatus, setLocationStatus] = useState<'stock' | 'ofrecido'>('stock');
 
   // 🔹 Estado de marcas (desde BD)
   const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
@@ -23,16 +27,18 @@ export default function RegisterVehicle() {
   const [referencePrice, setReferencePrice] = useState<number | "">("");
   const [takePrice, setTakePrice] = useState<number | "">("");
   const [price, setPrice] = useState<number | "">("");
-  const [ownership, setOwnership] = useState<"propio" | "consignado">(
-    "consignado"
-  );
+  
+  const [ownership, setOwnership] = useState<"propio" | "consignado">("consignado");
+  
   const [dni, setDni] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  
+  // Toggles
   const [checkSpare, setCheckSpare] = useState(true);
-  const [checkJack, setCheckJack] = useState(true); // Cric
-  const [checkTools, setCheckTools] = useState(true); // 🆕 Herramientas
+  const [checkJack, setCheckJack] = useState(true);
+  const [checkTools, setCheckTools] = useState(true);
   const [checkDocs, setCheckDocs] = useState(true);
   const [checkKeyCopy, setCheckKeyCopy] = useState(true);
   const [checkManual, setCheckManual] = useState(true);
@@ -44,9 +50,7 @@ export default function RegisterVehicle() {
   const [photoBack, setPhotoBack] = useState<File | null>(null);
   const [photoLeft, setPhotoLeft] = useState<File | null>(null);
   const [photoRight, setPhotoRight] = useState<File | null>(null);
-  const [photoInteriorFront, setPhotoInteriorFront] = useState<File | null>(
-    null
-  );
+  const [photoInteriorFront, setPhotoInteriorFront] = useState<File | null>(null);
   const [photoInteriorBack, setPhotoInteriorBack] = useState<File | null>(null);
   const [photoTrunk, setPhotoTrunk] = useState<File | null>(null);
   const [preview, setPreview] = useState<Record<string, string | null>>({});
@@ -60,6 +64,7 @@ export default function RegisterVehicle() {
     const saved = localStorage.getItem("vehicleFormBackup");
     if (saved) {
       const data = JSON.parse(saved);
+      if (data.locationStatus) setLocationStatus(data.locationStatus);
       setPlate(data.plate || "");
       setBrand(data.brand || "");
       setModel(data.model || "");
@@ -79,16 +84,13 @@ export default function RegisterVehicle() {
       setCheckSpare(data.checkSpare ?? true);
       setCheckJack(data.checkJack ?? true);
       setCheckDocs(data.checkDocs ?? true);
-      setCheckKeyCopy(data.checkKeyCopy ?? true); // 🆕
-      setCheckManual(data.checkManual ?? true); // 🆕
-      setCheckTools(data.checkTools ?? true);
       setCheckKeyCopy(data.checkKeyCopy ?? true);
       setCheckManual(data.checkManual ?? true);
+      setCheckTools(data.checkTools ?? true);
       setNotes(data.notes || "");
       localStorage.removeItem("vehicleFormBackup");
     }
 
-    // 🔹 Si acaba de registrarse un cliente, cargarlo automáticamente
     const newClient = localStorage.getItem("lastRegisteredCustomer");
     if (newClient) {
       const c = JSON.parse(newClient);
@@ -101,7 +103,6 @@ export default function RegisterVehicle() {
     }
   }, []);
 
-  // 🔹 Cargar marcas
   useEffect(() => {
     (async () => {
       try {
@@ -113,7 +114,6 @@ export default function RegisterVehicle() {
     })();
   }, []);
 
-  // 🔹 Agregar nueva marca
   const addBrand = async () => {
     if (!newBrand.trim()) return;
     try {
@@ -135,27 +135,13 @@ export default function RegisterVehicle() {
     setPreview((prev) => ({ ...prev, [key]: url }));
 
     switch (key) {
-      case "front":
-        setPhotoFront(file);
-        break;
-      case "back":
-        setPhotoBack(file);
-        break;
-      case "left":
-        setPhotoLeft(file);
-        break;
-      case "right":
-        setPhotoRight(file);
-        break;
-      case "interior_front":
-        setPhotoInteriorFront(file);
-        break;
-      case "interior_back":
-        setPhotoInteriorBack(file);
-        break;
-      case "trunk":
-        setPhotoTrunk(file);
-        break;
+      case "front": setPhotoFront(file); break;
+      case "back": setPhotoBack(file); break;
+      case "left": setPhotoLeft(file); break;
+      case "right": setPhotoRight(file); break;
+      case "interior_front": setPhotoInteriorFront(file); break;
+      case "interior_back": setPhotoInteriorBack(file); break;
+      case "trunk": setPhotoTrunk(file); break;
     }
   };
 
@@ -177,7 +163,6 @@ export default function RegisterVehicle() {
     }
   };
 
-  // ✅ Envío del formulario
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -185,26 +170,35 @@ export default function RegisterVehicle() {
 
     try {
       const form = new FormData();
-      form.append("plate", plate);
+      form.append("status", locationStatus === 'ofrecido' ? 'ofrecido' : 'disponible');
+
+      if(plate) form.append("plate", plate);
       form.append("brand", brand);
       form.append("model", model);
       if (year) form.append("year", String(year));
+      
       if (vin) form.append("vin", vin);
       if (color) form.append("color", color);
       if (km) form.append("km", String(km));
       if (fuelType) form.append("fuel_level", fuelType);
-      if (referencePrice)
-        form.append("reference_price", String(referencePrice));
+      
+      if (referencePrice) form.append("reference_price", String(referencePrice));
       if (takePrice) form.append("take_price", String(takePrice));
       if (price) form.append("price", String(price));
+      
       form.append("ownership", ownership);
-      form.append("check_spare", checkSpare ? "1" : "0");
-      form.append("check_jack", checkJack ? "1" : "0"); // Cric
-      form.append("check_tools", checkTools ? "1" : "0"); // Herramientas
-      form.append("check_docs", checkDocs ? "1" : "0");
-      form.append("check_key_copy", checkKeyCopy ? "1" : "0");
-      form.append("check_manual", checkManual ? "1" : "0");
+      
+      if (locationStatus === 'stock') {
+        form.append("check_spare", checkSpare ? "1" : "0");
+        form.append("check_jack", checkJack ? "1" : "0");
+        form.append("check_tools", checkTools ? "1" : "0");
+        form.append("check_docs", checkDocs ? "1" : "0");
+        form.append("check_key_copy", checkKeyCopy ? "1" : "0");
+        form.append("check_manual", checkManual ? "1" : "0");
+      }
+
       if (notes) form.append("notes", notes);
+      
       if (ownership === "consignado") {
         form.append("customer_dni", dni);
         form.append("customer_name", customerName);
@@ -212,7 +206,6 @@ export default function RegisterVehicle() {
         if (customerPhone) form.append("customer_phone", customerPhone);
       }
 
-      // 📸 Agregar todas las fotos
       const photos = {
         photo_front: photoFront,
         photo_back: photoBack,
@@ -231,16 +224,10 @@ export default function RegisterVehicle() {
       });
 
       const newVehicle = res.data?.data || res.data;
-      const redirect = new URLSearchParams(window.location.search).get(
-        "redirect"
-      );
+      const redirect = new URLSearchParams(window.location.search).get("redirect");
 
-      // 💾 Guardar el vehículo recién registrado en localStorage
       if (newVehicle) {
-        localStorage.setItem(
-          "lastRegisteredVehicle",
-          JSON.stringify(newVehicle)
-        );
+        localStorage.setItem("lastRegisteredVehicle", JSON.stringify(newVehicle));
       }
 
       if (redirect?.includes("/reservas/nueva") && newVehicle?.id) {
@@ -250,9 +237,7 @@ export default function RegisterVehicle() {
         setTimeout(goBack, 800);
       }
     } catch (err: any) {
-      setToast(
-        err?.response?.data?.message || "No se pudo registrar el vehículo"
-      );
+      setToast(err?.response?.data?.message || "No se pudo registrar el vehículo");
     } finally {
       setLoading(false);
     }
@@ -263,13 +248,47 @@ export default function RegisterVehicle() {
       <form onSubmit={onSubmit} className="vstack" style={{ gap: 16 }}>
         <div className="title">Registro de vehículos</div>
 
+        {/* 🟢 SECCIÓN DE ESTADO (CON CARDS) */}
+        <div className="card">
+          <div className="title" style={{marginBottom: 16, fontSize: '1rem'}}>Estado del Ingreso</div>
+          
+          <div className="selection-grid">
+            <div 
+              className={`selection-card ${locationStatus === 'stock' ? 'selected' : ''}`}
+              onClick={() => setLocationStatus('stock')}
+            >
+              <div className="selection-title">🏠 Ingreso Físico (Stock)</div>
+              <div className="selection-subtitle">Vehículo ingresa al predio</div>
+            </div>
+
+            <div 
+              className={`selection-card ${locationStatus === 'ofrecido' ? 'selected' : ''}`}
+              onClick={() => {
+                 setLocationStatus('ofrecido');
+                 setOwnership('consignado'); 
+              }}
+            >
+              <div className="selection-title">📞 Solo Ofrecido (Dato)</div>
+              <div className="selection-subtitle">El cliente retiene la unidad</div>
+            </div>
+          </div>
+
+          {locationStatus === 'ofrecido' && (
+              <div style={{ marginTop: 12, padding: '10px', background: 'rgba(245, 158, 11, 0.1)', color: 'orange', borderRadius: 8, fontSize: '0.9rem', display:'flex', gap: 8, alignItems:'center' }}>
+                  <span>💡</span>
+                  <span>Se ocultarán campos técnicos (VIN, Checklist) y la patente será opcional.</span>
+              </div>
+          )}
+        </div>
+
         {/* Datos básicos */}
         <div className="card vstack" style={{ gap: 16 }}>
           <Input
-            label="Patente *"
+            label={locationStatus === 'stock' ? "Patente *" : "Patente (Opcional)"}
             value={plate}
             onChange={(e) => setPlate(e.currentTarget.value)}
-            required
+            required={locationStatus === 'stock'}
+            placeholder={locationStatus === 'ofrecido' ? "Sin patente" : ""}
           />
 
           <div className="hstack" style={{ gap: 16 }}>
@@ -289,9 +308,7 @@ export default function RegisterVehicle() {
                     </option>
                   ))}
                 </select>
-                <Button type="button" onClick={() => setShowModal(true)}>
-                  +
-                </Button>
+                <Button type="button" onClick={() => setShowModal(true)}>+</Button>
               </div>
             </div>
 
@@ -309,15 +326,16 @@ export default function RegisterVehicle() {
             />
           </div>
 
-          <div className="hstack" style={{ gap: 16 }}>
-            <Input
-              label="VIN / Chasis"
-              value={vin}
-              onChange={(e) => setVin(e.currentTarget.value)}
-            />
-          </div>
+          {locationStatus === 'stock' && (
+            <div className="hstack" style={{ gap: 16 }}>
+                <Input
+                label="VIN / Chasis"
+                value={vin}
+                onChange={(e) => setVin(e.currentTarget.value)}
+                />
+            </div>
+          )}
 
-          {/* Color, km y combustible */}
           <div className="hstack" style={{ gap: 16 }}>
             <Input
               label="Color"
@@ -347,66 +365,56 @@ export default function RegisterVehicle() {
             </div>
           </div>
 
-          {/* Campos de precios */}
           <div className="hstack" style={{ gap: 16 }}>
             <Input
               label="Precio de referencia ($)"
               type="number"
               value={referencePrice as any}
-              onChange={(e) =>
-                setReferencePrice(parseFloat(e.currentTarget.value) || "")
-              }
+              onChange={(e) => setReferencePrice(parseFloat(e.currentTarget.value) || "")}
             />
             <Input
               label="Valor de toma ($)"
               type="number"
               value={takePrice as any}
-              onChange={(e) =>
-                setTakePrice(parseFloat(e.currentTarget.value) || "")
-              }
+              onChange={(e) => setTakePrice(parseFloat(e.currentTarget.value) || "")}
             />
             <Input
               label="Precio de venta ($)"
               type="number"
               value={price as any}
-              onChange={(e) =>
-                setPrice(parseFloat(e.currentTarget.value) || "")
-              }
+              onChange={(e) => setPrice(parseFloat(e.currentTarget.value) || "")}
             />
           </div>
         </div>
 
-        {/* Propiedad */}
-        <div className="card vstack" style={{ gap: 8 }}>
+        {/* 🟢 PROPIEDAD (CON CARDS) */}
+        <div className="card vstack" style={{ gap: 12 }}>
           <div className="title">Propiedad</div>
-          <div className="hstack" style={{ gap: 16 }}>
-            <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="propio"
-                checked={ownership === "propio"}
-                onChange={() => setOwnership("propio")}
-              />{" "}
-              Propio
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="consignado"
-                checked={ownership === "consignado"}
-                onChange={() => setOwnership("consignado")}
-              />{" "}
-              Consignado
-            </label>
+          
+          <div className="selection-grid">
+            <div 
+              className={`selection-card ${ownership === 'propio' ? 'selected' : ''} ${locationStatus === 'ofrecido' ? 'disabled' : ''}`}
+              onClick={() => {
+                  if (locationStatus !== 'ofrecido') setOwnership('propio');
+              }}
+            >
+              <div className="selection-title">🏢 Propio</div>
+              <div className="selection-subtitle">Unidad de la agencia</div>
+            </div>
+
+            <div 
+              className={`selection-card ${ownership === 'consignado' ? 'selected' : ''}`}
+              onClick={() => setOwnership('consignado')}
+            >
+              <div className="selection-title">🤝 Consignado</div>
+              <div className="selection-subtitle">Unidad de terceros</div>
+            </div>
           </div>
         </div>
 
-        {/* Cliente consignado */}
         {ownership === "consignado" && (
           <div className="card vstack" style={{ gap: 16 }}>
-            <div className="title">Datos del cliente</div>
+            <div className="title">Datos del cliente / Dueño</div>
 
             <div className="form-row" style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
@@ -426,37 +434,15 @@ export default function RegisterVehicle() {
               type="button"
               onClick={() => {
                 const state = {
-                  plate,
-                  brand,
-                  model,
-                  year,
-                  vin,
-                  color,
-                  km,
-                  fuelType,
-                  referencePrice,
-                  takePrice,
-                  price,
-                  ownership,
-                  dni,
-                  customerName,
-                  customerEmail,
-                  customerPhone,
-                  checkSpare,
-                  checkJack,
-                  checkTools,
-                  checkDocs,
-                  checkKeyCopy,
-                  checkManual, // 🆕
+                  locationStatus,
+                  plate, brand, model, year, vin, color, km, fuelType,
+                  referencePrice, takePrice, price, ownership,
+                  dni, customerName, customerEmail, customerPhone,
+                  checkSpare, checkJack, checkTools, checkDocs, checkKeyCopy, checkManual,
                   notes,
                 };
-
-                localStorage.setItem(
-                  "vehicleFormBackup",
-                  JSON.stringify(state)
-                );
-                window.location.href =
-                  "/clientes/registro?redirect=/vehiculos/registro";
+                localStorage.setItem("vehicleFormBackup", JSON.stringify(state));
+                window.location.href = "/clientes/registro?redirect=/vehiculos/registro";
               }}
             >
               + Registrar nuevo cliente
@@ -522,71 +508,41 @@ export default function RegisterVehicle() {
           </div>
         </div>
 
-        {/* Checklist */}
-        <div className="card vstack" style={{ gap: 8 }}>
-          <div className="title">Checklist</div>
+        {/* 🟢 CHECKLIST CON TOGGLES NUEVOS */}
+        {locationStatus === 'stock' && (
+            <div className="card vstack" style={{ gap: 16 }}>
+                <div className="title">Checklist de Ingreso</div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                    <Toggle label="Rueda de auxilio" checked={checkSpare} onChange={setCheckSpare} />
+                    <Toggle label="Crique" checked={checkJack} onChange={setCheckJack} />
+                    <Toggle label="Herramientas" checked={checkTools} onChange={setCheckTools} />
+                    <Toggle label="Documentación" checked={checkDocs} onChange={setCheckDocs} />
+                    <Toggle label="Duplicado de llave" checked={checkKeyCopy} onChange={setCheckKeyCopy} />
+                    <Toggle label="Manual" checked={checkManual} onChange={setCheckManual} />
+                </div>
 
-          <label>
-            <input
-              type="checkbox"
-              checked={checkSpare}
-              onChange={(e) => setCheckSpare(e.currentTarget.checked)}
-            />{" "}
-            Rueda de auxilio
-          </label>
+                <textarea
+                    className="form-control"
+                    placeholder="Observaciones adicionales del estado..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.currentTarget.value)}
+                    style={{ marginTop: 8 }}
+                />
+            </div>
+        )}
 
-          <label>
-            <input
-              type="checkbox"
-              checked={checkJack}
-              onChange={(e) => setCheckJack(e.currentTarget.checked)}
-            />{" "}
-            Crique
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={checkTools}
-              onChange={(e) => setCheckTools(e.currentTarget.checked)}
-            />{" "}
-            Herramientas
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={checkDocs}
-              onChange={(e) => setCheckDocs(e.currentTarget.checked)}
-            />{" "}
-            Documentación
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={checkKeyCopy}
-              onChange={(e) => setCheckKeyCopy(e.currentTarget.checked)}
-            />{" "}
-            Duplicado de llave
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={checkManual}
-              onChange={(e) => setCheckManual(e.currentTarget.checked)}
-            />{" "}
-            Manual
-          </label>
-
-          <textarea
-            className="form-control"
-            placeholder="Observaciones"
-            value={notes}
-            onChange={(e) => setNotes(e.currentTarget.value)}
-          />
-        </div>
+        {locationStatus === 'ofrecido' && (
+             <div className="card">
+                <label>Observaciones del vehículo</label>
+                <textarea
+                    className="form-control"
+                    placeholder="Detalles importantes..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.currentTarget.value)}
+                />
+             </div>
+        )}
 
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
           <Button type="submit" loading={loading}>
@@ -595,7 +551,7 @@ export default function RegisterVehicle() {
         </div>
       </form>
 
-      {/* Modal para nueva marca */}
+      {/* Modal Marca */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
@@ -607,16 +563,9 @@ export default function RegisterVehicle() {
               className="form-control"
               placeholder="Nombre de marca"
             />
-            <div
-              className="hstack"
-              style={{ justifyContent: "flex-end", gap: 8 }}
-            >
-              <Button type="button" onClick={addBrand}>
-                Guardar
-              </Button>
-              <Button type="button" onClick={() => setShowModal(false)}>
-                Cerrar
-              </Button>
+            <div className="hstack" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <Button type="button" onClick={addBrand}>Guardar</Button>
+              <Button type="button" onClick={() => setShowModal(false)}>Cerrar</Button>
             </div>
           </div>
         </div>

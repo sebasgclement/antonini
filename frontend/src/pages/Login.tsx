@@ -15,11 +15,11 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 🌓 Fuerza modo oscuro al entrar a la pantalla de login
+  // 🌓 Fuerza modo oscuro al entrar (Look premium)
   useEffect(() => {
     const html = document.documentElement;
     html.setAttribute("data-theme", "dark");
-    html.style.background = "#0f1115"; // previene flash blanco en carga
+    html.style.background = "#0f1115";
   }, []);
 
   const onSubmit = async (e: FormEvent) => {
@@ -43,92 +43,114 @@ export default function Login() {
         minHeight: "100vh",
         overflow: "hidden",
         display: "flex",
+        flexDirection: "column", // Cambiado para acomodar el footer
         justifyContent: "center",
         alignItems: "center",
-        background: "radial-gradient(circle at 30% 30%, #1e2635 0%, #0f1115 80%)",
+        background: "radial-gradient(circle at 50% 50%, #1a202c 0%, #0f1115 100%)", // Gradiente central más profundo
+        color: '#fff'
       }}
     >
-      {/* === FONDO ANIMADO === */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: [0.2, 0.4, 0.2], scale: [1, 1.05, 1] }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        style={{
-          position: "absolute",
-          width: "120%",
-          height: "120%",
-          background:
-            "radial-gradient(circle at 70% 80%, rgba(30,167,255,0.08), transparent 60%)",
-          filter: "blur(60px)",
-        }}
-      />
-      <motion.div
-        animate={{
-          x: ["0%", "10%", "-10%", "0%"],
-          y: ["0%", "5%", "-5%", "0%"],
-        }}
-        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-        style={{
-          position: "absolute",
-          width: "120%",
-          height: "120%",
-          background:
-            "radial-gradient(circle at 20% 30%, rgba(255,255,255,0.05), transparent 70%)",
-          filter: "blur(80px)",
-        }}
-      />
+      {/* === FONDO ANIMADO (Tus animaciones, ligeramente ajustadas) === */}
+      <div style={{position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none'}}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: [0.1, 0.3, 0.1], scale: [1, 1.2, 1], x: ['-10%', '10%', '-10%'] }}
+            transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+            style={{
+              position: "absolute",
+              top: '-20%', left: '-20%',
+              width: "70%", height: "70%",
+              background: "radial-gradient(circle, rgba(30,167,255,0.15) 0%, transparent 60%)",
+              filter: "blur(80px)",
+              borderRadius: '50%'
+            }}
+          />
+          <motion.div
+            animate={{ opacity: [0.1, 0.2, 0.1], scale: [1.2, 1, 1.2], x: ['10%', '-10%', '10%'] }}
+            transition={{ duration: 25, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            style={{
+              position: "absolute",
+              bottom: '-20%', right: '-20%',
+              width: "80%", height: "80%",
+              background: "radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, transparent 60%)", // Un toque violeta para contraste
+              filter: "blur(80px)",
+              borderRadius: '50%'
+            }}
+          />
+      </div>
 
-      {/* === TARJETA DE LOGIN === */}
-      <div
-        className="card vstack"
+      {/* === TARJETA DE LOGIN "GLASS" === */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className="vstack"
         style={{
-          gap: 20,
-          padding: 36,
+          gap: 24,
+          padding: "40px 32px",
           width: "100%",
-          maxWidth: 380,
-          boxShadow: "var(--shadow)",
-          borderRadius: "var(--radius)",
-          background: "var(--color-card)",
+          maxWidth: 400,
+          
+          // ✨ EFECTO VIDRIO ✨
+          background: "rgba(30, 38, 51, 0.5)", // Color base semi-transparente
+          backdropFilter: "blur(16px) saturate(180%)", // El desenfoque mágico
+          WebkitBackdropFilter: "blur(16px) saturate(180%)", // Soporte Safari
+          border: "1px solid rgba(255, 255, 255, 0.1)", // Borde sutil brillante
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)", // Sombra profunda
+          borderRadius: 24, // Bordes más redondeados
+          
           textAlign: "center",
           zIndex: 10,
+          position: 'relative'
         }}
       >
-        <div style={{ marginBottom: 10 }}>
-          <Logo />
+        <div>
+          <div style={{ display: 'inline-block', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '50%', marginBottom: 16 }}>
+             <Logo style={{height: 40}} />
+          </div>
+          <h2 className="title" style={{ color: "#fff", fontSize: "1.75rem", marginBottom: 8, letterSpacing: '-0.5px' }}>
+            Bienvenido
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.6)", fontSize: '0.95rem', margin: 0 }}>
+            Ingresá tus credenciales para acceder al sistema.
+          </p>
         </div>
 
-        <div
-          className="title"
-          style={{
-            textAlign: "center",
-            fontSize: "1.4rem",
-            fontWeight: 600,
-            marginBottom: 4,
-            color: "var(--color-text)",
-          }}
-        >
-          Ingresar a la Intranet
-        </div>
-
-        <form onSubmit={onSubmit} className="vstack" style={{ gap: 14 }}>
+        <form onSubmit={onSubmit} className="vstack" style={{ gap: 20, marginTop: 8 }}>
           <Input
-            label="Email"
+            label="Email Corporativo"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.currentTarget.value)}
             required
+            // Pequeño truco para oscurecer el input sobre el vidrio
+            style={{background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff'}}
           />
-          <Input
-            label="Contraseña"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.currentTarget.value)}
-            required
-          />
-          <Button loading={loading} type="submit">
-            Entrar
+          <div>
+              <Input
+                label="Contraseña"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+                required
+                style={{background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff'}}
+              />
+              <div style={{textAlign: 'right', marginTop: 8}}>
+                  <a href="#" style={{fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', textDecoration: 'none'}}>¿Olvidaste tu contraseña?</a>
+              </div>
+          </div>
+          
+          <Button loading={loading} type="submit" style={{padding: '12px', fontSize: '1rem', background: 'var(--color-primary)', border: 'none'}}>
+            Iniciar Sesión
           </Button>
         </form>
+      </motion.div>
+
+      {/* === FOOTER PARA LLENAR ESPACIO === */}
+      <div style={{ position: 'absolute', bottom: 20, textAlign: 'center', zIndex: 10 }}>
+        <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)' }}>
+          © {new Date().getFullYear()} Antonini Automotores. Sistema de Gestión Interna.
+        </p>
       </div>
 
       {error && <Toast message={error} type="error" />}

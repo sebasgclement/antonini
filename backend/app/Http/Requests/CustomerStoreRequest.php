@@ -14,10 +14,11 @@ class CustomerStoreRequest extends FormRequest
             'first_name' => ['required','string','max:80'],
             'last_name'  => ['required','string','max:80'],
 
-            'doc_type'   => ['nullable','string','max:10'],
-            'doc_number' => ['nullable','string','max:20','unique:customers,doc_number'],
+            'doc_type'   => ['nullable','string','max:20'], // Subí a 20 por las dudas ("Pasaporte Extranjero")
+            'doc_number' => ['required','string','max:20','unique:customers,doc_number'], // Lo puse required porque es clave
 
             'cuit'       => ['nullable','string','max:20','unique:customers,cuit'],
+            'marital_status' => ['nullable','string','max:20'], // 👈 FALTABA ESTE
 
             'email'      => ['nullable','email','max:150','unique:customers,email'],
             'phone'      => ['nullable','string','max:40'],
@@ -26,6 +27,10 @@ class CustomerStoreRequest extends FormRequest
             'city'       => ['nullable','string','max:80'],
             'address'    => ['nullable','string','max:160'],
             'notes'      => ['nullable','string'],
+
+            // 🖼️ Validaciones para las fotos (FALTABAN ESTAS)
+            'dni_front'  => ['nullable', 'image', 'max:10240'], // Max 10MB
+            'dni_back'   => ['nullable', 'image', 'max:10240'],
         ];
     }
 }

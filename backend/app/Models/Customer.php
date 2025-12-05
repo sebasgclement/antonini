@@ -11,15 +11,16 @@ class Customer extends Model
         'last_name',
         'doc_type',
         'doc_number',
-        'cuit',
+        'cuit',            
+        'marital_status',  
         'email',
         'phone',
-        'alt_phone',
-        'city',
-        'address',
-        'notes',
-        'dni_front',  // foto frente
-        'dni_back'    // foto dorso
+        'alt_phone',       
+        'address',         
+        'city',            
+        'notes',           
+        'dni_front',
+        'dni_back'
     ];
 
     // Relaciones

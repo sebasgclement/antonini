@@ -3,8 +3,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
+import Toggle from "../../components/ui/Toggle"; // 👈 Importamos el Toggle
 import api from "../../lib/api";
 
+// Ampliamos el tipo para incluir el status
 type Vehicle = {
   id: number;
   plate: string;
@@ -16,6 +18,7 @@ type Vehicle = {
   km?: number;
   fuel_type?: string;
   ownership: "propio" | "consignado";
+  status?: string; // 👈 Nuevo campo importante
   customer_dni?: string;
   customer_name?: string;
   customer_email?: string;
@@ -44,6 +47,10 @@ export default function VehicleEdit() {
   const nav = useNavigate();
 
   const [v, setV] = useState<Partial<Vehicle>>({});
+  
+  // 🔹 ESTADO: Controla si el auto está físico o es solo un dato
+  const [locationStatus, setLocationStatus] = useState<'stock' | 'ofrecido'>('stock');
+
   const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -59,6 +66,14 @@ export default function VehicleEdit() {
         const { data } = await api.get(`/vehicles/${id}`);
         const vehicle = data?.data ?? data ?? {};
         setV(vehicle);
+
+        // 🟢 DETECCIÓN INTELIGENTE:
+        // Si el vehículo guardado tiene status 'ofrecido', ponemos la UI en ese modo.
+        if (vehicle.status === 'ofrecido') {
+            setLocationStatus('ofrecido');
+        } else {
+            setLocationStatus('stock');
+        }
 
         setPreview({
           front: vehicle.photo_front_url || null,
@@ -136,25 +151,47 @@ export default function VehicleEdit() {
     setSaving(true);
     try {
       const form = new FormData();
-      form.append("plate", v.plate || "");
+      
+      // 🟢 Enviar el status correcto al editar
+      // Si el usuario lo cambió a 'ofrecido', mandamos 'ofrecido'.
+      // Si lo cambió a 'stock', mandamos 'disponible' (a menos que ya estuviera vendido/reservado, 
+      // pero para simplificar la edición básica asumimos que editar location resetea a disponible o mantiene el actual).
+      // Para ser seguros: Solo actualizamos a 'ofrecido' si locationStatus es ofrecido.
+      if (locationStatus === 'ofrecido') {
+          form.append("status", "ofrecido");
+      } else if (v.status === 'ofrecido' && locationStatus === 'stock') {
+          // Si era ofrecido y ahora es stock, pasa a disponible
+          form.append("status", "disponible");
+      }
+      // Si ya era stock (vendido/reservado) y sigue siendo stock, no tocamos el status para no romper nada.
+
+      if(v.plate) form.append("plate", v.plate);
       form.append("brand", v.brand || "");
       form.append("model", v.model || "");
       if (v.year) form.append("year", String(v.year));
+      
       if (v.vin) form.append("vin", v.vin);
+      
       if (v.color) form.append("color", v.color);
       if (v.km) form.append("km", String(v.km));
       if (v.fuel_type) form.append("fuel_type", v.fuel_type);
-      if (v.reference_price)
-        form.append("reference_price", String(v.reference_price));
+      
+      if (v.reference_price) form.append("reference_price", String(v.reference_price));
       if (v.take_price) form.append("take_price", String(v.take_price));
       if (v.price) form.append("price", String(v.price));
+      
       form.append("ownership", v.ownership || "propio");
-      form.append("check_spare", v.check_spare ? "1" : "0");
-      form.append("check_jack", v.check_jack ? "1" : "0");
-      form.append("check_tools", v.check_tools ? "1" : "0");
-      form.append("check_docs", v.check_docs ? "1" : "0");
-      form.append("check_key_copy", v.check_key_copy ? "1" : "0");
-      form.append("check_manual", v.check_manual ? "1" : "0");
+      
+      // Checklist
+      if (locationStatus === 'stock') {
+        form.append("check_spare", v.check_spare ? "1" : "0");
+        form.append("check_jack", v.check_jack ? "1" : "0");
+        form.append("check_tools", v.check_tools ? "1" : "0");
+        form.append("check_docs", v.check_docs ? "1" : "0");
+        form.append("check_key_copy", v.check_key_copy ? "1" : "0");
+        form.append("check_manual", v.check_manual ? "1" : "0");
+      }
+
       if (v.notes) form.append("notes", v.notes);
 
       if (v.ownership === "consignado" && v.customer_dni) {
@@ -165,13 +202,8 @@ export default function VehicleEdit() {
       }
 
       const sides = [
-        "front",
-        "back",
-        "left",
-        "right",
-        "interior_front",
-        "interior_back",
-        "trunk",
+        "front", "back", "left", "right",
+        "interior_front", "interior_back", "trunk",
       ];
       sides.forEach((side) => {
         const file = newPhotos[side];
@@ -200,13 +232,47 @@ export default function VehicleEdit() {
       <form onSubmit={onSubmit} className="vstack" style={{ gap: 16 }}>
         <div className="title">Editar vehículo #{id}</div>
 
+        {/* 🟢 SECCIÓN DE ESTADO (CON CARDS) */}
+        <div className="card">
+          <div className="title" style={{marginBottom: 16, fontSize: '1rem'}}>Estado del Ingreso</div>
+          
+          <div className="selection-grid">
+            <div 
+              className={`selection-card ${locationStatus === 'stock' ? 'selected' : ''}`}
+              onClick={() => setLocationStatus('stock')}
+            >
+              <div className="selection-title">🏠 Ingreso Físico (Stock)</div>
+              <div className="selection-subtitle">Vehículo ingresa al predio</div>
+            </div>
+
+            <div 
+              className={`selection-card ${locationStatus === 'ofrecido' ? 'selected' : ''}`}
+              onClick={() => {
+                 setLocationStatus('ofrecido');
+                 setV({ ...v, ownership: 'consignado' });
+              }}
+            >
+              <div className="selection-title">📞 Solo Ofrecido (Dato)</div>
+              <div className="selection-subtitle">El cliente retiene la unidad</div>
+            </div>
+          </div>
+
+          {locationStatus === 'ofrecido' && (
+              <div style={{ marginTop: 12, padding: '10px', background: 'rgba(245, 158, 11, 0.1)', color: 'orange', borderRadius: 8, fontSize: '0.9rem', display:'flex', gap: 8, alignItems:'center' }}>
+                  <span>💡</span>
+                  <span>Se ocultarán campos técnicos (VIN, Checklist) y la patente será opcional.</span>
+              </div>
+          )}
+        </div>
+
         {/* Datos básicos */}
         <div className="card vstack" style={{ gap: 16 }}>
           <Input
-            label="Patente *"
+            label={locationStatus === 'stock' ? "Patente *" : "Patente (Opcional)"}
             value={v.plate || ""}
             onChange={(e) => setV({ ...v, plate: e.currentTarget.value })}
-            required
+            required={locationStatus === 'stock'}
+            placeholder={locationStatus === 'ofrecido' ? "Sin patente" : ""}
           />
 
           <div className="hstack" style={{ gap: 16 }}>
@@ -226,9 +292,7 @@ export default function VehicleEdit() {
                     </option>
                   ))}
                 </select>
-                <Button type="button" onClick={() => setShowModal(true)}>
-                  +
-                </Button>
+                <Button type="button" onClick={() => setShowModal(true)}>+</Button>
               </div>
             </div>
 
@@ -251,12 +315,17 @@ export default function VehicleEdit() {
             />
           </div>
 
+          {locationStatus === 'stock' && (
+            <div className="hstack" style={{ gap: 16 }}>
+                <Input
+                label="VIN / Chasis"
+                value={v.vin || ""}
+                onChange={(e) => setV({ ...v, vin: e.currentTarget.value })}
+                />
+            </div>
+          )}
+
           <div className="hstack" style={{ gap: 16 }}>
-            <Input
-              label="VIN / Chasis"
-              value={v.vin || ""}
-              onChange={(e) => setV({ ...v, vin: e.currentTarget.value })}
-            />
             <Input
               label="Color"
               value={v.color || ""}
@@ -331,30 +400,27 @@ export default function VehicleEdit() {
           </div>
         </div>
 
-        {/* Propiedad */}
-        <div className="card vstack" style={{ gap: 8 }}>
+        {/* 🟢 PROPIEDAD (CON CARDS) */}
+        <div className="card vstack" style={{ gap: 12 }}>
           <div className="title">Propiedad</div>
-          <div className="hstack" style={{ gap: 16 }}>
-            <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="propio"
-                checked={v.ownership === "propio"}
-                onChange={() => setV({ ...v, ownership: "propio" })}
-              />{" "}
-              Propio
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="ownership"
-                value="consignado"
-                checked={v.ownership === "consignado"}
-                onChange={() => setV({ ...v, ownership: "consignado" })}
-              />{" "}
-              Consignado
-            </label>
+          <div className="selection-grid">
+            <div 
+              className={`selection-card ${v.ownership === 'propio' ? 'selected' : ''} ${locationStatus === 'ofrecido' ? 'disabled' : ''}`}
+              onClick={() => {
+                  if (locationStatus !== 'ofrecido') setV({ ...v, ownership: "propio" });
+              }}
+            >
+              <div className="selection-title">🏢 Propio</div>
+              <div className="selection-subtitle">Unidad de la agencia</div>
+            </div>
+
+            <div 
+              className={`selection-card ${v.ownership === 'consignado' ? 'selected' : ''}`}
+              onClick={() => setV({ ...v, ownership: "consignado" })}
+            >
+              <div className="selection-title">🤝 Consignado</div>
+              <div className="selection-subtitle">Unidad de terceros</div>
+            </div>
           </div>
         </div>
 
@@ -404,83 +470,65 @@ export default function VehicleEdit() {
           </div>
         )}
 
-        {/* Checklist */}
-        <div className="card vstack" style={{ gap: 8 }}>
-          <div className="title">Checklist</div>
+        {/* 🟢 CHECKLIST CON TOGGLES */}
+        {locationStatus === 'stock' && (
+            <div className="card vstack" style={{ gap: 16 }}>
+                <div className="title">Checklist</div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                    <Toggle 
+                        label="Rueda de auxilio" 
+                        checked={v.check_spare ?? false} 
+                        onChange={(val) => setV({ ...v, check_spare: val })} 
+                    />
+                    <Toggle 
+                        label="Crique" 
+                        checked={v.check_jack ?? false} 
+                        onChange={(val) => setV({ ...v, check_jack: val })} 
+                    />
+                    <Toggle 
+                        label="Herramientas" 
+                        checked={v.check_tools ?? false} 
+                        onChange={(val) => setV({ ...v, check_tools: val })} 
+                    />
+                    <Toggle 
+                        label="Documentación" 
+                        checked={v.check_docs ?? false} 
+                        onChange={(val) => setV({ ...v, check_docs: val })} 
+                    />
+                    <Toggle 
+                        label="Duplicado de llave" 
+                        checked={v.check_key_copy ?? false} 
+                        onChange={(val) => setV({ ...v, check_key_copy: val })} 
+                    />
+                    <Toggle 
+                        label="Manual" 
+                        checked={v.check_manual ?? false} 
+                        onChange={(val) => setV({ ...v, check_manual: val })} 
+                    />
+                </div>
 
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_spare ?? false}
-              onChange={(e) =>
-                setV({ ...v, check_spare: e.currentTarget.checked })
-              }
-            />{" "}
-            Rueda de auxilio
-          </label>
+                <textarea
+                    className="form-control"
+                    placeholder="Observaciones"
+                    value={v.notes || ""}
+                    onChange={(e) => setV({ ...v, notes: e.currentTarget.value })}
+                    style={{ marginTop: 8 }}
+                />
+            </div>
+        )}
 
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_jack ?? false}
-              onChange={(e) =>
-                setV({ ...v, check_jack: e.currentTarget.checked })
-              }
-            />{" "}
-            Crique
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_tools ?? false}
-              onChange={(e) =>
-                setV({ ...v, check_tools: e.currentTarget.checked })
-              }
-            />{" "}
-            Herramientas
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_docs ?? false}
-              onChange={(e) =>
-                setV({ ...v, check_docs: e.currentTarget.checked })
-              }
-            />{" "}
-            Documentación
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_key_copy ?? false}
-              onChange={(e) =>
-                setV({ ...v, check_key_copy: e.currentTarget.checked })
-              }
-            />{" "}
-            Duplicado de llave
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={v.check_manual ?? false}
-              onChange={(e) =>
-                setV({ ...v, check_manual: e.currentTarget.checked })
-              }
-            />{" "}
-            Manual
-          </label>
-
-          <textarea
-            className="form-control"
-            placeholder="Observaciones"
-            value={v.notes || ""}
-            onChange={(e) => setV({ ...v, notes: e.currentTarget.value })}
-          />
-        </div>
+        {locationStatus === 'ofrecido' && (
+             <div className="card">
+                <label>Observaciones del vehículo</label>
+                <textarea
+                    className="form-control"
+                    placeholder="Detalles importantes..."
+                    value={v.notes || ""}
+                    onChange={(e) => setV({ ...v, notes: e.currentTarget.value })}
+                />
+             </div>
+        )}
 
         {/* Fotos */}
         <div className="card vstack" style={{ gap: 12 }}>

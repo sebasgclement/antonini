@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import api from '../../../lib/api'
 import Toast from '../../../components/ui/Toast'
 import UserForm from './UserForm'
+import Button from '../../../components/ui/Button'
 
 export default function UsersCreate() {
   const nav = useNavigate()
@@ -22,16 +23,18 @@ export default function UsersCreate() {
   }
 
   return (
-    <div className="vstack" style={{ gap: 12 }}>
-      <div className="hstack" style={{ justifyContent: 'space-between' }}>
-        <div className="title">Nuevo usuario</div>
-        <Link className="enlace" to="/admin/usuarios">Volver</Link>
+    <div className="vstack" style={{ gap: 20 }}>
+      
+      {/* Header */}
+      <div className="hstack" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="title" style={{margin: 0}}>Nuevo Usuario</div>
+        <Button onClick={() => nav('/admin/usuarios')} style={{background: 'transparent', color: 'var(--color-muted)', border: 'none'}}>
+            Cancelar
+        </Button>
       </div>
 
-      {/* Card contenedor como en Clientes */}
-      <div className="card vstack" style={{ gap: 16, maxWidth: 800 }}>
-        <UserForm onSubmit={handleSubmit} submitting={saving} />
-      </div>
+      {/* Formulario (El UserForm ya trae sus propias Cards ahora, así que sacamos la card contenedora de acá para evitar doble borde) */}
+      <UserForm onSubmit={handleSubmit} submitting={saving} />
 
       {toast && <Toast message={toast} type="error" />}
     </div>
