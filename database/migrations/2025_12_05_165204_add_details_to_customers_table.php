@@ -9,13 +9,30 @@ return new class extends Migration
     public function up()
     {
         Schema::table('customers', function (Blueprint $table) {
-            // Agregamos los campos que faltaban para el perfil completo
-            $table->string('cuit')->nullable()->after('doc_number');
-            $table->string('marital_status')->nullable()->default('soltero')->after('cuit'); // 'soltero', 'casado', etc.
-            $table->string('alt_phone')->nullable()->after('phone');
-            $table->string('address')->nullable()->after('email');
-            $table->string('city')->nullable()->after('address');
-            $table->text('notes')->nullable()->after('city');
+            
+            if (!Schema::hasColumn('customers', 'cuit')) {
+                $table->string('cuit')->nullable()->after('doc_number');
+            }
+            
+            if (!Schema::hasColumn('customers', 'marital_status')) {
+                $table->string('marital_status')->nullable()->default('soltero')->after('cuit');
+            }
+
+            if (!Schema::hasColumn('customers', 'alt_phone')) {
+                $table->string('alt_phone')->nullable()->after('phone');
+            }
+
+            if (!Schema::hasColumn('customers', 'address')) {
+                $table->string('address')->nullable()->after('email');
+            }
+
+            if (!Schema::hasColumn('customers', 'city')) {
+                $table->string('city')->nullable()->after('address');
+            }
+
+            if (!Schema::hasColumn('customers', 'notes')) {
+                $table->text('notes')->nullable()->after('city');
+            }
         });
     }
 

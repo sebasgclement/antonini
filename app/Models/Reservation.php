@@ -9,30 +9,44 @@ class Reservation extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'vehicle_id',        // vehículo vendido
+   protected $fillable = [
+        'vehicle_id',
         'customer_id',
         'seller_id',
-        'used_vehicle_id',   // vehículo tomado en parte de pago
+        'used_vehicle_id',
         'date',
-        'price',             // precio total de venta
+        'price',             // Precio de venta del vehículo
         'deposit',
-        'credit_bank',       // 🆕 nuevo
-        'balance',           // 🆕 nuevo
+        'credit_bank',
+        'balance',
         'payment_method',
         'payment_details',
-        'workshop_expenses', // 💡 nuevo campo: gastos de taller
+        'workshop_expenses', // Gastos de taller
         'comments',
         'status',
+
+        // ✅ NUEVOS CAMPOS
+        'transfer_cost',       // Costo real de la transferencia (gestor/registro)
+        'administrative_cost', // Honorarios de la agencia (Ganancia extra)
+        'currency',            // 'ARS' o 'USD'
+        'exchange_rate',       // Cotización
+        'second_buyer_name',   // Nombre cotitular
+        'second_buyer_dni',    // DNI cotitular
+        'second_buyer_phone',  // Tel cotitular
+        'used_vehicle_checklist', // Checklist del usado (JSON)
     ];
 
-    protected $casts = [
-        'price'             => 'decimal:2',
-        'deposit'           => 'decimal:2',
-        'credit_bank'       => 'decimal:2', // 🆕
-        'balance'           => 'decimal:2', // 🆕
-        'workshop_expenses' => 'decimal:2',
-        'date'              => 'datetime',
+   protected $casts = [
+        'price'               => 'decimal:2',
+        'deposit'             => 'decimal:2',
+        'credit_bank'         => 'decimal:2',
+        'balance'             => 'decimal:2',
+        'workshop_expenses'   => 'decimal:2',
+        'transfer_cost'       => 'decimal:2', // ✅
+        'administrative_cost' => 'decimal:2', // ✅
+        'exchange_rate'       => 'decimal:2',
+        'used_vehicle_checklist' => 'array',  // ✅ convierte el JSON de la BD a Array en PHP
+        'date'                => 'datetime',
     ];
 
     protected $appends = [
@@ -65,18 +79,32 @@ class Reservation extends Model
         return $this->belongsTo(User::class, 'seller_id');
     }
 
+    public function getProfitAttribute(): float
+    {
+        $income = (float) $this->price + (float) $this->administrative_cost;
+
+        $costs = (float) ($this->usedVehicle?->price ?? 0) 
+               + (float) ($this->workshop_expenses ?? 0)
+               + (float) ($this->transfer_cost ?? 0);
+
+        return $income - $costs;
+    }
+    
+    // 💵 TOTAL OPERACIÓN (Lo que paga el cliente en total)
+    // Precio Auto + Transferencia + Honorarios
+    
+
     // ================= MÉTODOS AUXILIARES =================
 
     /**
      * Calcula la ganancia neta:
      * precio de venta - valor vehículo usado - gastos de taller
      */
-    public function getProfitAttribute(): float
+    public function getTotalOperationAttribute(): float
     {
-        $tradeInValue = $this->usedVehicle?->price ?? 0;
-        $workshop = $this->workshop_expenses ?? 0;
-
-        return (float) $this->price - $tradeInValue - $workshop;
+        return (float) $this->price 
+             + (float) ($this->transfer_cost ?? 0) 
+             + (float) ($this->administrative_cost ?? 0);
     }
 
         // ================= MÉTODOS DE PAGO =================
