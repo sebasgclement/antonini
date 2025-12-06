@@ -12,6 +12,7 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\VehicleBrandController;
 use App\Http\Controllers\Api\ReservationPaymentController;
+use App\Http\Controllers\Api\InfoAutoController;
 
 
 // ================== AUTH ==================
@@ -58,6 +59,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ 📄 Listar métodos de pago (visible para vendedores, reservas, etc.)
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
+});
+
+Route::prefix('infoauto')->group(function () {
+    Route::get('/brands', [InfoAutoController::class, 'getBrands']);
+    Route::get('/brands/{brand}/groups', [InfoAutoController::class, 'getGroups']);
+    
+    // CORRECCIÓN: Ahora la ruta incluye la marca antes del grupo
+    Route::get('/brands/{brand}/groups/{group}/models', [InfoAutoController::class, 'getModels']);
+    
+    Route::get('/models/{codia}', [InfoAutoController::class, 'getModelDetail']);
 });
 
 
