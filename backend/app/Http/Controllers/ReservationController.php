@@ -75,6 +75,14 @@ class ReservationController extends Controller
             'comments'            => 'nullable|string|max:1000',
             'status'              => 'nullable|string|max:50',
             'date'                => 'nullable|date',
+            'transfer_cost'          => 'nullable|numeric|min:0',
+            'administrative_cost'    => 'nullable|numeric|min:0',
+            'currency'               => 'nullable|string|in:ARS,USD',
+            'exchange_rate'          => 'nullable|numeric|min:0',
+            'second_buyer_name'      => 'nullable|string|max:255',
+            'second_buyer_dni'       => 'nullable|string|max:50',
+            'second_buyer_phone'     => 'nullable|string|max:50',
+            'used_vehicle_checklist' => 'nullable|array',
         ]);
 
         // Guardamos aparte el payload de payment_methods para no intentar insertarlo como columna
@@ -191,6 +199,14 @@ class ReservationController extends Controller
             'comments'          => 'nullable|string|max:1000',
             'status'            => 'nullable|string|max:50',
             'date'              => 'nullable|date',
+            'transfer_cost'          => 'nullable|numeric|min:0',
+            'administrative_cost'    => 'nullable|numeric|min:0',
+            'currency'               => 'nullable|string|in:ARS,USD',
+            'exchange_rate'          => 'nullable|numeric|min:0',
+            'second_buyer_name'      => 'nullable|string|max:255',
+            'second_buyer_dni'       => 'nullable|string|max:50',
+            'second_buyer_phone'     => 'nullable|string|max:50',
+            'used_vehicle_checklist' => 'nullable|array',
         ]);
 
         // Guardar aparte los métodos de pago

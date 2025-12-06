@@ -1,47 +1,29 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import PaymentMethodModal from "../../components/modals/PaymentMethodModal";
+import PaymentMethodModal from "../../components/modals/PaymentMethodModal"; // 👈 Asegurate que la ruta sea correcta
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
+import Toggle from "../../components/ui/Toggle";
 import api from "../../lib/api";
 
+/* TIPOS */
 type Vehicle = {
   id: number;
   plate: string;
   brand: string;
   model: string;
-  status: string;
   price?: number;
+  status: string;
 };
-
 type Customer = {
   id: number;
   first_name: string;
   last_name: string;
   doc_number: string;
   email?: string;
-  phone?: string;
 };
-
-type PaymentDetails = {
-  bank_name?: string;
-  check_number?: string;
-  check_due_date?: string;
-  account_alias?: string;
-  account_holder?: string;
-  card_last4?: string;
-  card_holder?: string;
-  installments?: number | "";
-  operation_number?: string;
-};
-
-type Payment = {
-  method_id: number | "";
-  amount: number | "";
-  details?: PaymentDetails;
-};
-
+type Payment = { method_id: number | ""; amount: number | ""; details?: any };
 type PaymentMethod = {
   id: number;
   name: string;
@@ -49,774 +31,822 @@ type PaymentMethod = {
   requires_details?: boolean;
 };
 
-/* ========= COMPONENTE PRINCIPAL ========= */
 export default function RegisterReservation() {
   const nav = useNavigate();
   const location = useLocation();
 
+  // === ESTADOS ===
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [usedVehicle, setUsedVehicle] = useState<Vehicle | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
 
-  const [searchPlate, setSearchPlate] = useState("");
-  const [searchUsedPlate, setSearchUsedPlate] = useState("");
-  const [searchDni, setSearchDni] = useState("");
+  // Cotitular
+  const [hasCoowner, setHasCoowner] = useState(false);
+  const [coName, setCoName] = useState("");
+  const [coDni, setCoDni] = useState("");
+  const [coPhone, setCoPhone] = useState("");
 
+  // Economía
+  const [currency, setCurrency] = useState<"ARS" | "USD">("ARS");
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [price, setPrice] = useState<number | "">("");
-  const [comments, setComments] = useState("");
-  const [toast, setToast] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [transferCost, setTransferCost] = useState<number | "">("");
+  const [adminCost, setAdminCost] = useState<number | "">("");
 
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [balance, setBalance] = useState<number>(0);
-
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [showModal, setShowModal] = useState(false);
-
-  // toggles
+  // Toma de Usado
   const [includeUsed, setIncludeUsed] = useState(false);
+  const [usedVehicle, setUsedVehicle] = useState<Vehicle | null>(null);
+  const [usedChecklist, setUsedChecklist] = useState({
+    titulo: false,
+    cedula: false,
+    "08": false,
+    informe: false,
+    libre_deuda: false,
+    verificacion: false,
+  });
+
+  // Pagos
   const [includeDeposit, setIncludeDeposit] = useState(false);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false); // ✅ Modal recuperado
 
-  /* ====== Helpers búsqueda ====== */
-  const searchVehicle = async () => {
-    if (!searchPlate.trim()) return;
-    try {
-      const res = await api.get(`/vehicles?search=${searchPlate}`);
-      const found = res.data?.data?.data?.[0] || res.data?.data?.[0];
-      if (found) {
-        setVehicle(found);
-        setPrice(found.price || "");
-        localStorage.setItem("reservation_vehicle", JSON.stringify(found));
-        localStorage.setItem(
-          "reservation_price",
-          JSON.stringify(found.price || "")
-        );
-        setToast("Vehículo encontrado ✅");
-      } else {
-        setVehicle(null);
-        localStorage.removeItem("reservation_vehicle");
-        setToast("No se encontró vehículo con esa patente");
-      }
-    } catch {
-      setToast("Error al buscar vehículo");
-    }
-  };
+  // UX
+  const [searchPlate, setSearchPlate] = useState("");
+  const [searchDni, setSearchDni] = useState("");
+  const [searchUsedPlate, setSearchUsedPlate] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState("");
 
-  const searchUsed = async () => {
-    if (!searchUsedPlate.trim()) return;
-    try {
-      const res = await api.get(`/vehicles?search=${searchUsedPlate}`);
-      const found = res.data?.data?.data?.[0] || res.data?.data?.[0];
-      if (found) {
-        setUsedVehicle(found);
-        localStorage.setItem("reservation_used_vehicle", JSON.stringify(found));
-        setToast("Vehículo usado encontrado ✅");
-      } else {
-        setUsedVehicle(null);
-        localStorage.removeItem("reservation_used_vehicle");
-        setToast("No se encontró vehículo usado");
-      }
-    } catch {
-      setToast("Error al buscar vehículo usado");
-    }
-  };
+  /* === CÁLCULOS === */
+  const totalOperation =
+    (Number(price) || 0) +
+    (Number(transferCost) || 0) +
+    (Number(adminCost) || 0);
+  const totalPaid =
+    (includeDeposit
+      ? payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+      : 0) +
+    (includeUsed && usedVehicle?.price ? Number(usedVehicle.price) : 0);
+  const balance = totalOperation - totalPaid;
 
-  const searchCustomer = async () => {
-    if (!searchDni.trim()) return;
-    try {
-      const res = await api.get(`/customers?dni=${searchDni}`);
-      const found = res.data?.data?.[0];
-      if (found) {
-        setCustomer(found);
-        setSearchDni(found.doc_number || "");
-        localStorage.setItem("reservation_customer", JSON.stringify(found));
-        setToast("Cliente encontrado ✅");
-      } else {
-        setCustomer(null);
-        localStorage.removeItem("reservation_customer");
-        setToast("No se encontró cliente con ese DNI");
-      }
-    } catch {
-      setToast("Error al buscar cliente");
-    }
-  };
-
-  /* ====== Carga inicial / redirect usado / métodos ====== */
+  /* === CARGA INICIAL === */
   useEffect(() => {
     (async () => {
       try {
-        const params = new URLSearchParams(location.search);
-        const fromUsed = params.get("used");
-        const vehicleId = params.get("vehicle_id");
+        // Métodos de pago
+        const methods = await api.get("/payment-methods");
+        setPaymentMethods(methods.data?.data || []);
 
-        // 🔹 Si llega un vehículo desde el listado (reservar)
-        if (vehicleId) {
-          try {
-            const res = await api.get(`/vehicles/${vehicleId}`);
-            const v = res.data?.data || res.data;
-            if (v) {
-              setVehicle(v);
-              setPrice(v.price || "");
-              setSearchPlate(v.plate);
-              localStorage.setItem("reservation_vehicle", JSON.stringify(v));
-              localStorage.setItem(
-                "reservation_price",
-                JSON.stringify(v.price || "")
-              );
-              setToast("Vehículo cargado automáticamente ✅");
-            }
-          } catch {
-            setToast("No se pudo cargar el vehículo seleccionado");
-          }
+        // Dólar API (Solo informativo)
+        try {
+          const dolar = await fetch("https://dolarapi.com/v1/dolares/blue");
+          const data = await dolar.json();
+          if (data.venta) setExchangeRate(data.venta);
+        } catch (e) {
+          console.log("No se pudo obtener cotización");
         }
 
-        const storedVehicle = localStorage.getItem("reservation_vehicle");
-        const storedUsed = localStorage.getItem("reservation_used_vehicle");
-        const storedCustomer = localStorage.getItem("reservation_customer");
-        const storedPrice = localStorage.getItem("reservation_price");
+        // Recuperar estados temporales
+        const savedV = localStorage.getItem("temp_reservation_vehicle");
+        if (savedV) {
+          const v = JSON.parse(savedV);
+          setVehicle(v);
+          setPrice(v.price || "");
+          setSearchPlate(v.plate);
+        }
 
-        if (storedVehicle && !vehicleId) setVehicle(JSON.parse(storedVehicle));
-        if (storedUsed) {
-          setUsedVehicle(JSON.parse(storedUsed));
+        const savedC = localStorage.getItem("temp_reservation_customer");
+        if (savedC) {
+          const c = JSON.parse(savedC);
+          setCustomer(c);
+          setSearchDni(c.doc_number);
+        }
+
+        const savedU = localStorage.getItem("temp_reservation_used");
+        if (savedU) {
+          setUsedVehicle(JSON.parse(savedU));
           setIncludeUsed(true);
         }
-        if (storedCustomer) {
-          const c = JSON.parse(storedCustomer);
-          setCustomer(c);
-          setSearchDni(c.doc_number || c.dni || "");
-        }
-        if (storedPrice && !vehicleId) setPrice(JSON.parse(storedPrice));
 
-        // 🔹 Vehículo recién registrado
-        const savedVehicle = localStorage.getItem("lastRegisteredVehicle");
-        if (savedVehicle) {
-          const v = JSON.parse(savedVehicle);
-          localStorage.removeItem("lastRegisteredVehicle");
-          let found: any = null;
-          try {
-            if (v.id) {
-              const res = await api.get(`/vehicles/${v.id}`);
-              found = res.data?.data || res.data;
-            } else if (v.plate) {
-              const res = await api.get(`/vehicles?search=${v.plate}`);
-              found = res.data?.data?.data?.[0] || res.data?.data?.[0];
-            }
-          } catch {
-            /* noop */
-          }
-          if (found) {
-            if (fromUsed) {
-              setIncludeUsed(true);
-              setUsedVehicle(found);
-              setSearchUsedPlate(found.plate);
-              localStorage.setItem(
-                "reservation_used_vehicle",
-                JSON.stringify(found)
-              );
-              setToast("Vehículo usado cargado automáticamente ✅");
-            } else {
-              setVehicle(found);
-              setSearchPlate(found.plate);
-              setPrice(found.price || "");
-              localStorage.setItem(
-                "reservation_vehicle",
-                JSON.stringify(found)
-              );
-              localStorage.setItem(
-                "reservation_price",
-                JSON.stringify(found.price || "")
-              );
-              setToast("Vehículo cargado automáticamente ✅");
-            }
+        // Cargar si viene por URL (nuevo registro)
+        const params = new URLSearchParams(location.search);
+        const vId = params.get("vehicle_id");
+
+        // Si no hay temporales y hay ID en URL, cargamos de la API
+        if (vId && !savedV) {
+          const res = await api.get(`/vehicles/${vId}`);
+          const v = res.data?.data || res.data;
+          if (v) {
+            setVehicle(v);
+            setPrice(v.price || "");
+            setSearchPlate(v.plate);
           }
         }
-
-        // 🔹 Métodos de pago
-        const methods = await api.get("/payment-methods");
-        setPaymentMethods(methods.data?.data || methods.data || []);
-      } catch {
-        setToast("Error al cargar datos iniciales");
+      } catch (e) {
+        console.error(e);
       }
     })();
   }, [location.search]);
 
-  /* ====== Balance ====== */
-  useEffect(() => {
-    const total = Number(price) || 0;
-    const pagos = includeDeposit
-      ? payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-      : 0;
-    const tradeIn = includeUsed && usedVehicle?.price ? usedVehicle.price : 0;
-    setBalance(total - pagos - tradeIn);
-  }, [price, payments, usedVehicle, includeUsed, includeDeposit]);
-
-  /* ====== Gestión pagos ====== */
-  const addPayment = () =>
-    setPayments((p) => [...p, { method_id: "", amount: "" }]);
-
-  const updatePayment = (index: number, key: keyof Payment, value: any) => {
-    setPayments((prev) => {
-      const copy = [...prev];
-      copy[index][key] = value;
-      return copy;
-    });
+  // Guardar estado temporal antes de ir a crear vehículo/cliente
+  const saveTempState = () => {
+    if (vehicle)
+      localStorage.setItem("temp_reservation_vehicle", JSON.stringify(vehicle));
+    if (customer)
+      localStorage.setItem(
+        "temp_reservation_customer",
+        JSON.stringify(customer)
+      );
+    if (usedVehicle)
+      localStorage.setItem(
+        "temp_reservation_used",
+        JSON.stringify(usedVehicle)
+      );
   };
 
-  const updatePaymentDetail = (
-    index: number,
-    field: keyof PaymentDetails,
-    value: any
+  const searchEntity = async (
+    type: "vehicle" | "customer" | "used",
+    query: string
   ) => {
-    setPayments((prev) => {
-      const copy = [...prev];
-      const current = copy[index].details || {};
-      copy[index].details = { ...current, [field]: value };
-      return copy;
-    });
+    if (!query) return;
+    try {
+      const endpoint =
+        type === "customer"
+          ? `/customers?dni=${query}`
+          : `/vehicles?search=${query}`;
+      const res = await api.get(endpoint);
+      const data = res.data?.data?.data?.[0] || res.data?.data?.[0];
+
+      if (data) {
+        if (type === "vehicle") {
+          setVehicle(data);
+          setPrice(data.price || "");
+          setToast("Vehículo cargado ✅");
+        }
+        if (type === "customer") {
+          setCustomer(data);
+          setToast("Cliente cargado ✅");
+        }
+        if (type === "used") {
+          setUsedVehicle(data);
+          setToast("Usado cargado ✅");
+        }
+      } else {
+        setToast("No se encontraron resultados");
+      }
+    } catch {
+      setToast("Error en la búsqueda");
+    }
   };
 
-  const removePayment = (index: number) =>
-    setPayments((prev) => prev.filter((_, i) => i !== index));
-
-  useEffect(() => {
-    if (!includeDeposit) setPayments([]);
-    if (includeDeposit && payments.length === 0)
-      setPayments([{ method_id: "", amount: "" }]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includeDeposit]);
-
-  /* ====== Submit ====== */
-  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!vehicle || !customer) {
+      setToast("Falta vehículo o cliente");
+      return;
+    }
     setLoading(true);
 
-    if (!vehicle?.id) {
-      setToast("Debe seleccionar un vehículo válido");
-      setLoading(false);
-      return;
-    }
-    if (!customer?.id) {
-      setToast("Debe seleccionar un cliente válido");
-      setLoading(false);
-      return;
-    }
-
-    const validPayments = includeDeposit
-      ? payments
-          .filter((p) => p.method_id && Number(p.amount) > 0)
-          .map((p) => {
-            const details = p.details || {};
-            const hasDetails = Object.values(details).some(
-              (v) => v !== "" && v !== null && v !== undefined
-            );
-
-            return {
-              method_id: Number(p.method_id),
-              amount: Number(p.amount),
-              ...(hasDetails ? { details } : {}),
-            };
-          })
-      : [];
-
-    if (includeDeposit && validPayments.length === 0) {
-      setToast("Agregá al menos un medio de pago con monto válido");
-      setLoading(false);
-      return;
-    }
-
     try {
-      await api.post("/reservations", {
+      const payload = {
         vehicle_id: vehicle.id,
-        used_vehicle_id: includeUsed ? usedVehicle?.id || null : null,
         customer_id: customer.id,
-        seller_id: 1, // TODO: usuario logueado
-        price,
-        deposit: includeDeposit
-          ? validPayments.reduce((a, p) => a + p.amount, 0)
-          : null,
-        payment_methods: validPayments,
-        balance,
-        comments,
-      });
+        price: Number(price),
+        currency,
+        exchange_rate: Number(exchangeRate),
+        transfer_cost: Number(transferCost),
+        administrative_cost: Number(adminCost),
 
-      setToast("Reserva creada correctamente ✅");
-      [
-        "reservation_vehicle",
-        "reservation_used_vehicle",
-        "reservation_customer",
-        "reservation_price",
-      ].forEach((k) => localStorage.removeItem(k));
-      setTimeout(() => nav("/reservas"), 800);
+        second_buyer_name: hasCoowner ? coName : null,
+        second_buyer_dni: hasCoowner ? coDni : null,
+        second_buyer_phone: hasCoowner ? coPhone : null,
+
+        used_vehicle_id: includeUsed ? usedVehicle?.id : null,
+        used_vehicle_checklist: includeUsed ? usedChecklist : null,
+
+        payment_methods: includeDeposit
+          ? payments.filter((p) => p.amount && p.method_id)
+          : [],
+        deposit: includeDeposit
+          ? payments.reduce((acc, p) => acc + Number(p.amount), 0)
+          : 0,
+
+        balance,
+        status: "pendiente",
+        date: new Date().toISOString().split("T")[0],
+      };
+
+      await api.post("/reservations", payload);
+
+      // Limpiar temporales
+      localStorage.removeItem("temp_reservation_vehicle");
+      localStorage.removeItem("temp_reservation_customer");
+      localStorage.removeItem("temp_reservation_used");
+
+      setToast("Reserva generada con éxito ✅");
+      setTimeout(() => nav("/reservas"), 1000);
     } catch (err: any) {
-      setToast(
-        err?.response?.data?.message || "No se pudo registrar la reserva"
-      );
+      setToast(err.response?.data?.message || "Error al guardar");
     } finally {
       setLoading(false);
     }
   };
 
-  /* ====== Cancelar ====== */
-  const handleCancel = () => {
-    setToast(
-      "¿Cancelar la reserva y limpiar los datos? 🔄 Click nuevamente en 'Cancelar' para confirmar"
-    );
-    const confirmTimeout = setTimeout(() => setToast(""), 3000);
-
-    const confirmHandler = () => {
-      clearTimeout(confirmTimeout);
-      [
-        "reservation_vehicle",
-        "reservation_used_vehicle",
-        "reservation_customer",
-        "reservation_price",
-      ].forEach((k) => localStorage.removeItem(k));
-
-      setVehicle(null);
-      setUsedVehicle(null);
-      setCustomer(null);
-      setPrice("");
-      setPayments([]);
-      setComments("");
-      setIncludeUsed(false);
-      setIncludeDeposit(false);
-
-      setToast("Reserva cancelada correctamente ✅");
-      document.removeEventListener("click", confirmHandler);
-      setTimeout(() => nav("/reservas"), 800);
-    };
-
-    document.addEventListener("click", confirmHandler, { once: true });
-  };
-
-  /* ========= RENDER ========= */
   return (
-    <div className="container">
-      <form onSubmit={onSubmit} className="vstack">
-        <div className="title">Registrar reserva</div>
+    <div className="container vstack" style={{ gap: 20 }}>
+      {/* HEADER */}
+      <div
+        className="hstack"
+        style={{ justifyContent: "space-between", alignItems: "center" }}
+      >
+        <h1 className="title" style={{ margin: 0 }}>
+          Nueva Operación
+        </h1>
+        <Button
+          onClick={() => nav("/reservas")}
+          style={{
+            background: "transparent",
+            color: "var(--color-muted)",
+            border: "none",
+          }}
+        >
+          Cancelar
+        </Button>
+      </div>
 
-        {/* VEHÍCULO */}
-        <div className="card vstack">
-          <label>Vehículo principal *</label>
-          <a
-            href="/vehiculos/registro?redirect=/reservas/nueva"
-            className="enlace"
-          >
-            + Registrar vehículo
-          </a>
-          <div className="hstack">
-            <Input
-              label="Buscar por patente"
-              value={searchPlate}
-              onChange={(e) => setSearchPlate(e.currentTarget.value)}
-              placeholder="Ej: AB123CD"
-            />
-            <Button type="button" onClick={searchVehicle}>
-              Buscar
-            </Button>
+      <form
+        onSubmit={onSubmit}
+        className="vstack"
+        style={{ gap: 20, paddingBottom: 80 }}
+      >
+        {" "}
+        {/* Padding bottom para que el sticky no tape */}
+        {/* === 1. DATOS DE LA OPERACIÓN === */}
+        <div className="card vstack" style={{ gap: 16 }}>
+          <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
+            Vehículo y Cliente
           </div>
-          {vehicle && (
-            <div className="card">
-              <p>
-                <strong>
-                  {vehicle.brand} {vehicle.model}
-                </strong>{" "}
-                — {vehicle.plate}
-              </p>
-              <p>Precio: ${vehicle.price?.toLocaleString() || "—"}</p>
-            </div>
-          )}
-        </div>
 
-        {/* CLIENTE */}
-        <div className="card vstack">
-          <label>Cliente *</label>
-          <a
-            href="/clientes/registro?redirect=/reservas/nueva"
-            className="enlace"
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+              gap: 20,
+            }}
           >
-            + Registrar cliente
-          </a>
-          <div className="hstack">
-            <Input
-              label="Buscar por DNI"
-              value={searchDni}
-              onChange={(e) => setSearchDni(e.currentTarget.value)}
-              placeholder="Ej: 30123456"
-            />
-            <Button type="button" onClick={searchCustomer}>
-              Buscar
-            </Button>
-          </div>
-          {customer && (
-            <div className="card">
-              <p>
-                <strong>
-                  {customer.first_name} {customer.last_name}
-                </strong>
-              </p>
-              <p>DNI: {customer.doc_number}</p>
-              {customer.email && <p>Email: {customer.email}</p>}
-              {customer.phone && <p>Tel: {customer.phone}</p>}
-            </div>
-          )}
-        </div>
-
-        {/* VEHÍCULO USADO */}
-        <label>
-          <input
-            type="checkbox"
-            checked={includeUsed}
-            onChange={() => setIncludeUsed(!includeUsed)}
-          />{" "}
-          Incluir vehículo usado como parte de pago
-        </label>
-
-        {includeUsed && (
-          <div className="card vstack">
-            <label>Vehículo usado (opcional)</label>
-            <a
-              href="/vehiculos/registro?redirect=/reservas/nueva?used=1"
-              className="enlace"
-            >
-              + Registrar vehículo usado
-            </a>
-            <div className="hstack">
-              <Input
-                label="Buscar por patente"
-                value={searchUsedPlate}
-                onChange={(e) => setSearchUsedPlate(e.currentTarget.value)}
-                placeholder="Ej: AC987EF"
-              />
-              <Button type="button" onClick={searchUsed}>
-                Buscar
-              </Button>
-            </div>
-            {usedVehicle && (
-              <div className="card">
-                <p>
+            {/* VEHÍCULO A VENDER */}
+            <div className="vstack" style={{ gap: 8 }}>
+              <div
+                className="hstack"
+                style={{ justifyContent: "space-between" }}
+              >
+                <label>Unidad a Vender</label>
+                <a
+                  className="enlace"
+                  style={{ fontSize: "0.85rem", cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    saveTempState();
+                    // Pasamos redirect para volver acá después
+                    window.location.href =
+                      "/vehiculos/registro?redirect=/reservas/nueva";
+                  }}
+                >
+                  + Nuevo Vehículo
+                </a>
+              </div>
+              <div className="hstack">
+                <Input
+                  placeholder="Patente / Modelo..."
+                  value={searchPlate}
+                  onChange={(e) => setSearchPlate(e.currentTarget.value)}
+                />
+                <Button
+                  type="button"
+                  onClick={() => searchEntity("vehicle", searchPlate)}
+                >
+                  Buscar
+                </Button>
+              </div>
+              {vehicle && (
+                <div
+                  style={{
+                    padding: 10,
+                    background: "var(--hover-bg)",
+                    borderRadius: "var(--radius)",
+                    fontSize: "0.9rem",
+                    border: "1px solid var(--color-primary)",
+                  }}
+                >
+                  🚗{" "}
                   <strong>
-                    {usedVehicle.brand} {usedVehicle.model}
+                    {vehicle.brand} {vehicle.model}
                   </strong>{" "}
-                  — {usedVehicle.plate}
-                </p>
-                <p>
-                  Valor tomado: ${usedVehicle.price?.toLocaleString() || "—"}
-                </p>
+                  <br />
+                  <small style={{ color: "var(--color-muted)" }}>
+                    Patente: {vehicle.plate} • Precio Lista: $
+                    {vehicle.price?.toLocaleString()}
+                  </small>
+                </div>
+              )}
+            </div>
+
+            {/* CLIENTE */}
+            <div className="vstack" style={{ gap: 8 }}>
+              <div
+                className="hstack"
+                style={{ justifyContent: "space-between" }}
+              >
+                <label>Cliente Titular</label>
+                <a
+                  className="enlace"
+                  style={{ fontSize: "0.85rem", cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    saveTempState();
+                    window.location.href =
+                      "/clientes/registro?redirect=/reservas/nueva";
+                  }}
+                >
+                  + Nuevo Cliente
+                </a>
+              </div>
+              <div className="hstack">
+                <Input
+                  placeholder="DNI / Apellido..."
+                  value={searchDni}
+                  onChange={(e) => setSearchDni(e.currentTarget.value)}
+                />
+                <Button
+                  type="button"
+                  onClick={() => searchEntity("customer", searchDni)}
+                >
+                  Buscar
+                </Button>
+              </div>
+              {customer && (
+                <div
+                  style={{
+                    padding: 10,
+                    background: "var(--hover-bg)",
+                    borderRadius: "var(--radius)",
+                    fontSize: "0.9rem",
+                    border: "1px solid var(--color-primary)",
+                  }}
+                >
+                  👤{" "}
+                  <strong>
+                    {customer.first_name} {customer.last_name}
+                  </strong>{" "}
+                  <br />
+                  <small style={{ color: "var(--color-muted)" }}>
+                    Doc: {customer.doc_number}
+                  </small>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* COTITULAR */}
+          <div style={{ marginTop: 8 }}>
+            <Toggle
+              label="Agregar Segundo Titular / Cónyuge"
+              checked={hasCoowner}
+              onChange={setHasCoowner}
+            />
+            {hasCoowner && (
+              <div
+                className="hstack"
+                style={{ marginTop: 12, alignItems: "end" }}
+              >
+                <Input
+                  label="Nombre Completo"
+                  value={coName}
+                  onChange={(e) => setCoName(e.currentTarget.value)}
+                />
+                <Input
+                  label="DNI"
+                  value={coDni}
+                  onChange={(e) => setCoDni(e.currentTarget.value)}
+                />
+                <Input
+                  label="Teléfono"
+                  value={coPhone}
+                  onChange={(e) => setCoPhone(e.currentTarget.value)}
+                />
               </div>
             )}
           </div>
-        )}
+        </div>
+        {/* === 2. VALORES === */}
+        <div className="card vstack" style={{ gap: 16 }}>
+          <div className="hstack" style={{ justifyContent: "space-between" }}>
+            <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
+              Valores de la Operación
+            </div>
 
-        {/* SEÑA */}
-        <label>
-          <input
-            type="checkbox"
-            checked={includeDeposit}
-            onChange={() => setIncludeDeposit(!includeDeposit)}
-          />{" "}
-          Registrar seña / anticipo
-        </label>
+            {/* Selector Moneda */}
+            <div
+              className="hstack"
+              style={{
+                gap: 0,
+                border: "1px solid var(--color-border)",
+                borderRadius: 8,
+                overflow: "hidden",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setCurrency("ARS")}
+                style={{
+                  padding: "6px 12px",
+                  border: "none",
+                  background:
+                    currency === "ARS" ? "var(--color-primary)" : "transparent",
+                  color: currency === "ARS" ? "#fff" : "var(--color-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                Pesos (ARS)
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrency("USD")}
+                style={{
+                  padding: "6px 12px",
+                  border: "none",
+                  background: currency === "USD" ? "#22c55e" : "transparent",
+                  color: currency === "USD" ? "#fff" : "var(--color-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                Dólares (USD)
+              </button>
+            </div>
+          </div>
 
-        {includeDeposit && (
-          <div className="card vstack">
-            <label>Medios de pago</label>
-            {payments.map((p, i) => {
-              const selectedMethod = paymentMethods.find(
-                (m) => m.id === Number(p.method_id)
-              );
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 20,
+            }}
+          >
+            {/* Precio Venta */}
+            <div className="vstack" style={{ gap: 6 }}>
+              <Input
+                label={`Precio Negociado (${currency})`}
+                type="number"
+                value={price as any}
+                onChange={(e) => setPrice(parseFloat(e.currentTarget.value))}
+                style={{ fontWeight: "bold", fontSize: "1.1rem" }}
+              />
+              {/* ✅ Cotización Informativa READONLY */}
+              <div className="hstack" style={{ gap: 8, alignItems: "center" }}>
+                <span
+                  style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}
+                >
+                  Cotización Ref (USD):
+                </span>
+                <input
+                  type="text"
+                  value={`$ ${exchangeRate.toLocaleString()}`}
+                  readOnly
+                  disabled
+                  style={{
+                    width: 100,
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    border: "1px solid var(--color-border)",
+                    background: "var(--bg-color)",
+                    color: "var(--color-muted)",
+                    textAlign: "right",
+                    fontWeight: 600,
+                  }}
+                />
+              </div>
+            </div>
 
-              return (
-                <div key={i} className="vstack" style={{ gap: 8 }}>
-                  <div className="hstack">
-                    <select
-                      value={p.method_id}
-                      onChange={(e) =>
-                        updatePayment(
-                          i,
-                          "method_id",
-                          Number(e.currentTarget.value) || ""
-                        )
-                      }
+            <Input
+              label="Gastos Transferencia"
+              type="number"
+              value={transferCost as any}
+              onChange={(e) =>
+                setTransferCost(parseFloat(e.currentTarget.value))
+              }
+              placeholder="0.00"
+            />
+            <Input
+              label="Gastos Administrativos"
+              type="number"
+              value={adminCost as any}
+              onChange={(e) => setAdminCost(parseFloat(e.currentTarget.value))}
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+        {/* === 3. PAGOS Y TOMA === */}
+        <div className="card vstack" style={{ gap: 20 }}>
+          <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
+            Forma de Pago
+          </div>
+
+          {/* TOMA DE USADO */}
+          <div
+            style={{
+              background: "var(--input-bg)",
+              borderRadius: 8,
+              padding: 16,
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            <Toggle
+              label="Recibir Vehículo Usado (Permuta)"
+              checked={includeUsed}
+              onChange={setIncludeUsed}
+            />
+
+            {includeUsed && (
+              <div className="vstack" style={{ marginTop: 16, gap: 16 }}>
+                <div className="hstack">
+                  <Input
+                    placeholder="Patente del usado..."
+                    value={searchUsedPlate}
+                    onChange={(e) => setSearchUsedPlate(e.currentTarget.value)}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => searchEntity("used", searchUsedPlate)}
+                  >
+                    Buscar
+                  </Button>
+                  {/* Link para cargar usado si no existe */}
+                  <a
+                    className="enlace"
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      saveTempState();
+                      window.location.href = `/vehiculos/registro?redirect=/reservas/nueva?used=1`;
+                    }}
+                  >
+                    + Cargar Usado
+                  </a>
+                </div>
+
+                {usedVehicle && (
+                  <>
+                    <div
+                      style={{
+                        padding: 10,
+                        background: "var(--color-card)",
+                        borderRadius: 8,
+                        border: "1px solid var(--color-border)",
+                      }}
                     >
-                      <option value="">Seleccionar…</option>
-                      {paymentMethods.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
+                      🚗 Toma:{" "}
+                      <strong>
+                        {usedVehicle.brand} {usedVehicle.model}
+                      </strong>{" "}
+                      - Valor Toma:{" "}
+                      <strong style={{ color: "#22c55e" }}>
+                        ${usedVehicle.price?.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    {/* Checklist Documentación Usado */}
+                    <label
+                      style={{
+                        fontSize: "0.9rem",
+                        color: "var(--color-muted)",
+                        marginTop: 8,
+                      }}
+                    >
+                      Documentación Recibida:
+                    </label>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(140px, 1fr))",
+                        gap: 10,
+                      }}
+                    >
+                      {Object.keys(usedChecklist).map((key) => (
+                        <label
+                          key={key}
+                          style={{
+                            fontSize: "0.9rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={(usedChecklist as any)[key]}
+                            onChange={(e) =>
+                              setUsedChecklist({
+                                ...usedChecklist,
+                                [key]: e.target.checked,
+                              })
+                            }
+                          />
+                          {key.replace("_", " ").toUpperCase()}
+                        </label>
                       ))}
-                    </select>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
-                    <Input
-                      type="number"
-                      label="Monto"
-                      value={p.amount as any}
-                      onChange={(e) =>
-                        updatePayment(
-                          i,
-                          "amount",
-                          e.currentTarget.value === ""
-                            ? ""
-                            : Number(e.currentTarget.value)
-                        )
+          {/* SEÑA / PAGOS */}
+          <div
+            style={{
+              background: "var(--input-bg)",
+              borderRadius: 8,
+              padding: 16,
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            <Toggle
+              label="Registrar Seña / Anticipo"
+              checked={includeDeposit}
+              onChange={setIncludeDeposit}
+            />
+
+            {includeDeposit && (
+              <div className="vstack" style={{ marginTop: 16, gap: 12 }}>
+                {payments.map((p, i) => (
+                  <div
+                    key={i}
+                    className="hstack"
+                    style={{ alignItems: "flex-start" }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <select
+                        className="form-control"
+                        value={p.method_id}
+                        onChange={(e) => {
+                          const copy = [...payments];
+                          copy[i].method_id = Number(e.target.value);
+                          setPayments(copy);
+                        }}
+                      >
+                        <option value="">Método...</option>
+                        {paymentMethods.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Input
+                        type="number"
+                        placeholder="Monto"
+                        value={p.amount as any}
+                        onChange={(e) => {
+                          const copy = [...payments];
+                          copy[i].amount = Number(e.target.value);
+                          setPayments(copy);
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        setPayments(payments.filter((_, idx) => idx !== i))
                       }
-                    />
-
-                    <Button type="button" onClick={() => removePayment(i)}>
+                      style={{ padding: "10px" }}
+                    >
                       🗑
                     </Button>
                   </div>
-
-                  {/* Campos específicos según tipo de medio */}
-                  {selectedMethod?.requires_details && (
-                    <div className="card vstack">
-                      {/* TRANSFERENCIA BANCARIA */}
-                      {selectedMethod.type === "bank" && (
-                        <>
-                          <Input
-                            label="Banco"
-                            value={p.details?.bank_name || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "bank_name",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            label="Alias / CBU"
-                            value={p.details?.account_alias || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "account_alias",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            label="Titular"
-                            value={p.details?.account_holder || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "account_holder",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            label="N° de operación"
-                            value={p.details?.operation_number || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "operation_number",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                        </>
-                      )}
-
-                      {/* CHEQUE */}
-                      {selectedMethod.type === "check" && (
-                        <>
-                          <Input
-                            label="Banco"
-                            value={p.details?.bank_name || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "bank_name",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            label="N° de cheque"
-                            value={p.details?.check_number || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "check_number",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            type="date"
-                            label="Fecha de vencimiento"
-                            value={p.details?.check_due_date || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "check_due_date",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            label="Titular"
-                            value={p.details?.account_holder || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "account_holder",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                        </>
-                      )}
-
-                      {/* TARJETA */}
-                      {selectedMethod.type === "card" && (
-                        <>
-                          <Input
-                            label="Titular"
-                            value={p.details?.card_holder || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "card_holder",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            label="Últimos 4 dígitos"
-                            value={p.details?.card_last4 || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "card_last4",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            type="number"
-                            label="Cuotas"
-                            value={p.details?.installments ?? ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "installments",
-                                e.currentTarget.value === ""
-                                  ? ""
-                                  : Number(e.currentTarget.value)
-                              )
-                            }
-                          />
-                        </>
-                      )}
-
-                      {/* CRÉDITO BANCARIO */}
-                      {selectedMethod.type === "credit_bank" && (
-                        <>
-                          <Input
-                            label="Banco"
-                            value={p.details?.bank_name || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "bank_name",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                          <Input
-                            label="N° de crédito / legajo"
-                            value={p.details?.operation_number || ""}
-                            onChange={(e) =>
-                              updatePaymentDetail(
-                                i,
-                                "operation_number",
-                                e.currentTarget.value
-                              )
-                            }
-                          />
-                        </>
-                      )}
-
-                      {/* Fallback genérico si requiere detalles pero no matchea tipo */}
-                      {!["bank", "check", "card", "credit_bank"].includes(
-                        selectedMethod.type
-                      ) && (
-                        <textarea
-                          placeholder="Detalles del pago (CBU, referencia, etc.)"
-                          value={p.details?.operation_number || ""}
-                          onChange={(e) =>
-                            updatePaymentDetail(
-                              i,
-                              "operation_number",
-                              e.currentTarget.value
-                            )
-                          }
-                          className="textarea"
-                        />
-                      )}
-                    </div>
-                  )}
+                ))}
+                <div className="hstack">
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      setPayments([...payments, { method_id: "", amount: "" }])
+                    }
+                  >
+                    + Agregar Pago
+                  </Button>
+                  {/* ✅ Botón recuperado para crear métodos */}
+                  <a
+                    className="enlace"
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowPaymentModal(true);
+                    }}
+                  >
+                    + Nuevo método
+                  </a>
                 </div>
-              );
-            })}
-            <div className="hstack">
-              <a className="enlace" onClick={addPayment}>
-                + Agregar medio
-              </a>
-              <a className="enlace" onClick={() => setShowModal(true)}>
-                + Nuevo método
-              </a>
-            </div>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* SALDO */}
-        <div className="card vstack">
-          <label>Saldo restante ($)</label>
-          <input
-            type="number"
-            value={balance}
-            readOnly
-            className="input-readonly"
-          />
         </div>
-
-        {/* COMENTARIOS */}
-        <div className="card vstack">
-          <label>Comentarios</label>
-          <textarea
-            placeholder="Observaciones adicionales, condiciones de pago, etc."
-            value={comments}
-            onChange={(e) => setComments(e.currentTarget.value)}
-            className="textarea"
-          />
-        </div>
-
-        {/* ACCIONES */}
-        <div className="hstack" style={{ justifyContent: "flex-end" }}>
-          <Button type="submit" loading={loading}>
-            Guardar
-          </Button>
-          <Button
-            type="button"
-            onClick={handleCancel}
-            className="btn-secondary"
+        {/* 4. RESUMEN FINAL (Sticky Bottom Ajustado) */}
+        <div
+          className="card"
+          style={{
+            position: "sticky",
+            bottom: 20,
+            zIndex: 10,
+            border: "2px solid var(--color-primary)",
+            background: "var(--color-card)",
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.3)",
+            padding: "16px 24px", // Padding seguro
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 20,
+            }}
           >
-            Cancelar
-          </Button>
+            {/* Totales alineados a la izquierda */}
+            <div style={{ display: "flex", gap: 32 }}>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-muted)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Total Operación
+                </span>
+                <span
+                  style={{
+                    fontSize: "1.4rem",
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {currency === "USD" ? "USD" : "$"}{" "}
+                  {totalOperation.toLocaleString()}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-muted)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Saldo a Pagar
+                </span>
+                <span
+                  style={{
+                    fontSize: "1.4rem",
+                    fontWeight: 800,
+                    color:
+                      balance > 0
+                        ? "var(--color-danger)"
+                        : "var(--color-primary)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {currency === "USD" ? "USD" : "$"} {balance.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Botón a la derecha sin desbordar */}
+            <Button
+              type="submit"
+              loading={loading}
+              style={{
+                padding: "12px 24px",
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                minWidth: "fit-content",
+              }}
+            >
+              CONFIRMAR 📝
+            </Button>
+          </div>
         </div>
       </form>
 
-      {showModal && (
+      {/* Modal de métodos de pago */}
+      {showPaymentModal && (
         <PaymentMethodModal
-          onClose={() => setShowModal(false)}
-          onCreated={(m) => {
-            setPaymentMethods((prev) => [...prev, m]);
-            setToast("Método agregado correctamente ✅");
+          onClose={() => setShowPaymentModal(false)}
+          onCreated={(newMethod) => {
+            setPaymentMethods([...paymentMethods, newMethod]);
+            setToast("Método de pago creado ✅");
           }}
         />
       )}

@@ -1,15 +1,25 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { pdf } from "@react-pdf/renderer";
+import { saveAs } from "file-saver";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Button from "../../components/ui/Button";
+
+// --- IMPORTS ---
+import { PaymentReceipt } from "../../components/pdfs/PaymentReceipt";
 import Pagination from "../../components/ui/Pagination";
-import Toast from "../../components/ui/Toast";
 import usePagedList from "../../hooks/usePagedList";
 import api from "../../lib/api";
+
+// IMPORTA EL MODAL QUE ACABAMOS DE CREAR
+// (Asegúrate que la ruta coincida con donde guardaste el paso 1)
+import PaymentModal from "../../components/modals/PaymentModal";
+
+// --- TIPOS ---
+type ReservationStatus = "pendiente" | "confirmada" | "anulada" | "vendido";
 
 type Reservation = {
   id: number;
   date: string;
-  status: "pendiente" | "confirmada" | "anulada" | "vendido";
+  status: ReservationStatus;
   price: number;
   deposit?: number;
   credit_bank?: number;
@@ -21,590 +31,327 @@ type Reservation = {
   seller?: { id: number; name: string };
 };
 
-type PaymentMethod = {
-  id: number;
-  name: string;
-  type: "cash" | "bank" | "check" | "card" | "credit_bank";
-  requires_details?: boolean;
+const STATUS_CONFIG: Record<string, { colorClass: string; label: string }> = {
+  pendiente: { colorClass: "orange", label: "⏳ Pendiente" },
+  confirmada: { colorClass: "green", label: "✅ Confirmada" },
+  anulada: { colorClass: "gray", label: "🚫 Anulada" },
+  vendido: { colorClass: "blue", label: "🤝 Vendido" },
 };
 
-type PaymentDetails = {
-  bank_name?: string;
-  account_alias?: string;
-  account_holder?: string;
-  operation_number?: string;
-  check_number?: string;
-  check_due_date?: string;
-  card_holder?: string;
-  card_last4?: string;
-  installments?: number | "";
-};
-
-/* ========= MODAL PARA AGREGAR PAGO ========= */
-
-type AddPaymentModalProps = {
-  reservation: Reservation;
-  onClose: () => void;
-  onSaved: (message?: string) => void;
-};
-
-function AddPaymentModal({
-  reservation,
-  onClose,
-  onSaved,
-}: AddPaymentModalProps) {
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
-  const [methodId, setMethodId] = useState<number | "">("");
-  const [amount, setAmount] = useState<number | "">("");
-  const [details, setDetails] = useState<PaymentDetails>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Cargar métodos de pago
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get("/payment-methods");
-        setMethods(res.data?.data || res.data || []);
-      } catch {
-        setError("No se pudieron cargar los medios de pago");
-      }
-    })();
-  }, []);
-
-  const selectedMethod = methods.find((m) => m.id === methodId);
-
-  const setDetail = (
-    key: keyof PaymentDetails,
-    value: string | number | ""
-  ) => {
-    setDetails((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (!methodId) {
-      setError("Seleccioná un medio de pago");
-      return;
-    }
-    if (!amount || Number(amount) <= 0) {
-      setError("Ingresá un monto válido");
-      return;
-    }
-
-    // Limpio details (si todo está vacío, va null)
-    const cleaned: PaymentDetails = { ...details };
-    if (cleaned.installments === "") {
-      delete cleaned.installments;
-    }
-    const hasDetails = Object.values(cleaned).some(
-      (v) => v !== undefined && v !== ""
-    );
-    const payloadDetails = hasDetails ? cleaned : null;
-
-    setLoading(true);
-    try {
-      await api.post("/reservation-payments", {
-        reservation_id: reservation.id,
-        payment_method_id: Number(methodId),
-        amount: Number(amount),
-        details: payloadDetails,
-      });
-
-      onSaved("Pago registrado correctamente ✅");
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-          "No se pudo registrar el pago. Verificá la API /reservation-payments."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Cerrar con ESC
-  useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onEsc);
-    return () => document.removeEventListener("keydown", onEsc);
-  }, [onClose]);
-
-  const renderDetailFields = () => {
-    if (!selectedMethod) return null;
-
-    switch (selectedMethod.type) {
-      case "cash":
-        return (
-          <p style={{ fontSize: "0.85rem", color: "var(--color-muted)" }}>
-            Este método no requiere datos adicionales.
-          </p>
-        );
-
-      case "bank":
-        return (
-          <>
-            <label>Banco / entidad</label>
-            <input
-              type="text"
-              value={details.bank_name ?? ""}
-              onChange={(e) => setDetail("bank_name", e.currentTarget.value)}
-              placeholder="Ej: Banco Nación"
-            />
-
-            <label>Alias / CBU / Cuenta</label>
-            <input
-              type="text"
-              value={details.account_alias ?? ""}
-              onChange={(e) =>
-                setDetail("account_alias", e.currentTarget.value)
-              }
-              placeholder="Alias o CBU"
-            />
-
-            <label>Titular</label>
-            <input
-              type="text"
-              value={details.account_holder ?? ""}
-              onChange={(e) =>
-                setDetail("account_holder", e.currentTarget.value)
-              }
-              placeholder="Nombre del titular"
-            />
-
-            <label>Nº de operación</label>
-            <input
-              type="text"
-              value={details.operation_number ?? ""}
-              onChange={(e) =>
-                setDetail("operation_number", e.currentTarget.value)
-              }
-              placeholder="Comprobante / referencia"
-            />
-          </>
-        );
-
-      case "check":
-        return (
-          <>
-            <label>Banco</label>
-            <input
-              type="text"
-              value={details.bank_name ?? ""}
-              onChange={(e) => setDetail("bank_name", e.currentTarget.value)}
-              placeholder="Ej: Banco Santa Fe"
-            />
-
-            <label>Nº de cheque</label>
-            <input
-              type="text"
-              value={details.check_number ?? ""}
-              onChange={(e) => setDetail("check_number", e.currentTarget.value)}
-              placeholder="Número de cheque"
-            />
-
-            <label>Fecha de vencimiento</label>
-            <input
-              type="date"
-              value={details.check_due_date ?? ""}
-              onChange={(e) =>
-                setDetail("check_due_date", e.currentTarget.value)
-              }
-            />
-
-            <label>Titular</label>
-            <input
-              type="text"
-              value={details.account_holder ?? ""}
-              onChange={(e) =>
-                setDetail("account_holder", e.currentTarget.value)
-              }
-              placeholder="Nombre del titular"
-            />
-          </>
-        );
-
-      case "card":
-        return (
-          <>
-            <label>Titular de la tarjeta</label>
-            <input
-              type="text"
-              value={details.card_holder ?? ""}
-              onChange={(e) => setDetail("card_holder", e.currentTarget.value)}
-              placeholder="Nombre como figura en la tarjeta"
-            />
-
-            <label>Últimos 4 dígitos</label>
-            <input
-              type="text"
-              maxLength={4}
-              value={details.card_last4 ?? ""}
-              onChange={(e) => setDetail("card_last4", e.currentTarget.value)}
-              placeholder="1234"
-            />
-
-            <label>Cantidad de cuotas</label>
-            <input
-              type="number"
-              min={1}
-              value={details.installments ?? ""}
-              onChange={(e) =>
-                setDetail(
-                  "installments",
-                  e.currentTarget.value === ""
-                    ? ""
-                    : Number(e.currentTarget.value)
-                )
-              }
-              placeholder="1, 3, 6…"
-            />
-
-            <label>Nº de operación</label>
-            <input
-              type="text"
-              value={details.operation_number ?? ""}
-              onChange={(e) =>
-                setDetail("operation_number", e.currentTarget.value)
-              }
-              placeholder="Comprobante / ticket"
-            />
-          </>
-        );
-
-      case "credit_bank":
-        return (
-          <>
-            <label>Banco / entidad</label>
-            <input
-              type="text"
-              value={details.bank_name ?? ""}
-              onChange={(e) => setDetail("bank_name", e.currentTarget.value)}
-              placeholder="Banco que otorga el crédito"
-            />
-
-            <label>Nº de operación / legajo</label>
-            <input
-              type="text"
-              value={details.operation_number ?? ""}
-              onChange={(e) =>
-                setDetail("operation_number", e.currentTarget.value)
-              }
-              placeholder="Nº de crédito / referencia"
-            />
-          </>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card vstack" onClick={(e) => e.stopPropagation()}>
-        <h3>Registrar pago</h3>
-        <p style={{ fontSize: "0.9rem", color: "var(--color-muted)" }}>
-          Reserva #{reservation.id} —{" "}
-          {reservation.vehicle
-            ? `${reservation.vehicle.brand} ${reservation.vehicle.model} (${reservation.vehicle.plate})`
-            : "Vehículo"}
-        </p>
-
-        <form onSubmit={handleSubmit} className="vstack" style={{ gap: 12 }}>
-          <label>Medio de pago *</label>
-          <select
-            value={methodId}
-            onChange={(e) => {
-              const value =
-                e.currentTarget.value === ""
-                  ? ""
-                  : Number(e.currentTarget.value);
-              setMethodId(value);
-            }}
-          >
-            <option value="">Seleccionar…</option>
-            {methods.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-
-          <label>Monto *</label>
-          <input
-            type="number"
-            min={1}
-            value={amount}
-            onChange={(e) =>
-              setAmount(
-                e.currentTarget.value === ""
-                  ? ""
-                  : Number(e.currentTarget.value)
-              )
-            }
-          />
-
-          {/* Campos dinámicos según tipo */}
-          {selectedMethod && (
-            <div className="vstack" style={{ gap: 8 }}>
-              <strong style={{ fontSize: "0.9rem" }}>
-                Detalle del pago ({selectedMethod.type})
-              </strong>
-              {renderDetailFields()}
-            </div>
-          )}
-
-          {error && <p className="text-danger">{error}</p>}
-
-          <div
-            className="hstack"
-            style={{ justifyContent: "flex-end", gap: 8 }}
-          >
-            <Button
-              type="button"
-              onClick={onClose}
-              className="btn-secondary"
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" loading={loading}>
-              Guardar pago
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/* ========= LISTA PRINCIPAL DE RESERVAS ========= */
+/* ========= COMPONENTE LISTA PRINCIPAL ========= */
 
 export default function ReservationsList() {
   const nav = useNavigate();
-  const { items, loading, error, page, setPage, totalPages, refetch } =
-    usePagedList<Reservation>("/reservations");
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const [toast, setToast] = useState("");
-  const [paymentModalReservation, setPaymentModalReservation] =
-    useState<Reservation | null>(null);
+  // ESTADO PARA EL MODAL DE PAGO
+  const [reservationToPay, setReservationToPay] = useState<Reservation | null>(
+    null
+  );
 
-  const rows = useMemo(() => items, [items]);
+  const {
+    items,
+    loading,
+    error,
+    page,
+    setPage,
+    totalPages,
+    search,
+    setSearch,
+    refetch,
+  } = usePagedList<Reservation>("/reservations");
 
-  useEffect(() => {
-    refetch();
-  }, [page, refetch]);
+  // --- FUNCIÓN 1: CONFIRMAR SEÑA INICIAL (Solo Admin/Vendedor) ---
+  const handleConfirmDeposit = async (reservation: Reservation) => {
+    const amount = reservation.deposit || 0;
 
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") refetch();
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () =>
-      document.removeEventListener("visibilitychange", handleVisibility);
-  }, [refetch]);
+    if (
+      !window.confirm(
+        `💰 ¿Confirmas el ingreso de la SEÑA por $${amount.toLocaleString(
+          "es-AR"
+        )}?`
+      )
+    )
+      return;
 
-  // Auto-ocultar toast después de unos segundos
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 3500);
-    return () => clearTimeout(t);
-  }, [toast]);
+    setIsProcessing(true);
+    try {
+      await api.patch(`/reservations/${reservation.id}`, {
+        status: "confirmada",
+      });
+
+      const blob = await pdf(
+        <PaymentReceipt
+          reservation={{ ...reservation, status: "confirmada" }}
+          amount={amount}
+          concept="Seña / Reserva de Unidad"
+        />
+      ).toBlob();
+      saveAs(blob, `Recibo_Seña_${reservation.id}.pdf`);
+
+      await refetch();
+    } catch (err) {
+      console.error(err);
+      alert("Error al confirmar seña.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const renderStatusBadge = (status: Reservation["status"]) => {
-    let label = "";
-    let bg = "#1f2933";
-
-    switch (status) {
-      case "pendiente":
-        label = "Pendiente";
-        bg = "#eab308"; // amarillo
-        break;
-      case "confirmada":
-        label = "Confirmada";
-        bg = "#22c55e"; // verde
-        break;
-      case "anulada":
-        label = "Anulada";
-        bg = "#6b7280"; // gris
-        break;
-      case "vendido":
-        label = "Vendido";
-        bg = "#ef4444"; // rojo
-        break;
-      default:
-        label = status;
-        break;
-    }
-
-    return (
-      <span
-        style={{
-          display: "inline-block",
-          padding: "2px 8px",
-          borderRadius: 999,
-          fontSize: "0.75rem",
-          fontWeight: 600,
-          color: "#fff",
-          background: bg,
-          textTransform: "capitalize",
-        }}
-      >
-        {label}
-      </span>
-    );
+    const config = STATUS_CONFIG[status] || STATUS_CONFIG["pendiente"];
+    return <span className={`badge ${config.colorClass}`}>{config.label}</span>;
   };
 
   return (
-    <div className="vstack" style={{ gap: 12 }}>
+    <div className="vstack" style={{ gap: 20 }}>
+      {/* HEADER */}
       <div
         className="hstack"
         style={{ justifyContent: "space-between", alignItems: "center" }}
       >
-        <div className="title">Reservas</div>
-        <Link className="enlace" to="/reservas/nueva">
-          + Nueva reserva
+        <div className="title" style={{ margin: 0 }}>
+          Gestión de Reservas
+        </div>
+        <Link className="btn" to="/reservas/nueva">
+          + Nueva Reserva
         </Link>
       </div>
 
-      <div className="card" style={{ overflowX: "auto" }}>
-        {loading ? (
-          <div style={{ padding: 16 }}>Cargando…</div>
+      {/* BUSCADOR */}
+      <div className="card hstack" style={{ padding: "12px 16px" }}>
+        <input
+          className="input-search"
+          placeholder="🔍 Buscar por cliente, patente o vehículo..."
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          style={{
+            border: "none",
+            background: "transparent",
+            width: "100%",
+            fontSize: "1rem",
+            outline: "none",
+          }}
+        />
+      </div>
+
+      {/* TABLA */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {loading || isProcessing ? (
+          <div
+            style={{
+              padding: 30,
+              textAlign: "center",
+              color: "var(--color-muted)",
+            }}
+          >
+            {isProcessing ? "Procesando..." : "Cargando reservas..."}
+          </div>
         ) : error ? (
-          <div style={{ padding: 16, color: "var(--color-danger)" }}>
+          <div style={{ padding: 20, color: "var(--color-danger)" }}>
             Error: {error}
           </div>
-        ) : rows.length === 0 ? (
-          <div style={{ padding: 16, color: "var(--color-muted)" }}>
+        ) : items.length === 0 ? (
+          <div
+            style={{
+              padding: 30,
+              textAlign: "center",
+              color: "var(--color-muted)",
+            }}
+          >
             No hay reservas.
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left", color: "var(--color-muted)" }}>
-                <th style={{ padding: 8 }}>#</th>
-                <th style={{ padding: 8 }}>Fecha</th>
-                <th style={{ padding: 8 }}>Vehículo</th>
-                <th style={{ padding: 8 }}>Cliente</th>
-                <th style={{ padding: 8 }}>Vendedor</th>
-                <th style={{ padding: 8 }}>Precio de venta</th>
-                <th style={{ padding: 8 }}>Seña</th>
-                <th style={{ padding: 8 }}>Saldo</th>
-                <th style={{ padding: 8 }}>Estado</th>
-                <th style={{ padding: 8, textAlign: "right" }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} style={{ borderTop: "1px solid #1f2430" }}>
-                  <td style={{ padding: 8 }}>{r.id}</td>
-                  <td style={{ padding: 8 }}>
-                    {new Date(r.date).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    {r.vehicle
-                      ? `${r.vehicle.brand} ${r.vehicle.model} (${r.vehicle.plate})`
-                      : "—"}
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    {r.customer
-                      ? `${r.customer.first_name} ${r.customer.last_name}`
-                      : "—"}
-                  </td>
-                  <td style={{ padding: 8 }}>{r.seller?.name || "—"}</td>
-                  <td style={{ padding: 8 }}>
-                    {r.price?.toLocaleString("es-AR") || "—"}
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    {r.deposit?.toLocaleString("es-AR") || "—"}
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    {r.credit_bank
-                      ? r.credit_bank.toLocaleString("es-AR")
-                      : "—"}
-                  </td>
-                  <td
-                    style={{
-                      padding: 8,
-                      fontWeight: 600,
-                      color:
-                        (r.balance ?? 0) > 0
-                          ? "#eab308" // saldo pendiente
-                          : "#22c55e", // saldado
-                    }}
-                  >
-                    {r.balance?.toLocaleString("es-AR") || 0}
-                  </td>
-                  <td style={{ padding: 8 }}>{renderStatusBadge(r.status)}</td>
-                  <td style={{ padding: 8, textAlign: "right" }}>
-                    <div
-                      className="hstack"
-                      style={{ justifyContent: "flex-end", gap: 6 }}
-                    >
-                      {/* 👁 Ver detalle, ahora visible en modo claro */}
-                      <Button
-                        type="button"
-                        title="Ver detalle"
-                        onClick={() => nav(`/reservas/${r.id}`)}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          padding: 4,
-                          minWidth: 0,
-                          color: "var(--color-text)",
-                        }}
-                      >
-                        👁
-                      </Button>
-
-                      {/* 💳 Registrar pago */}
-                      <Button
-                        type="button"
-                        title="Registrar pago"
-                        className="btn-secondary"
-                        onClick={() => setPaymentModalReservation(r)}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          padding: 4,
-                          minWidth: 0,
-                          color: "var(--color-primary)",
-                        }}
-                      >
-                        💳
-                      </Button>
-                    </div>
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              className="modern-table"
+              style={{ marginTop: 0, border: "none" }}
+            >
+              <thead>
+                <tr style={{ background: "var(--hover-bg)" }}>
+                  <th>Fecha / ID</th>
+                  <th>Cliente</th>
+                  <th>Vehículo</th>
+                  <th>Estado</th>
+                  <th style={{ textAlign: "right" }}>Total</th>
+                  <th style={{ textAlign: "right" }}>Saldo</th>
+                  <th style={{ textAlign: "right" }}>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((r) => {
+                  const balance = r.balance ?? 0;
+                  const hasBalance = balance > 0;
+                  const canConfirmDeposit =
+                    r.status === "pendiente" && (r.deposit || 0) > 0;
+
+                  return (
+                    <tr key={r.id}>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>
+                          {new Date(r.date).toLocaleDateString()}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "0.8rem",
+                            color: "var(--color-muted)",
+                          }}
+                        >
+                          #{r.id}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>
+                          {r.customer
+                            ? `${r.customer.first_name} ${r.customer.last_name}`
+                            : "—"}
+                        </div>
+                      </td>
+                      <td>
+                        {r.vehicle ? (
+                          <div>
+                            <div style={{ fontWeight: 500 }}>
+                              {r.vehicle.brand} {r.vehicle.model}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: "0.8rem",
+                                color: "var(--color-muted)",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {r.vehicle.plate}
+                            </div>
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>{renderStatusBadge(r.status)}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ fontWeight: 500 }}>
+                          ${r.price?.toLocaleString("es-AR")}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {hasBalance ? (
+                          <span
+                            style={{
+                              color: "var(--color-danger)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            ${balance.toLocaleString("es-AR")}
+                          </span>
+                        ) : (
+                          <span className="badge green">Saldado</span>
+                        )}
+                      </td>
+
+                      {/* ACCIONES */}
+                      <td style={{ textAlign: "right" }}>
+                        <div
+                          className="hstack"
+                          style={{ justifyContent: "flex-end", gap: 8 }}
+                        >
+                          {/* 1. CONFIRMAR SEÑA */}
+                          {canConfirmDeposit && (
+                            <button
+                              className="action-btn"
+                              title="Confirmar Seña"
+                              onClick={() => handleConfirmDeposit(r)}
+                              style={{
+                                color: "#d97706",
+                                background: "#fffbeb",
+                              }}
+                            >
+                              <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                              </svg>
+                            </button>
+                          )}
+
+                          {/* 2. VER DETALLE */}
+                          <button
+                            className="action-btn"
+                            title="Ver Detalle"
+                            onClick={() => nav(`/reservas/${r.id}`)}
+                          >
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          </button>
+
+                          {/* 3. REGISTRAR COBRO (MODAL) */}
+                          {hasBalance &&
+                            r.status !== "anulada" &&
+                            r.status !== "pendiente" && (
+                              <button
+                                className="action-btn"
+                                title="Registrar Nuevo Pago"
+                                style={{ color: "var(--color-primary)" }}
+                                // AQUI ESTA EL CAMBIO CLAVE: ABRIMOS EL MODAL
+                                onClick={() => setReservationToPay(r)}
+                              >
+                                <svg
+                                  width="18"
+                                  height="18"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <rect
+                                    x="1"
+                                    y="4"
+                                    width="22"
+                                    height="16"
+                                    rx="2"
+                                    ry="2"
+                                  />
+                                  <line x1="1" y1="10" x2="23" y2="10" />
+                                </svg>
+                              </button>
+                            )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       <Pagination page={page} totalPages={totalPages} onPage={setPage} />
 
-      {paymentModalReservation && (
-        <AddPaymentModal
-          reservation={paymentModalReservation}
-          onClose={() => setPaymentModalReservation(null)}
-          onSaved={(msg) => {
-            if (msg) setToast(msg);
-            setPaymentModalReservation(null);
-            refetch(); // recarga lista con saldo/estado actualizados
+      {/* RENDERIZADO DEL MODAL */}
+      {reservationToPay && (
+        <PaymentModal
+          reservation={reservationToPay}
+          onClose={() => setReservationToPay(null)}
+          onSuccess={() => {
+            setReservationToPay(null);
+            refetch(); // Recargar la tabla para ver el saldo actualizado
           }}
-        />
-      )}
-
-      {toast && (
-        <Toast
-          message={toast}
-          type={toast.includes("✅") ? "success" : "error"}
         />
       )}
     </div>

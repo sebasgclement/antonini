@@ -10,6 +10,14 @@ type Props = {
 
 type MethodType = "" | "cash" | "bank" | "check" | "card" | "credit_bank";
 
+const METHOD_OPTIONS: Record<string, string> = {
+  cash: "💵 Efectivo",
+  bank: "🏦 Transferencia Bancaria",
+  check: "🎫 Cheque",
+  card: "💳 Tarjeta de Débito/Crédito",
+  credit_bank: "🏦 Crédito Bancario",
+};
+
 export default function PaymentMethodModal({ onClose, onCreated }: Props) {
   const [name, setName] = useState("");
   const [type, setType] = useState<MethodType>("");
@@ -19,10 +27,6 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
 
   const handleChangeType = (value: MethodType) => {
     setType(value);
-
-    // Pequeña ayudita de UX:
-    // - cash: normalmente no hace falta detalle → lo apagamos
-    // - otros: lo prendemos por defecto (se puede desmarcar)
     if (value === "cash") {
       setRequiresDetails(false);
     } else if (value) {
@@ -59,7 +63,7 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
     }
   };
 
-  // Permitir cerrar con ESC
+  // Cierre con ESC
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
@@ -67,62 +71,305 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
   }, [onClose]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card vstack" onClick={(e) => e.stopPropagation()}>
-        <h3>Nuevo medio de pago</h3>
+    <>
+      {/* Estilo local para asegurar que las opciones desplegadas sean oscuras */}
+      <style>{`
+        .dark-select option {
+          background-color: var(--bg-card, #1f2937);
+          color: var(--text-color, #fff);
+        }
+      `}</style>
 
-        <form onSubmit={handleSubmit} className="vstack">
-          <Input
-            label="Nombre del método"
-            value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
-            placeholder="Ej: Tarjeta Banco Nación"
-            required
-          />
-
-          <label>Tipo *</label>
-          <select
-            value={type}
-            onChange={(e) =>
-              handleChangeType(e.currentTarget.value as MethodType)
-            }
+      <div className="modal-overlay" onClick={onClose} style={styles.overlay}>
+        <div
+          className="modal-card vstack"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            ...styles.card,
+            // AQUI ESTABA EL ERROR: Ahora forzamos las variables CSS
+            backgroundColor: "var(--bg-card, #1f2937)",
+            color: "var(--text-color, #f3f4f6)",
+            // Estilos de scroll
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          {/* HEADER (Fijo) */}
+          <div
+            className="hstack"
+            style={{
+              justifyContent: "space-between",
+              marginBottom: 16,
+              flexShrink: 0,
+            }}
           >
-            <option value="">Seleccionar…</option>
-            <option value="cash">Efectivo</option>
-            <option value="bank">Transferencia Bancaria</option>
-            <option value="check">Cheque</option>
-            <option value="card">Tarjeta de Débito/Crédito</option>
-            <option value="credit_bank">Crédito Bancario</option>
-          </select>
+            <div>
+              <h3 style={{ margin: 0, fontSize: "1.25rem" }}>
+                Nuevo medio de pago
+              </h3>
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--color-muted, #9ca3af)",
+                  fontSize: "0.9rem",
+                }}
+              >
+                Define cómo cobrarás las reservas
+              </p>
+            </div>
+            <button onClick={onClose} style={styles.closeBtn} title="Cerrar">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-          <label className="hstack" style={{ gap: 6 }}>
-            <input
-              type="checkbox"
-              checked={requiresDetails}
-              onChange={(e) => setRequiresDetails(e.target.checked)}
-              // Podrías bloquearlo en efectivo si querés:
-              // disabled={type === "cash"}
-            />
-            Requiere datos adicionales (CBU, N° de cheque, etc.)
-          </label>
+          {/* BODY CON SCROLL */}
+          <div
+            style={{
+              overflowY: "auto",
+              flex: 1,
+              paddingRight: 4,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+          >
+            <form
+              id="create-method-form"
+              onSubmit={handleSubmit}
+              className="vstack"
+              style={{ gap: 16 }}
+            >
+              {/* Nombre (Este ya se veía bien porque usa tu componente Input) */}
+              <Input
+                label="Nombre del método"
+                value={name}
+                onChange={(e) => setName(e.currentTarget.value)}
+                placeholder="Ej: Banco Galicia - Cuenta Corriente"
+                required
+                autoFocus
+              />
 
-          {error && <p className="text-danger">{error}</p>}
+              {/* Selector de Tipo (CORREGIDO PARA DARK MODE) */}
+              <div className="vstack" style={{ gap: 6 }}>
+                <label style={{ fontWeight: 500, fontSize: "0.9rem" }}>
+                  Tipo de Método *
+                </label>
+                <div style={{ position: "relative" }}>
+                  <select
+                    value={type}
+                    onChange={(e) =>
+                      handleChangeType(e.currentTarget.value as MethodType)
+                    }
+                    className="dark-select"
+                    style={{
+                      ...styles.select,
+                      // Sobrescribimos colores hardcodeados
+                      backgroundColor: "var(--bg-input, #374151)",
+                      color: "var(--text-color, #f3f4f6)",
+                      borderColor: "var(--border-color, #4b5563)",
+                    }}
+                    required
+                  >
+                    <option value="" disabled>
+                      Seleccionar tipo...
+                    </option>
+                    {Object.entries(METHOD_OPTIONS).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
 
-          <div className="hstack" style={{ justifyContent: "flex-end" }}>
+                  {/* Flechita SVG */}
+                  <div
+                    style={{
+                      ...styles.selectArrow,
+                      color: "var(--text-color, #9ca3af)", // Adaptable
+                    }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Checkbox (CORREGIDO PARA DARK MODE) */}
+              <div
+                className="hstack"
+                style={{
+                  gap: 10,
+                  padding: 12,
+                  // Fondo y borde adaptables
+                  backgroundColor: "var(--bg-input, #374151)",
+                  border: "1px solid var(--border-color, #4b5563)",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}
+                onClick={() => setRequiresDetails(!requiresDetails)}
+              >
+                <input
+                  type="checkbox"
+                  checked={requiresDetails}
+                  onChange={(e) => setRequiresDetails(e.target.checked)}
+                  style={{
+                    accentColor: "var(--color-primary)",
+                    width: 16,
+                    height: 16,
+                    cursor: "pointer",
+                  }}
+                />
+                <div className="vstack" style={{ gap: 2 }}>
+                  <span style={{ fontWeight: 500, fontSize: "0.9rem" }}>
+                    Requiere datos adicionales
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "var(--color-muted, #9ca3af)",
+                    }}
+                  >
+                    Marcar si al cobrar necesitas pedir CBU, N° Cheque, etc.
+                  </span>
+                </div>
+              </div>
+
+              {/* Mensaje de Error */}
+              {error && (
+                <div
+                  style={{
+                    padding: 10,
+                    backgroundColor: "rgba(239, 68, 68, 0.15)", // Rojo con transparencia
+                    color: "#f87171", // Rojo claro
+                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                    borderRadius: 6,
+                    fontSize: "0.9rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  {error}
+                </div>
+              )}
+            </form>
+          </div>
+
+          {/* FOOTER (Fijo) */}
+          <div
+            className="hstack"
+            style={{
+              justifyContent: "flex-end",
+              gap: 10,
+              marginTop: 16,
+              paddingTop: 16,
+              borderTop: "1px solid var(--border-color, #374151)",
+              flexShrink: 0,
+            }}
+          >
             <Button
               type="button"
               onClick={onClose}
               className="btn-secondary"
               disabled={loading}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border-color, #4b5563)",
+                color: "var(--text-color, #f3f4f6)",
+              }}
             >
               Cancelar
             </Button>
-            <Button type="submit" loading={loading}>
-              Guardar
+            <Button type="submit" form="create-method-form" loading={loading}>
+              {loading ? "Guardando..." : "Crear Método"}
             </Button>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
+
+// === ESTILOS ESTRUCTURALES (SIN COLORES FIJOS) ===
+const styles = {
+  overlay: {
+    position: "fixed" as "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)", // Un poco más oscuro
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+  },
+  card: {
+    padding: 24,
+    borderRadius: 12,
+    width: 450,
+    maxWidth: "95%",
+    boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+    // NOTA: Borré 'background: white' de aquí
+  },
+  closeBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 4,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "50%",
+    color: "var(--text-color, white)", // Color adaptable
+  },
+  select: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "6px",
+    fontSize: "1rem",
+    appearance: "none" as "none",
+    cursor: "pointer",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    // NOTA: Borré 'background' y 'border' fijos de aquí
+  },
+  selectArrow: {
+    position: "absolute" as "absolute",
+    right: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none" as "none",
+  },
+};
