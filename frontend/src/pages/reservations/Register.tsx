@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import PaymentMethodModal from "../../components/modals/PaymentMethodModal"; // 👈 Asegurate que la ruta sea correcta
+import PaymentMethodModal from "../../components/modals/PaymentMethodModal";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
 import Toggle from "../../components/ui/Toggle";
 import api from "../../lib/api";
+import { useDolar } from "../../hooks/useDolar"; // <--- 1. IMPORTAR HOOK
 
 /* TIPOS */
 type Vehicle = {
@@ -34,6 +35,7 @@ type PaymentMethod = {
 export default function RegisterReservation() {
   const nav = useNavigate();
   const location = useLocation();
+  const { dolar } = useDolar(); // <--- 2. USAR HOOK
 
   // === ESTADOS ===
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -47,7 +49,7 @@ export default function RegisterReservation() {
 
   // Economía
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS");
-  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const [exchangeRate, setExchangeRate] = useState<number>(1); // Default 1
   const [price, setPrice] = useState<number | "">("");
   const [transferCost, setTransferCost] = useState<number | "">("");
   const [adminCost, setAdminCost] = useState<number | "">("");
@@ -68,7 +70,7 @@ export default function RegisterReservation() {
   const [includeDeposit, setIncludeDeposit] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [showPaymentModal, setShowPaymentModal] = useState(false); // ✅ Modal recuperado
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // UX
   const [searchPlate, setSearchPlate] = useState("");
@@ -82,12 +84,22 @@ export default function RegisterReservation() {
     (Number(price) || 0) +
     (Number(transferCost) || 0) +
     (Number(adminCost) || 0);
+  
   const totalPaid =
     (includeDeposit
       ? payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
       : 0) +
     (includeUsed && usedVehicle?.price ? Number(usedVehicle.price) : 0);
+  
   const balance = totalOperation - totalPaid;
+
+  // 3. EFECTO PARA ACTUALIZAR COTIZACIÓN AUTOMÁTICA
+  useEffect(() => {
+    // Si la cotización llega y el usuario NO tocó el valor (está en 1), actualizamos
+    if (dolar?.venta && exchangeRate === 1) {
+       setExchangeRate(dolar.venta);
+    }
+  }, [dolar, exchangeRate]);
 
   /* === CARGA INICIAL === */
   useEffect(() => {
@@ -96,15 +108,6 @@ export default function RegisterReservation() {
         // Métodos de pago
         const methods = await api.get("/payment-methods");
         setPaymentMethods(methods.data?.data || []);
-
-        // Dólar API (Solo informativo)
-        try {
-          const dolar = await fetch("https://dolarapi.com/v1/dolares/blue");
-          const data = await dolar.json();
-          if (data.venta) setExchangeRate(data.venta);
-        } catch (e) {
-          console.log("No se pudo obtener cotización");
-        }
 
         // Recuperar estados temporales
         const savedV = localStorage.getItem("temp_reservation_vehicle");
@@ -132,7 +135,6 @@ export default function RegisterReservation() {
         const params = new URLSearchParams(location.search);
         const vId = params.get("vehicle_id");
 
-        // Si no hay temporales y hay ID en URL, cargamos de la API
         if (vId && !savedV) {
           const res = await api.get(`/vehicles/${vId}`);
           const v = res.data?.data || res.data;
@@ -238,7 +240,6 @@ export default function RegisterReservation() {
 
       await api.post("/reservations", payload);
 
-      // Limpiar temporales
       localStorage.removeItem("temp_reservation_vehicle");
       localStorage.removeItem("temp_reservation_customer");
       localStorage.removeItem("temp_reservation_used");
@@ -279,8 +280,6 @@ export default function RegisterReservation() {
         className="vstack"
         style={{ gap: 20, paddingBottom: 80 }}
       >
-        {" "}
-        {/* Padding bottom para que el sticky no tape */}
         {/* === 1. DATOS DE LA OPERACIÓN === */}
         <div className="card vstack" style={{ gap: 16 }}>
           <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
@@ -296,10 +295,7 @@ export default function RegisterReservation() {
           >
             {/* VEHÍCULO A VENDER */}
             <div className="vstack" style={{ gap: 8 }}>
-              <div
-                className="hstack"
-                style={{ justifyContent: "space-between" }}
-              >
+              <div className="hstack" style={{ justifyContent: "space-between" }}>
                 <label>Unidad a Vender</label>
                 <a
                   className="enlace"
@@ -307,9 +303,7 @@ export default function RegisterReservation() {
                   onClick={(e) => {
                     e.preventDefault();
                     saveTempState();
-                    // Pasamos redirect para volver acá después
-                    window.location.href =
-                      "/vehiculos/registro?redirect=/reservas/nueva";
+                    window.location.href = "/vehiculos/registro?redirect=/reservas/nueva";
                   }}
                 >
                   + Nuevo Vehículo
@@ -353,10 +347,7 @@ export default function RegisterReservation() {
 
             {/* CLIENTE */}
             <div className="vstack" style={{ gap: 8 }}>
-              <div
-                className="hstack"
-                style={{ justifyContent: "space-between" }}
-              >
+              <div className="hstack" style={{ justifyContent: "space-between" }}>
                 <label>Cliente Titular</label>
                 <a
                   className="enlace"
@@ -364,8 +355,7 @@ export default function RegisterReservation() {
                   onClick={(e) => {
                     e.preventDefault();
                     saveTempState();
-                    window.location.href =
-                      "/clientes/registro?redirect=/reservas/nueva";
+                    window.location.href = "/clientes/registro?redirect=/reservas/nueva";
                   }}
                 >
                   + Nuevo Cliente
@@ -438,6 +428,7 @@ export default function RegisterReservation() {
             )}
           </div>
         </div>
+
         {/* === 2. VALORES === */}
         <div className="card vstack" style={{ gap: 16 }}>
           <div className="hstack" style={{ justifyContent: "space-between" }}>
@@ -501,29 +492,40 @@ export default function RegisterReservation() {
                 onChange={(e) => setPrice(parseFloat(e.currentTarget.value))}
                 style={{ fontWeight: "bold", fontSize: "1.1rem" }}
               />
-              {/* ✅ Cotización Informativa READONLY */}
+              
+              {/* ✅ COTIZACIÓN DÓLAR INTERACTIVA */}
               <div className="hstack" style={{ gap: 8, alignItems: "center" }}>
                 <span
                   style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}
                 >
-                  Cotización Ref (USD):
+                  Cotización (USD):
                 </span>
-                <input
-                  type="text"
-                  value={`$ ${exchangeRate.toLocaleString()}`}
-                  readOnly
-                  disabled
-                  style={{
-                    width: 100,
-                    padding: "4px 8px",
-                    borderRadius: 6,
-                    border: "1px solid var(--color-border)",
-                    background: "var(--bg-color)",
-                    color: "var(--color-muted)",
-                    textAlign: "right",
-                    fontWeight: 600,
-                  }}
-                />
+                <div style={{position: 'relative', width: 100}}>
+                    <input
+                    type="number"
+                    value={exchangeRate}
+                    onChange={(e) => setExchangeRate(Number(e.target.value))}
+                    style={{
+                        width: '100%',
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid var(--color-border)",
+                        background: "var(--input-bg)",
+                        color: "var(--color-text)",
+                        textAlign: "right",
+                        fontWeight: 600,
+                    }}
+                    />
+                </div>
+                {/* Botón para resetear al valor de la API */}
+                <button 
+                    type="button"
+                    onClick={() => dolar?.venta && setExchangeRate(dolar.venta)}
+                    title={`Usar cotización actual: $${dolar?.venta || '...'}`}
+                    style={{background:'transparent', border:'none', cursor:'pointer'}}
+                >
+                    🔄
+                </button>
               </div>
             </div>
 
@@ -545,6 +547,7 @@ export default function RegisterReservation() {
             />
           </div>
         </div>
+
         {/* === 3. PAGOS Y TOMA === */}
         <div className="card vstack" style={{ gap: 20 }}>
           <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
@@ -580,7 +583,6 @@ export default function RegisterReservation() {
                   >
                     Buscar
                   </Button>
-                  {/* Link para cargar usado si no existe */}
                   <a
                     className="enlace"
                     style={{ cursor: "pointer" }}
@@ -614,7 +616,6 @@ export default function RegisterReservation() {
                       </strong>
                     </div>
 
-                    {/* Checklist Documentación Usado */}
                     <label
                       style={{
                         fontSize: "0.9rem",
@@ -736,7 +737,6 @@ export default function RegisterReservation() {
                   >
                     + Agregar Pago
                   </Button>
-                  {/* ✅ Botón recuperado para crear métodos */}
                   <a
                     className="enlace"
                     style={{ cursor: "pointer" }}
@@ -752,7 +752,8 @@ export default function RegisterReservation() {
             )}
           </div>
         </div>
-        {/* 4. RESUMEN FINAL (Sticky Bottom Ajustado) */}
+
+        {/* 4. RESUMEN FINAL */}
         <div
           className="card"
           style={{
@@ -762,7 +763,7 @@ export default function RegisterReservation() {
             border: "2px solid var(--color-primary)",
             background: "var(--color-card)",
             boxShadow: "0 -4px 20px rgba(0,0,0,0.3)",
-            padding: "16px 24px", // Padding seguro
+            padding: "16px 24px",
           }}
         >
           <div
@@ -773,7 +774,6 @@ export default function RegisterReservation() {
               gap: 20,
             }}
           >
-            {/* Totales alineados a la izquierda */}
             <div style={{ display: "flex", gap: 32 }}>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span
@@ -823,7 +823,6 @@ export default function RegisterReservation() {
               </div>
             </div>
 
-            {/* Botón a la derecha sin desbordar */}
             <Button
               type="submit"
               loading={loading}

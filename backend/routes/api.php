@@ -12,6 +12,7 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\VehicleBrandController;
 use App\Http\Controllers\Api\ReservationPaymentController;
+use App\Http\Controllers\Api\DashboardController;
 
 
 // ================== AUTH ==================
@@ -58,6 +59,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ 📄 Listar métodos de pago (visible para vendedores, reservas, etc.)
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
+
+    Route::get('/dolar', [DashboardController::class, 'getDolar']);
+
 });
 
 
@@ -88,6 +92,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // ✅ CRUD completo de métodos de pago (solo admin)
     Route::apiResource('payment-methods', PaymentMethodController::class)
         ->except(['index']);
+    
 
     // ================== REPORTES ==================
     Route::prefix('reports')->group(function () {

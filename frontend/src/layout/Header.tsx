@@ -15,6 +15,16 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
 
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "dark");
 
+  // --- LÓGICA DE ROL (Arreglo TypeScript para evitar errores) ---
+  // 1. Extraemos el rol crudo. Usamos as any para que TypeScript no se queje si 'roles' o 'role' no están tipados.
+  const rawRole = (user?.roles?.[0] as any)?.name || (user as any)?.role || "Usuario";
+  
+  // 2. Capitalizamos el rol, tratando siempre el resultado como string.
+  const userRoleName = 
+    typeof rawRole === 'string'
+      ? rawRole.charAt(0).toUpperCase() + rawRole.slice(1)
+      : String(rawRole).charAt(0).toUpperCase() + String(rawRole).slice(1);
+
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
@@ -320,7 +330,8 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
             <span className="user-name">
               {user?.name?.split(" ")[0] || "Usuario"}
             </span>
-            <span className="user-role">Administrador</span>
+            {/* ✅ AQUÍ MOSTRAMOS EL ROL REAL */}
+            <span className="user-role">{userRoleName}</span>
           </div>
 
           <svg

@@ -8,9 +8,9 @@ import { PaymentReceipt } from "../../components/pdfs/PaymentReceipt";
 import Pagination from "../../components/ui/Pagination";
 import usePagedList from "../../hooks/usePagedList";
 import api from "../../lib/api";
+import useAuth from "../../hooks/useAuth"; 
 
-// IMPORTA EL MODAL QUE ACABAMOS DE CREAR
-// (Asegúrate que la ruta coincida con donde guardaste el paso 1)
+// IMPORTA EL MODAL
 import PaymentModal from "../../components/modals/PaymentModal";
 
 // --- TIPOS ---
@@ -42,6 +42,7 @@ const STATUS_CONFIG: Record<string, { colorClass: string; label: string }> = {
 
 export default function ReservationsList() {
   const nav = useNavigate();
+  const { user } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
 
   // ESTADO PARA EL MODAL DE PAGO
@@ -61,7 +62,14 @@ export default function ReservationsList() {
     refetch,
   } = usePagedList<Reservation>("/reservations");
 
-  // --- FUNCIÓN 1: CONFIRMAR SEÑA INICIAL (Solo Admin/Vendedor) ---
+  // ✅ LÓGICA ROBUSTA DE ADMIN (Igual que en el Home)
+  // Verifica si tiene roles array O propiedad simple, y normaliza a minúsculas
+  const isAdmin = 
+    user?.roles?.some((r: any) => ['admin', 'superadmin', 'gerente'].includes(r.name?.toLowerCase())) || 
+    user?.role === 'admin' || // Fallback por si tu backend manda string simple
+    user?.role === 'ADMIN';
+
+  // --- FUNCIÓN: CONFIRMAR SEÑA ---
   const handleConfirmDeposit = async (reservation: Reservation) => {
     const amount = reservation.deposit || 0;
 
@@ -182,8 +190,12 @@ export default function ReservationsList() {
                 {items.map((r) => {
                   const balance = r.balance ?? 0;
                   const hasBalance = balance > 0;
+                  
+                  // 3. APLICO EL FILTRO CORRECTO
                   const canConfirmDeposit =
-                    r.status === "pendiente" && (r.deposit || 0) > 0;
+                    r.status === "pendiente" && 
+                    (r.deposit || 0) > 0 &&
+                    isAdmin; // ✅ Ahora usa la validación robusta
 
                   return (
                     <tr key={r.id}>
@@ -258,11 +270,12 @@ export default function ReservationsList() {
                           {canConfirmDeposit && (
                             <button
                               className="action-btn"
-                              title="Confirmar Seña"
+                              title="Confirmar Seña (Admin)"
                               onClick={() => handleConfirmDeposit(r)}
                               style={{
                                 color: "#d97706",
                                 background: "#fffbeb",
+                                border: "1px solid #fcd34d"
                               }}
                             >
                               <svg
@@ -293,6 +306,8 @@ export default function ReservationsList() {
                               fill="none"
                               stroke="currentColor"
                               strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             >
                               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                               <circle cx="12" cy="12" r="3" />
@@ -307,7 +322,6 @@ export default function ReservationsList() {
                                 className="action-btn"
                                 title="Registrar Nuevo Pago"
                                 style={{ color: "var(--color-primary)" }}
-                                // AQUI ESTA EL CAMBIO CLAVE: ABRIMOS EL MODAL
                                 onClick={() => setReservationToPay(r)}
                               >
                                 <svg
@@ -317,6 +331,8 @@ export default function ReservationsList() {
                                   fill="none"
                                   stroke="currentColor"
                                   strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
                                 >
                                   <rect
                                     x="1"
