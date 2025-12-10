@@ -1,7 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-// 👈 SOLUCIÓN 1: Importamos ReactNode con 'type'
-import { type ReactNode } from 'react'; 
-// 👈 SOLUCIÓN 2: Importamos el componente ToastContainer
+import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import ToastContainer from '../components/ToastContainer'; 
 
 // --- TIPOS ---
@@ -14,57 +11,54 @@ export interface Toast {
     duration?: number;
 }
 
-// Tipos para el Contexto
 interface ToastContextType {
-    // 👈 SOLUCIÓN 3: Renombramos la función a 'addToast'
     addToast: (message: string, type?: ToastType, duration?: number) => void;
 }
 
-// Exportamos el contexto para que el useToast pueda consumirlo
 export const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-// --- Hook Personalizado (para usar en NotificationContext) ---
+// --- Hook Personalizado ---
 export const useToast = () => {
     const context = useContext(ToastContext);
     if (context === undefined) {
         throw new Error('useToast debe ser usado dentro de un ToastProvider');
     }
-    // 👈 Devolvemos la interfaz pública (solo 'addToast')
-    return { addToast: context.addToast };
+    
+    // 🔥 CORRECCIÓN CLAVE: Exportamos como 'showToast'
+    // Así coincide con lo que usamos en NotificationContext y ReservationsList
+    return { showToast: context.addToast };
 };
 
-// --- Provider Component ---
+// --- Provider ---
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
     const [toasts, setToasts] = useState<Toast[]>([]);
 
-    const addToast = (
+    const addToast = useCallback((
         message: string,
         type: ToastType = 'info',
-        duration: number = 5000 // 5 segundos por defecto
+        duration: number = 5000 
     ) => {
         const id = Date.now();
         const newToast: Toast = { id, message, type, duration };
 
-        // Prepend (colocar al principio) para que se vea el más nuevo arriba
         setToasts((prev) => [newToast, ...prev]);
 
-        // Ocultar automáticamente después de la duración
+        // Auto-eliminar
         setTimeout(() => {
             setToasts((prev) => prev.filter((toast) => toast.id !== id));
         }, duration);
-    };
+    }, []);
     
-    // Función para cerrar un toast manualmente
-    const removeToast = (id: number) => {
+    const removeToast = useCallback((id: number) => {
         setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    };
+    }, []);
 
     const value = { addToast };
 
     return (
         <ToastContext.Provider value={value}>
             {children}
-            {/* 👈 Renderiza el contenedor con la lista de toasts */}
+            {/* El Container que los dibuja */}
             <ToastContainer toasts={toasts} removeToast={removeToast} />
         </ToastContext.Provider>
     );

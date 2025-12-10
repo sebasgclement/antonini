@@ -26,11 +26,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [refreshTrigger, setRefreshTrigger] = useState(0); 
     const { showToast } = useToast(); 
     
-    // Referencias para mantener valores sin reiniciar el efecto
     const echoRef = useRef<any>(null);
     const isConnected = useRef(false);
 
-    // Función para actualizar el contador desde la DB
     const fetchInitialCounts = useCallback(async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -53,58 +51,53 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
     }, []);
 
-    // --- WEBSOCKET (Lógica blindada) ---
+    // --- 🔔 NUEVO: EFECTO PARA CAMBIAR EL TÍTULO DE LA PESTAÑA ---
     useEffect(() => {
-        // 1. Validaciones iniciales
+        // Nombre base de tu aplicación
+        const appName = "Antonini Auto";
+
+        if (pendingReservationsCount > 0) {
+            // Si hay notificaciones: "(1) 🔔 Antonini Auto"
+            document.title = `(${pendingReservationsCount}) 🔔 ${appName}`;
+        } else {
+            // Si no hay nada: "Antonini Auto"
+            document.title = appName;
+        }
+    }, [pendingReservationsCount]);
+    // -------------------------------------------------------------
+
+    // --- WEBSOCKET ---
+    useEffect(() => {
         if (loading || !isAuthenticated || !isAdmin) return;
         
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // 2. Si ya estamos conectados, NO hacemos nada (Evita el loop de desconexión)
-        if (isConnected.current) {
-            return;
-        }
+        if (isConnected.current) return;
 
         console.log("🔌 Iniciando conexión Reverb...");
-        
-        // 3. Cargar datos iniciales
         fetchInitialCounts();
 
-        // 4. Configurar Echo
         const echoInstance = setupEcho(token); 
         echoRef.current = echoInstance;
         isConnected.current = true;
 
-        // 🔥 ESPÍA GLOBAL: Esto muestra TODO lo que entra por el cable
-        echoInstance.connector.pusher.connection.bind('message', (payload: any) => {
-            console.log('📡 RAW MESSAGE RECIBIDO:', payload);
-        });
-
-        // 5. Suscripción al canal
-        const channel = echoInstance.private('admin-notifications');
-
-        channel.listen('.reserva.creada', (e: any) => {
-            console.log('🎯 Evento Detectado:', e);
+        const handleEvent = (e: any) => {
+            console.log('🔥 ¡EVENTO RECIBIDO!', e);
             
-            const data = e.reserva || e;
-            const cliente = data.clientName || 'Cliente';
+            const reserva = e.reserva || e;
+            const cliente = reserva.clientName || 'Cliente';
 
-            showToast(`⚠️ ¡Nueva Reserva de ${cliente}!`, 'warning', 8000);
+            showToast(`¡Nueva Reserva de ${cliente}!`, 'warning', 8000);
             
-            // Actualizar todo
             fetchInitialCounts();
             setRefreshTrigger(prev => prev + 1);
-        });
+        };
 
-        // Evento alternativo por si el nombre viene sin punto
-        channel.listen('reserva.creada', (e: any) => {
-             console.log('🎯 Evento (sin punto):', e);
-             fetchInitialCounts();
-             setRefreshTrigger(prev => prev + 1);
-        });
+        echoInstance.private('admin-notifications')
+            .listen('.reserva.creada', handleEvent)
+            .listen('reserva.creada', handleEvent);
 
-        // 6. Cleanup: Solo desconectamos si el componente se desmonta REALMENTE
         return () => {
             console.log("👋 Desmontando socket...");
             if (echoRef.current) {
@@ -114,9 +107,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
             }
         };
     
-    // ⚠️ ARRAY DE DEPENDENCIAS MÍNIMO: 
-    // Sacamos 'fetchInitialCounts' y 'showToast' para que no reinicien la conexión
-    }, [isAuthenticated, isAdmin, loading]); 
+    }, [isAuthenticated, isAdmin, loading, fetchInitialCounts, showToast]); 
 
     const value = {
         pendingReservationsCount,
