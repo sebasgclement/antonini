@@ -74,20 +74,14 @@ export default function PaymentModal({
       const selectedMethod = methods.find((m) => m.id.toString() === methodId);
       const methodName = selectedMethod?.name || "Desconocido";
 
-      // --- CORRECCIÓN DE ENDPOINT ---
-      // Usamos la ruta plana '/reservation-payments' y enviamos el ID en el body
       await api.post("/reservation-payments", {
-        reservation_id: reservation.id, // <--- EL ID VA AQUÍ
+        reservation_id: reservation.id, 
         amount: numAmount,
-        notes: concept || "Pago a cuenta", // Usualmente se usa 'notes' o 'description'
+        notes: concept || "Pago a cuenta", 
         payment_method_id: methodId,
       });
 
-      // Generación del PDF (Visual)
-      const reservationForPdf = {
-        ...reservation,
-        payment_method: methodName,
-      };
+      const reservationForPdf = { ...reservation, payment_method: methodName };
 
       const blob = await pdf(
         <PaymentReceipt
@@ -101,8 +95,7 @@ export default function PaymentModal({
       onSuccess();
     } catch (error: any) {
       console.error(error);
-      const msg =
-        error?.response?.data?.message || "Error al registrar el pago.";
+      const msg = error?.response?.data?.message || "Error al registrar el pago.";
       alert(`❌ ${msg}`);
     } finally {
       setLoading(false);
@@ -117,11 +110,11 @@ export default function PaymentModal({
 
   return (
     <>
-      {/* Hack CSS para las opciones del select en Dark Mode */}
+      {/* 🔥 FIX: Variables correctas para el dropdown */}
       <style>{`
-        .dark-select option {
-          background-color: var(--bg-card, #1f2937);
-          color: var(--text-color, #fff);
+        .adaptive-select option {
+          background-color: var(--color-card);
+          color: var(--color-text);
           padding: 8px;
         }
       `}</style>
@@ -131,7 +124,6 @@ export default function PaymentModal({
           className="modal-card vstack"
           onClick={(e) => e.stopPropagation()}
           style={{
-            // Estilos de Dimensiones y Scroll
             width: 450,
             maxWidth: "95%",
             maxHeight: "90vh",
@@ -139,72 +131,34 @@ export default function PaymentModal({
             flexDirection: "column",
             overflow: "hidden",
 
-            // Estilos de Dark Mode (Asegurados)
-            backgroundColor: "var(--bg-card, #1f2937)",
-            color: "var(--text-color, #f3f4f6)",
+            // 🔥 FIX: Variables CSS correctas
+            backgroundColor: "var(--color-card)",
+            color: "var(--color-text)",
+            border: "1px solid var(--color-border)",
           }}
         >
-          {/* HEADER (Fijo) */}
-          <div
-            className="hstack"
-            style={{
-              justifyContent: "space-between",
-              marginBottom: 16,
-              flexShrink: 0,
-            }}
-          >
+          {/* HEADER */}
+          <div className="hstack" style={{ justifyContent: "space-between", marginBottom: 16, flexShrink: 0 }}>
             <div>
-              <h3 style={{ margin: 0 }}>Registrar Cobro</h3>
-              <p
-                style={{
-                  margin: 0,
-                  color: "var(--color-muted, #9ca3af)",
-                  fontSize: "0.9rem",
-                }}
-              >
+              <h3 style={{ margin: 0, color: "var(--color-text)" }}>Registrar Cobro</h3>
+              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "0.9rem" }}>
                 Reserva #{reservation.id}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--text-color)",
-              }}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--color-text)" }}
             >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          {/* BODY (Con Scroll) */}
-          <div
-            style={{
-              overflowY: "auto",
-              flex: 1,
-              paddingRight: 4,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
-            <form
-              id="payment-form"
-              onSubmit={handlePayment}
-              className="vstack"
-              style={{ gap: 16 }}
-            >
+          {/* BODY */}
+          <div style={{ overflowY: "auto", flex: 1, paddingRight: 4, display: "flex", flexDirection: "column", gap: 16 }}>
+            <form id="payment-form" onSubmit={handlePayment} className="vstack" style={{ gap: 16 }}>
               <Input
                 label="Monto a cobrar ($)"
                 type="number"
@@ -217,25 +171,14 @@ export default function PaymentModal({
 
               {/* SELECTOR MEDIO DE PAGO */}
               <div className="vstack" style={{ gap: 6 }}>
-                <div
-                  className="hstack"
-                  style={{ justifyContent: "space-between" }}
-                >
-                  <label style={{ fontWeight: 500, fontSize: "0.9rem" }}>
+                <div className="hstack" style={{ justifyContent: "space-between" }}>
+                  <label style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-muted)" }}>
                     Medio de Pago *
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowCreateMethod(true)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--color-primary)",
-                      fontSize: "0.85rem",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      textDecoration: "underline",
-                    }}
+                    style={{ background: "none", border: "none", color: "var(--color-primary)", fontSize: "0.85rem", cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}
                   >
                     + Nuevo método
                   </button>
@@ -247,23 +190,16 @@ export default function PaymentModal({
                     onChange={(e) => setMethodId(e.target.value)}
                     required
                     disabled={loadingMethods}
-                    className="dark-select"
+                    className="adaptive-select"
                     style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      borderRadius: "6px",
-                      fontSize: "1rem",
-                      appearance: "none",
-                      cursor: "pointer",
-                      // Colores Adaptables
-                      border: "1px solid var(--border-color, #4b5563)",
-                      background: "var(--bg-input, #374151)",
-                      color: "var(--text-color, #f3f4f6)",
+                      width: "100%", padding: "10px 12px", borderRadius: "6px", fontSize: "1rem", appearance: "none", cursor: "pointer",
+                      // 🔥 FIX: Variables CSS correctas
+                      border: "1px solid var(--color-border)",
+                      background: "var(--input-bg)",
+                      color: "var(--color-text)",
                     }}
                   >
-                    <option value="" disabled>
-                      {loadingMethods ? "Cargando..." : "Seleccionar método..."}
-                    </option>
+                    <option value="" disabled>{loadingMethods ? "Cargando..." : "Seleccionar método..."}</option>
                     {methods.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name} {m.type === "cash" ? "(Efvo)" : ""}
@@ -271,27 +207,8 @@ export default function PaymentModal({
                     ))}
                   </select>
 
-                  {/* Flechita SVG */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 12,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      pointerEvents: "none",
-                      color: "var(--color-muted, #9ca3af)",
-                    }}
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
+                  <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--color-muted)" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
                   </div>
                 </div>
               </div>
@@ -303,32 +220,14 @@ export default function PaymentModal({
                 placeholder="Ej: Cuota 2, Cancelación total..."
               />
 
-              <div
-                style={{
-                  padding: 10,
-                  background: "var(--hover-bg)",
-                  borderRadius: 6,
-                  fontSize: "0.9rem",
-                }}
-              >
-                Saldo actual:{" "}
-                <strong>${reservation.balance?.toLocaleString("es-AR")}</strong>
+              <div style={{ padding: 10, background: "var(--hover-bg)", borderRadius: 6, fontSize: "0.9rem", color: "var(--color-text)" }}>
+                Saldo actual: <strong>${reservation.balance?.toLocaleString("es-AR")}</strong>
               </div>
             </form>
           </div>
 
-          {/* FOOTER (Fijo) */}
-          <div
-            className="hstack"
-            style={{
-              justifyContent: "flex-end",
-              gap: 10,
-              marginTop: 16,
-              flexShrink: 0,
-              borderTop: "1px solid var(--border-color)",
-              paddingTop: 16,
-            }}
-          >
+          {/* FOOTER */}
+          <div className="hstack" style={{ justifyContent: "flex-end", gap: 10, marginTop: 16, flexShrink: 0, borderTop: "1px solid var(--color-border)", paddingTop: 16 }}>
             <Button
               type="button"
               onClick={onClose}
@@ -336,8 +235,9 @@ export default function PaymentModal({
               disabled={loading}
               style={{
                 background: "transparent",
-                border: "1px solid var(--border-color, #4b5563)",
-                color: "var(--text-color, #f3f4f6)",
+                border: "1px solid var(--color-border)",
+                // 🔥 FIX: Color de texto correcto
+                color: "var(--color-text)", 
               }}
             >
               Cancelar

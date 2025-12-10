@@ -1458,3 +1458,68 @@ html, body {
 }
 
 /* ⬆️⬆️⬆️ FIN SECCIÓN BADGES ⬆️⬆️⬆️ */
+
+/* ========================================= */
+/* === FIX: MODALES Y TEMAS (Light/Dark) === */
+/* ========================================= */
+
+/* 1. Asegurar fondo y texto del contenedor del modal */
+.modal-card, 
+.modal-box {
+  background-color: var(--color-card) !important;
+  color: var(--color-text) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow);
+}
+
+/* 2. Forzar inputs/selects dentro del modal a usar el tema */
+.modal-card input,
+.modal-card select,
+.modal-card textarea,
+.modal-box input,
+.modal-box select,
+.modal-box textarea {
+  background-color: var(--input-bg) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* 3. Placeholder (Texto de ayuda) adaptable */
+.modal-card ::placeholder,
+.modal-box ::placeholder {
+  color: var(--color-muted);
+  opacity: 0.7;
+}
+
+/* 4. Arreglo específico para las opciones del <select> en Dark Mode */
+/* (Sin esto, al abrir el desplegable en Windows se ve blanco) */
+.modal-card option,
+.modal-box option {
+  background-color: var(--color-card);
+  color: var(--color-text);
+}
+
+/* 5. Títulos dentro del modal */
+.modal-card h3,
+.modal-box h3 {
+  color: var(--color-text) !important;
+}
+
+/* 6. Textos secundarios dentro del modal */
+.modal-card p,
+.modal-box p,
+.modal-card label,
+.modal-box label {
+  color: var(--color-muted);
+}
+
+/* 7. Botones de cancelar (bordes visibles en dark mode) */
+.modal-card .btn[style*="background: transparent"],
+.modal-box .btn[style*="background: transparent"] {
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+}
+.modal-card .btn[style*="background: transparent"]:hover,
+.modal-box .btn[style*="background: transparent"]:hover {
+    background-color: var(--hover-bg) !important;
+}

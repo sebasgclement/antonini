@@ -72,11 +72,11 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
 
   return (
     <>
-      {/* Estilo local para asegurar que las opciones desplegadas sean oscuras */}
+      {/* 🔥 FIX: Usamos las variables correctas (--color-card y --color-text) */}
       <style>{`
-        .dark-select option {
-          background-color: var(--bg-card, #1f2937);
-          color: var(--text-color, #fff);
+        .adaptive-select option {
+          background-color: var(--color-card);
+          color: var(--color-text);
         }
       `}</style>
 
@@ -86,17 +86,18 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
           onClick={(e) => e.stopPropagation()}
           style={{
             ...styles.card,
-            // AQUI ESTABA EL ERROR: Ahora forzamos las variables CSS
-            backgroundColor: "var(--bg-card, #1f2937)",
-            color: "var(--text-color, #f3f4f6)",
-            // Estilos de scroll
+            // 🔥 FIX: Variables correctas del tema
+            backgroundColor: "var(--color-card)", 
+            color: "var(--color-text)",
+            border: "1px solid var(--color-border)",
+            
             maxHeight: "90vh",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
           }}
         >
-          {/* HEADER (Fijo) */}
+          {/* HEADER */}
           <div
             className="hstack"
             style={{
@@ -106,51 +107,24 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
             }}
           >
             <div>
-              <h3 style={{ margin: 0, fontSize: "1.25rem" }}>
+              <h3 style={{ margin: 0, fontSize: "1.25rem", color: "var(--color-text)" }}>
                 Nuevo medio de pago
               </h3>
-              <p
-                style={{
-                  margin: 0,
-                  color: "var(--color-muted, #9ca3af)",
-                  fontSize: "0.9rem",
-                }}
-              >
+              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "0.9rem" }}>
                 Define cómo cobrarás las reservas
               </p>
             </div>
             <button onClick={onClose} style={styles.closeBtn} title="Cerrar">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          {/* BODY CON SCROLL */}
-          <div
-            style={{
-              overflowY: "auto",
-              flex: 1,
-              paddingRight: 4,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
-            <form
-              id="create-method-form"
-              onSubmit={handleSubmit}
-              className="vstack"
-              style={{ gap: 16 }}
-            >
-              {/* Nombre (Este ya se veía bien porque usa tu componente Input) */}
+          {/* BODY */}
+          <div style={{ overflowY: "auto", flex: 1, paddingRight: 4, display: "flex", flexDirection: "column", gap: 16 }}>
+            <form id="create-method-form" onSubmit={handleSubmit} className="vstack" style={{ gap: 16 }}>
+              
               <Input
                 label="Nombre del método"
                 value={name}
@@ -160,124 +134,74 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
                 autoFocus
               />
 
-              {/* Selector de Tipo (CORREGIDO PARA DARK MODE) */}
+              {/* Selector de Tipo */}
               <div className="vstack" style={{ gap: 6 }}>
-                <label style={{ fontWeight: 500, fontSize: "0.9rem" }}>
+                <label style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-muted)" }}>
                   Tipo de Método *
                 </label>
                 <div style={{ position: "relative" }}>
                   <select
                     value={type}
-                    onChange={(e) =>
-                      handleChangeType(e.currentTarget.value as MethodType)
-                    }
-                    className="dark-select"
+                    onChange={(e) => handleChangeType(e.currentTarget.value as MethodType)}
+                    className="adaptive-select"
                     style={{
                       ...styles.select,
-                      // Sobrescribimos colores hardcodeados
-                      backgroundColor: "var(--bg-input, #374151)",
-                      color: "var(--text-color, #f3f4f6)",
-                      borderColor: "var(--border-color, #4b5563)",
+                      // 🔥 FIX: Variables correctas
+                      backgroundColor: "var(--input-bg)",
+                      color: "var(--color-text)",
+                      borderColor: "var(--color-border)",
                     }}
                     required
                   >
-                    <option value="" disabled>
-                      Seleccionar tipo...
-                    </option>
+                    <option value="" disabled>Seleccionar tipo...</option>
                     {Object.entries(METHOD_OPTIONS).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
+                      <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
 
-                  {/* Flechita SVG */}
-                  <div
-                    style={{
-                      ...styles.selectArrow,
-                      color: "var(--text-color, #9ca3af)", // Adaptable
-                    }}
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
+                  <div style={{ ...styles.selectArrow, color: "var(--color-text)" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M6 9l6 6 6-6" />
                     </svg>
                   </div>
                 </div>
               </div>
 
-              {/* Checkbox (CORREGIDO PARA DARK MODE) */}
+              {/* Checkbox */}
               <div
                 className="hstack"
+                onClick={() => setRequiresDetails(!requiresDetails)}
                 style={{
                   gap: 10,
                   padding: 12,
-                  // Fondo y borde adaptables
-                  backgroundColor: "var(--bg-input, #374151)",
-                  border: "1px solid var(--border-color, #4b5563)",
+                  // 🔥 FIX: Variables correctas
+                  backgroundColor: "var(--input-bg)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: 6,
                   cursor: "pointer",
                 }}
-                onClick={() => setRequiresDetails(!requiresDetails)}
               >
                 <input
                   type="checkbox"
                   checked={requiresDetails}
                   onChange={(e) => setRequiresDetails(e.target.checked)}
-                  style={{
-                    accentColor: "var(--color-primary)",
-                    width: 16,
-                    height: 16,
-                    cursor: "pointer",
-                  }}
+                  style={{ accentColor: "var(--color-primary)", width: 16, height: 16, cursor: "pointer" }}
                 />
                 <div className="vstack" style={{ gap: 2 }}>
-                  <span style={{ fontWeight: 500, fontSize: "0.9rem" }}>
+                  <span style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-text)" }}>
                     Requiere datos adicionales
                   </span>
-                  <span
-                    style={{
-                      fontSize: "0.8rem",
-                      color: "var(--color-muted, #9ca3af)",
-                    }}
-                  >
+                  <span style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}>
                     Marcar si al cobrar necesitas pedir CBU, N° Cheque, etc.
                   </span>
                 </div>
               </div>
 
-              {/* Mensaje de Error */}
+              {/* Error */}
               {error && (
-                <div
-                  style={{
-                    padding: 10,
-                    backgroundColor: "rgba(239, 68, 68, 0.15)", // Rojo con transparencia
-                    color: "#f87171", // Rojo claro
-                    border: "1px solid rgba(239, 68, 68, 0.2)",
-                    borderRadius: 6,
-                    fontSize: "0.9rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                <div style={{ padding: 10, backgroundColor: "rgba(239, 68, 68, 0.15)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: 6, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                   {error}
                 </div>
@@ -285,18 +209,8 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
             </form>
           </div>
 
-          {/* FOOTER (Fijo) */}
-          <div
-            className="hstack"
-            style={{
-              justifyContent: "flex-end",
-              gap: 10,
-              marginTop: 16,
-              paddingTop: 16,
-              borderTop: "1px solid var(--border-color, #374151)",
-              flexShrink: 0,
-            }}
-          >
+          {/* FOOTER */}
+          <div className="hstack" style={{ justifyContent: "flex-end", gap: 10, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--color-border)", flexShrink: 0 }}>
             <Button
               type="button"
               onClick={onClose}
@@ -304,8 +218,9 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
               disabled={loading}
               style={{
                 background: "transparent",
-                border: "1px solid var(--border-color, #4b5563)",
-                color: "var(--text-color, #f3f4f6)",
+                border: "1px solid var(--color-border)",
+                // 🔥 FIX: Color de texto correcto (se verá oscuro en light mode)
+                color: "var(--color-text)", 
               }}
             >
               Cancelar
@@ -320,19 +235,13 @@ export default function PaymentMethodModal({ onClose, onCreated }: Props) {
   );
 }
 
-// === ESTILOS ESTRUCTURALES (SIN COLORES FIJOS) ===
 const styles = {
   overlay: {
     position: "fixed" as "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.6)", // Un poco más oscuro
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
     backdropFilter: "blur(4px)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    display: "flex", alignItems: "center", justifyContent: "center",
     zIndex: 9999,
   },
   card: {
@@ -341,18 +250,15 @@ const styles = {
     width: 450,
     maxWidth: "95%",
     boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
-    // NOTA: Borré 'background: white' de aquí
   },
   closeBtn: {
     background: "none",
     border: "none",
     cursor: "pointer",
     padding: 4,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    display: "flex", alignItems: "center", justifyContent: "center",
     borderRadius: "50%",
-    color: "var(--text-color, white)", // Color adaptable
+    color: "var(--color-muted)",
   },
   select: {
     width: "100%",
@@ -363,7 +269,6 @@ const styles = {
     cursor: "pointer",
     borderWidth: "1px",
     borderStyle: "solid",
-    // NOTA: Borré 'background' y 'border' fijos de aquí
   },
   selectArrow: {
     position: "absolute" as "absolute",
