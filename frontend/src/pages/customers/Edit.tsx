@@ -13,7 +13,10 @@ export default function CustomerEdit() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
   
-  // Estado del cliente (inicializamos con parcial para no romper)
+  // 🔹 ESTADO NUEVO: Controla si es Consulta o Cliente Completo
+  const [customerType, setCustomerType] = useState<'consulta' | 'completo'>('consulta')
+
+  // Estado del cliente
   const [c, setC] = useState<Partial<Customer>>({})
 
   // Fotos
@@ -22,7 +25,7 @@ export default function CustomerEdit() {
   const [previewFront, setPreviewFront] = useState<string | null>(null)
   const [previewBack, setPreviewBack] = useState<string | null>(null)
 
-  // Flags para borrar foto en backend
+  // Flags para borrar foto
   const [deleteFront, setDeleteFront] = useState(false)
   const [deleteBack, setDeleteBack] = useState(false)
 
@@ -33,7 +36,16 @@ export default function CustomerEdit() {
         const cliente = data?.data ?? data ?? {}
         setC(cliente)
 
-        // Previews iniciales (si existen en BD)
+        // 🔹 LÓGICA DE DETECCIÓN: 
+        // Si ya tiene DNI cargado, asumimos que es un "Cliente Completo".
+        // Si no tiene DNI, lo tratamos como "Consulta".
+        if (cliente.doc_number && cliente.doc_number.length > 0) {
+            setCustomerType('completo')
+        } else {
+            setCustomerType('consulta')
+        }
+
+        // Previews iniciales
         if (cliente.dni_front_url) setPreviewFront(cliente.dni_front_url)
         if (cliente.dni_back_url) setPreviewBack(cliente.dni_back_url)
       } catch (e: any) {
@@ -52,7 +64,7 @@ export default function CustomerEdit() {
     if (side === 'front') {
       setDniFront(file)
       setPreviewFront(url)
-      setDeleteFront(false) // Si subo nueva, no necesito flag de borrar, la nueva pisa
+      setDeleteFront(false) 
     } else {
       setDniBack(file)
       setPreviewBack(url)
@@ -64,7 +76,7 @@ export default function CustomerEdit() {
     if (side === 'front') {
       setDniFront(null)
       setPreviewFront(null)
-      setDeleteFront(true) // Marcar para borrar en BD
+      setDeleteFront(true)
     } else {
       setDniBack(null)
       setPreviewBack(null)
@@ -78,29 +90,32 @@ export default function CustomerEdit() {
 
     try {
       const form = new FormData()
+      // Datos Base
       form.append('first_name', c.first_name || '')
       form.append('last_name', c.last_name || '')
-      form.append('doc_type', c.doc_type || 'DNI')
-      form.append('doc_number', c.doc_number || '')
-      
-      if (c.cuit) form.append('cuit', c.cuit)
-      if (c.marital_status) form.append('marital_status', c.marital_status)
-      
       if (c.email) form.append('email', c.email)
       if (c.phone) form.append('phone', c.phone)
       if (c.alt_phone) form.append('alt_phone', c.alt_phone)
-      
-      if (c.address) form.append('address', c.address)
-      if (c.city) form.append('city', c.city)
       if (c.notes) form.append('notes', c.notes)
 
-      // Fotos nuevas
-      if (dniFront) form.append('dni_front', dniFront)
-      if (dniBack) form.append('dni_back', dniBack)
+      // 🔹 CONDICIONAL: Solo enviamos datos legales si es COMPLETO
+      if (customerType === 'completo') {
+        form.append('doc_type', c.doc_type || 'DNI')
+        form.append('doc_number', c.doc_number || '') // Validado por el 'required' del input
+        
+        if (c.cuit) form.append('cuit', c.cuit)
+        if (c.marital_status) form.append('marital_status', c.marital_status)
+        if (c.address) form.append('address', c.address)
+        if (c.city) form.append('city', c.city)
 
-      // Eliminar imágenes existentes si se marcó y NO se subió una nueva
-      if (deleteFront && !dniFront) form.append('delete_dni_front', '1')
-      if (deleteBack && !dniBack) form.append('delete_dni_back', '1')
+        // Fotos nuevas
+        if (dniFront) form.append('dni_front', dniFront)
+        if (dniBack) form.append('dni_back', dniBack)
+
+        // Eliminar imágenes
+        if (deleteFront && !dniFront) form.append('delete_dni_front', '1')
+        if (deleteBack && !dniBack) form.append('delete_dni_back', '1')
+      }
 
       await api.post(`/customers/${id}?_method=PUT`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -130,6 +145,29 @@ export default function CustomerEdit() {
 
       <form onSubmit={onSubmit} className="vstack" style={{ gap: 24 }}>
         
+        {/* 🟢 SECCIÓN DE TIPO (NUEVO) */}
+        <div className="card">
+            <div className="title" style={{marginBottom: 16, fontSize: '1rem'}}>Estado del Registro</div>
+            
+            <div className="selection-grid">
+                <div 
+                    className={`selection-card ${customerType === 'consulta' ? 'selected' : ''}`}
+                    onClick={() => setCustomerType('consulta')}
+                >
+                    <div className="selection-title">📝 Consulta / Lead</div>
+                    <div className="selection-subtitle">Solo contacto</div>
+                </div>
+
+                <div 
+                    className={`selection-card ${customerType === 'completo' ? 'selected' : ''}`}
+                    onClick={() => setCustomerType('completo')}
+                >
+                    <div className="selection-title">🪪 Cliente Confirmado</div>
+                    <div className="selection-subtitle">Datos legales completos</div>
+                </div>
+            </div>
+        </div>
+
         {/* === TARJETA 1: IDENTIDAD === */}
         <div className="card vstack" style={{ gap: 16 }}>
             <div className="title" style={{fontSize: '1.1rem', margin: 0}}>Identidad</div>
@@ -139,42 +177,52 @@ export default function CustomerEdit() {
                 <Input label="Apellido *" value={c.last_name || ''} onChange={e => setC({ ...c, last_name: e.currentTarget.value })} required />
             </div>
 
-            <div className="form-row">
-                <div className="form-group" style={{ flex: 0.5 }}>
-                    <label>Tipo Doc</label>
-                    <select className="form-control" value={c.doc_type || 'DNI'} onChange={e => setC({ ...c, doc_type: e.currentTarget.value })}>
-                        <option value="DNI">DNI</option>
-                        <option value="CUIT">CUIT</option>
-                        <option value="Pasaporte">Pasaporte</option>
-                    </select>
-                </div>
-                <Input label="Número de Documento *" value={c.doc_number || ''} onChange={e => setC({ ...c, doc_number: e.currentTarget.value })} required />
-                <Input label="CUIT / CUIL" value={c.cuit || ''} onChange={e => setC({ ...c, cuit: e.currentTarget.value })} />
-            </div>
+            {/* 🔹 SOLO SI ES COMPLETO */}
+            {customerType === 'completo' && (
+                <>
+                    <div className="form-row">
+                        <div className="form-group" style={{ flex: 0.5 }}>
+                            <label>Tipo Doc</label>
+                            <select className="form-control" value={c.doc_type || 'DNI'} onChange={e => setC({ ...c, doc_type: e.currentTarget.value })}>
+                                <option value="DNI">DNI</option>
+                                <option value="CUIT">CUIT</option>
+                                <option value="Pasaporte">Pasaporte</option>
+                            </select>
+                        </div>
+                        {/* 'required' solo si es completo */}
+                        <Input 
+                            label="Número de Documento *" 
+                            value={c.doc_number || ''} 
+                            onChange={e => setC({ ...c, doc_number: e.currentTarget.value })} 
+                            required={customerType === 'completo'} 
+                        />
+                        <Input label="CUIT / CUIL" value={c.cuit || ''} onChange={e => setC({ ...c, cuit: e.currentTarget.value })} />
+                    </div>
 
-            {/* Estado Civil */}
-            <div className="form-group">
-                <label>Estado Civil</label>
-                <div className="hstack" style={{ gap: 16 }}>
-                    {['soltero', 'casado', 'otro'].map((status) => (
-                        <label key={status} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', textTransform: 'capitalize'}}>
-                            <input 
-                                type="radio" 
-                                name="marital" 
-                                value={status} 
-                                checked={c.marital_status === status} 
-                                onChange={() => setC({ ...c, marital_status: status })} 
-                            />
-                            {status}
-                        </label>
-                    ))}
-                </div>
-            </div>
+                    <div className="form-group">
+                        <label>Estado Civil</label>
+                        <div className="hstack" style={{ gap: 16 }}>
+                            {['soltero', 'casado', 'otro'].map((status) => (
+                                <label key={status} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', textTransform: 'capitalize'}}>
+                                    <input 
+                                        type="radio" 
+                                        name="marital" 
+                                        value={status} 
+                                        checked={c.marital_status === status} 
+                                        onChange={() => setC({ ...c, marital_status: status })} 
+                                    />
+                                    {status}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
 
         {/* === TARJETA 2: CONTACTO Y UBICACIÓN === */}
         <div className="card vstack" style={{ gap: 16 }}>
-            <div className="title" style={{fontSize: '1.1rem', margin: 0}}>Contacto y Ubicación</div>
+            <div className="title" style={{fontSize: '1.1rem', margin: 0}}>Contacto</div>
             
             <div className="form-row">
                 <Input label="Teléfono Principal *" value={c.phone || ''} onChange={e => setC({ ...c, phone: e.currentTarget.value })} required />
@@ -183,74 +231,79 @@ export default function CustomerEdit() {
 
             <Input label="Email" type="email" value={c.email || ''} onChange={e => setC({ ...c, email: e.currentTarget.value })} />
 
-            <div className="form-row">
-                <Input label="Dirección / Calle" value={c.address || ''} onChange={e => setC({ ...c, address: e.currentTarget.value })} style={{flex: 2}} />
-                <Input label="Ciudad / Localidad" value={c.city || ''} onChange={e => setC({ ...c, city: e.currentTarget.value })} style={{flex: 1}} />
-            </div>
+            {/* Dirección: Solo visible en completo (opcional según tu gusto) */}
+            {customerType === 'completo' && (
+                <div className="form-row">
+                    <Input label="Dirección / Calle" value={c.address || ''} onChange={e => setC({ ...c, address: e.currentTarget.value })} style={{flex: 2}} />
+                    <Input label="Ciudad / Localidad" value={c.city || ''} onChange={e => setC({ ...c, city: e.currentTarget.value })} style={{flex: 1}} />
+                </div>
+            )}
         </div>
 
-        {/* === TARJETA 3: DOCUMENTACIÓN === */}
-        <div className="card vstack" style={{ gap: 16 }}>
-            <div className="title" style={{fontSize: '1.1rem', margin: 0}}>Documentación</div>
-            
-            <div className="hstack" style={{ gap: 16, flexWrap: 'wrap' }}>
-                {/* FRENTE */}
-                <div className="form-group" style={{ flex: 1, minWidth: 200 }}>
-                    <label>Frente del DNI</label>
-                    <input type="file" accept="image/*" onChange={e => handleFileChange(e, 'front')} className="form-control" style={{padding: 8}} />
-                    
-                    {previewFront ? (
-                        <div style={{ position: 'relative', marginTop: 10 }}>
-                            <img src={previewFront} alt="Preview" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--color-border)' }} />
-                            <button
-                                type="button"
-                                onClick={() => handleDeleteImage('front')}
-                                title="Eliminar foto"
-                                style={{
-                                    position: 'absolute', top: 8, right: 8,
-                                    background: 'rgba(239,68,68,0.9)', color: '#fff',
-                                    border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer'
-                                }}
-                            >
-                                🗑
-                            </button>
-                        </div>
-                    ) : (
-                        <div style={{marginTop: 10, padding: 20, border: '2px dashed var(--color-border)', borderRadius: 8, textAlign: 'center', color: 'var(--color-muted)'}}>
-                            Sin imagen
-                        </div>
-                    )}
-                </div>
+        {/* === TARJETA 3: DOCUMENTACIÓN (SOLO COMPLETO) === */}
+        {customerType === 'completo' && (
+            <div className="card vstack" style={{ gap: 16 }}>
+                <div className="title" style={{fontSize: '1.1rem', margin: 0}}>Documentación</div>
+                
+                <div className="hstack" style={{ gap: 16, flexWrap: 'wrap' }}>
+                    {/* FRENTE */}
+                    <div className="form-group" style={{ flex: 1, minWidth: 200 }}>
+                        <label>Frente del DNI</label>
+                        <input type="file" accept="image/*" onChange={e => handleFileChange(e, 'front')} className="form-control" style={{padding: 8}} />
+                        
+                        {previewFront ? (
+                            <div style={{ position: 'relative', marginTop: 10 }}>
+                                <img src={previewFront} alt="Preview" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--color-border)' }} />
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteImage('front')}
+                                    title="Eliminar foto"
+                                    style={{
+                                        position: 'absolute', top: 8, right: 8,
+                                        background: 'rgba(239,68,68,0.9)', color: '#fff',
+                                        border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer'
+                                    }}
+                                >
+                                    🗑
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{marginTop: 10, padding: 20, border: '2px dashed var(--color-border)', borderRadius: 8, textAlign: 'center', color: 'var(--color-muted)'}}>
+                                Sin imagen
+                            </div>
+                        )}
+                    </div>
 
-                {/* DORSO */}
-                <div className="form-group" style={{ flex: 1, minWidth: 200 }}>
-                    <label>Dorso del DNI</label>
-                    <input type="file" accept="image/*" onChange={e => handleFileChange(e, 'back')} className="form-control" style={{padding: 8}} />
-                    
-                    {previewBack ? (
-                        <div style={{ position: 'relative', marginTop: 10 }}>
-                            <img src={previewBack} alt="Preview" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--color-border)' }} />
-                            <button
-                                type="button"
-                                onClick={() => handleDeleteImage('back')}
-                                title="Eliminar foto"
-                                style={{
-                                    position: 'absolute', top: 8, right: 8,
-                                    background: 'rgba(239,68,68,0.9)', color: '#fff',
-                                    border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer'
-                                }}
-                            >
-                                🗑
-                            </button>
-                        </div>
-                    ) : (
-                        <div style={{marginTop: 10, padding: 20, border: '2px dashed var(--color-border)', borderRadius: 8, textAlign: 'center', color: 'var(--color-muted)'}}>
-                            Sin imagen
-                        </div>
-                    )}
+                    {/* DORSO */}
+                    <div className="form-group" style={{ flex: 1, minWidth: 200 }}>
+                        <label>Dorso del DNI</label>
+                        <input type="file" accept="image/*" onChange={e => handleFileChange(e, 'back')} className="form-control" style={{padding: 8}} />
+                        
+                        {previewBack ? (
+                            <div style={{ position: 'relative', marginTop: 10 }}>
+                                <img src={previewBack} alt="Preview" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--color-border)' }} />
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteImage('back')}
+                                    title="Eliminar foto"
+                                    style={{
+                                        position: 'absolute', top: 8, right: 8,
+                                        background: 'rgba(239,68,68,0.9)', color: '#fff',
+                                        border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer'
+                                    }}
+                                >
+                                    🗑
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{marginTop: 10, padding: 20, border: '2px dashed var(--color-border)', borderRadius: 8, textAlign: 'center', color: 'var(--color-muted)'}}>
+                                Sin imagen
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
+        )}
 
         {/* === TARJETA 4: NOTAS === */}
         <div className="card vstack" style={{ gap: 16 }}>
@@ -265,7 +318,9 @@ export default function CustomerEdit() {
         </div>
 
         <div className="hstack" style={{ justifyContent: 'flex-end' }}>
-            <Button type="submit" loading={saving}>Guardar Cambios</Button>
+            <Button type="submit" loading={saving}>
+                Guardar Cambios
+            </Button>
         </div>
 
       </form>

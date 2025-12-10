@@ -46,6 +46,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ CLIENTES
     Route::apiResource('customers', CustomerController::class);
+    Route::post('/customers/{id}/events', [CustomerController::class, 'storeEvent']);
+    Route::get('/customers/{id}/events', [CustomerController::class, 'getEvents']);
 
     // ✅ VEHÍCULOS
     Route::apiResource('vehicles', VehicleController::class);

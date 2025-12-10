@@ -6,6 +6,7 @@ import Toast from '../../components/ui/Toast'
 import Confirm from '../../components/ui/Confirm'
 import Pagination from '../../components/ui/Pagination'
 import { displayCustomerName, type Customer } from '../../types/customer'
+import CustomerEventsModal from '../../components/modals/CustomerEventsModal' // Asegurate que la ruta sea correcta
 
 export default function CustomersList() {
   const nav = useNavigate()
@@ -24,6 +25,10 @@ export default function CustomersList() {
 
   const [toast, setToast] = useState('')
   const [toDelete, setToDelete] = useState<Customer | null>(null)
+  
+  // 🔹 Estado para el Modal de Agenda
+  const [agendaCustomer, setAgendaCustomer] = useState<Customer | null>(null)
+
   const rows = useMemo(() => items, [items])
 
   const onDelete = async () => {
@@ -94,7 +99,6 @@ export default function CustomersList() {
                         <div style={{fontWeight: 600, color: 'var(--color-text)', fontSize: '1rem'}}>
                             {displayCustomerName(c)}
                         </div>
-                        {/* Si tiene condición fiscal o algo extra, iría acá */}
                     </td>
 
                     {/* Documento */}
@@ -128,6 +132,16 @@ export default function CustomersList() {
                     <td style={{ textAlign: 'right' }}>
                       <div className="hstack" style={{ justifyContent: 'flex-end', gap: 4 }}>
                         
+                        {/* 🆕 BOTÓN AGENDA */}
+                        <button
+                            className="action-btn"
+                            title="Agenda / Eventos"
+                            style={{ color: '#eab308' }} // Color dorado
+                            onClick={() => setAgendaCustomer(c)}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        </button>
+
                         <button
                           className="action-btn"
                           title="Ver detalles"
@@ -171,6 +185,7 @@ export default function CustomersList() {
         />
       )}
 
+      {/* CONFIRMACIÓN DE BORRADO */}
       <Confirm
         open={!!toDelete}
         title="Eliminar cliente"
@@ -184,6 +199,15 @@ export default function CustomersList() {
         onCancel={() => setToDelete(null)}
         onConfirm={onDelete}
       />
+
+      {/* 🆕 MODAL DE AGENDA */}
+      {agendaCustomer && (
+        <CustomerEventsModal
+            customer={agendaCustomer}
+            onClose={() => setAgendaCustomer(null)}
+        />
+      )}
+
     </div>
   )
 }
