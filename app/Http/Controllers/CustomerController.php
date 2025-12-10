@@ -110,6 +110,22 @@ class CustomerController extends Controller
         return response()->json(['ok' => true, 'data' => $customer]);
     }
 
+       // Guardar evento
+    public function storeEvent(Request $request, $customerId)
+{
+    $data = $request->validate([
+        'type' => 'required|string',
+        'description' => 'nullable|string',
+        'date' => 'required|date',
+    ]);
+
+    $data['customer_id'] = $customerId;
+    
+    $event = CustomerEvent::create($data);
+
+    return response()->json(['message' => 'Evento guardado', 'data' => $event]);
+}
+
 
     // DELETE /api/customers/{id}
     public function destroy(Customer $customer)

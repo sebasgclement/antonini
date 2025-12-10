@@ -23,6 +23,11 @@ class Customer extends Model
         'dni_back'
     ];
 
+    public function events()
+    {
+        return $this->hasMany(CustomerEvent::class)->orderBy('date', 'desc');
+    }
+
     // Relaciones
     public function reservations()
     {
