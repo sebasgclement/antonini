@@ -140,29 +140,30 @@ header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px; /* Un poco más de aire */
+  padding: 10px 12px;
   border-radius: 8px;
-  color: var(--color-muted); /* Por defecto grisaceo */
+  color: var(--color-muted);
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
-  margin-bottom: 4px; /* Separación entre items */
-  border-left: 3px solid transparent; /* Preparado para borde activo */
+  margin-bottom: 4px;
+  border-left: 3px solid transparent;
+  position: relative; /* Necesario para elementos absolutos si los hubiera */
 }
 
 /* Hover suave */
 .nav-link:hover {
   background: var(--hover-bg);
   color: var(--color-text);
-  transform: translateX(4px); /* Pequeño movimiento a la derecha */
+  transform: translateX(4px);
 }
 
-/* Estado ACTIVO (La magia) */
+/* Estado ACTIVO */
 .nav-link.active {
-  background: rgba(30, 167, 255, 0.1); /* Azul muy suave transparente */
+  background: rgba(30, 167, 255, 0.1);
   color: var(--color-primary);
   font-weight: 600;
-  border-left-color: var(--color-primary); /* Borde indicador a la izquierda */
+  border-left-color: var(--color-primary);
 }
 
 /* Íconos SVG dentro del link */
@@ -172,12 +173,53 @@ header {
   stroke-width: 2px;
   opacity: 0.8;
   transition: opacity 0.2s;
+  flex-shrink: 0; /* Evita que el ícono se aplaste si hay poco espacio */
 }
 
 .nav-link.active svg {
   opacity: 1;
   stroke: var(--color-primary);
 }
+
+/* ⬇️⬇️⬇️ SECCIÓN NUEVA: BADGES DE NOTIFICACIÓN ⬇️⬇️⬇️ */
+
+/* Esto soluciona que el badge no rompa el layout */
+.nav-link-badge-container {
+  display: flex;
+  justify-content: space-between; /* Empuja el badge al final */
+  align-items: center;
+  padding-right: 8px; /* Un poco de aire a la derecha */
+}
+
+.nav-badge {
+  background-color: var(--color-danger);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 99px; /* Forma de píldora */
+  padding: 2px 8px;
+  min-width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  
+  /* La clave para que se vaya a la derecha en el flex */
+  margin-left: auto; 
+  
+  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
+  animation: pulse-badge 2s infinite;
+}
+
+/* Animación de latido para llamar la atención */
+@keyframes pulse-badge {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+/* ⬆️⬆️⬆️ FIN SECCIÓN BADGES ⬆️⬆️⬆️ */
+
 
 /* Separador de secciones */
 .sidebar-separator {
@@ -491,22 +533,17 @@ label {
 }
 
 /* ======== FIX DEFINITIVO DEL ASIDE ======== */
-
-/* 🔹 Estado inicial */
 .sidebar {
   transition: transform 0.3s ease-in-out !important;
 }
 .sidebar-backdrop {
   display: none;
 }
-
-/* 🔹 MOBILE: sidebar deslizable */
 @media (max-width: 900px) {
   .layout-grid {
     grid-template-columns: 1fr;
     padding: 0;
   }
-
   .sidebar {
     position: fixed;
     top: 0;
@@ -518,11 +555,9 @@ label {
     border-right: 1px solid var(--color-border);
     transform: translateX(-100%);
   }
-
   .sidebar.open {
     transform: translateX(0);
   }
-
   .sidebar-backdrop {
     display: block;
     position: fixed;
@@ -530,7 +565,6 @@ label {
     background: rgba(0, 0, 0, 0.5);
     z-index: 999;
   }
-
   .menu-toggle {
     display: inline-flex !important;
     align-items: center;
@@ -543,44 +577,35 @@ label {
     cursor: pointer;
     font-size: 1.2rem;
   }
-
   body.sidebar-open {
     overflow: hidden;
   }
 }
-
-/* 🔹 DESKTOP: sidebar fija, sin overlay ni toggle */
 @media (min-width: 901px) {
   .menu-toggle {
     display: none !important;
   }
-
   .sidebar {
     position: relative !important;
     transform: none !important;
     box-shadow: none !important;
     z-index: auto !important;
   }
-
   .sidebar-backdrop {
     display: none !important;
   }
-
   body.sidebar-open {
     overflow: auto !important;
   }
 }
 
 /* ===== FIX: Sidebar responsive ===== */
-
 .sidebar-inner {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   height: 100%;
 }
-
-/* 🔹 Botón "X" — solo visible en móvil */
 .sidebar-close {
   display: none;
   align-self: flex-end;
@@ -591,59 +616,46 @@ label {
   margin-bottom: 10px;
   cursor: pointer;
 }
-
-/* 🔹 Footer (usuario y botones) */
 .sidebar-footer {
   margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
 .sidebar-user {
   color: var(--color-muted);
   font-size: 0.9rem;
   text-align: center;
 }
-
-/* ===== MOBILE ===== */
 @media (max-width: 900px) {
   .sidebar-close {
     display: inline-block;
   }
-
   .sidebar-footer {
     display: flex;
   }
 }
-
-/* ===== DESKTOP ===== */
 @media (min-width: 901px) {
   .sidebar-close {
     display: none !important;
   }
-
   .sidebar-footer {
     display: none !important;
   }
 }
 
 /* ======= Detail & Form Views ======= */
-
 .container.detail-page {
   display: flex;
   flex-direction: column;
   gap: 24px;
   padding: 16px;
 }
-
-/* Título principal */
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-
 .page-title {
   font-size: 1.6rem;
   font-weight: 700;
@@ -652,8 +664,6 @@ label {
   align-items: center;
   gap: 8px;
 }
-
-/* Estado del vehículo */
 .status-badge {
   font-size: 0.85rem;
   text-transform: capitalize;
@@ -672,8 +682,6 @@ label {
 .status-badge.reservado {
   background: #eab308;
 }
-
-/* Tarjetas de detalle */
 .detail-card {
   background: var(--color-card);
   border: 1px solid var(--color-border);
@@ -684,47 +692,35 @@ label {
   flex-direction: column;
   gap: 8px;
 }
-
-/* Títulos dentro de las tarjetas */
 .detail-section-title {
   font-weight: 600;
   color: var(--color-muted);
   margin-bottom: 6px;
   font-size: 1rem;
 }
-
-/* Grupos de información */
 .detail-group p {
   margin-bottom: 4px;
   font-size: 0.95rem;
 }
-
 .detail-group strong {
   color: var(--color-text);
   font-weight: 600;
 }
-
-/* Texto aclaratorio */
 .text-muted {
   color: var(--color-muted);
   font-style: italic;
 }
-
-/* Checklist */
 .checklist p {
   display: flex;
   align-items: center;
   gap: 4px;
 }
-
-/* Galería de fotos */
 .photo-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
   margin-top: 8px;
 }
-
 .photo-item {
   text-align: center;
   background: var(--color-bg);
@@ -733,22 +729,17 @@ label {
   padding: 10px;
   box-shadow: var(--shadow);
 }
-
 .photo-item img {
   width: 100%;
   height: auto;
   border-radius: 8px;
   object-fit: cover;
 }
-
-/* Botón volver */
 .detail-actions {
   display: flex;
   justify-content: flex-end;
   padding-top: 8px;
 }
-
-/* Responsivo */
 @media (max-width: 768px) {
   .container.detail-page {
     padding: 10px;
@@ -763,15 +754,11 @@ label {
 }
 
 /* ======= DASHBOARD DE REPORTES ======= */
-
-/* Contenedor principal */
 .vstack > .title {
   font-size: 1.6rem;
   font-weight: 700;
   color: var(--color-text);
 }
-
-/* ==== Filtros ==== */
 .report-card {
   background: var(--color-card);
   border: 1px solid var(--color-border);
@@ -782,39 +769,31 @@ label {
   flex-direction: column;
   gap: 20px;
 }
-
 .report-filters {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
 }
-
 .report-filters .field {
   display: flex;
   flex-direction: column;
 }
-
 .report-filters label {
   font-size: 0.9rem;
   color: var(--color-muted);
   margin-bottom: 6px;
 }
-
-/* Acciones */
 .report-actions {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
 }
-
-/* ==== Widgets resumen ==== */
 .dashboard-widgets {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
-
 .widget {
   background: var(--color-card);
   border: 1px solid var(--color-border);
@@ -827,24 +806,19 @@ label {
   text-align: center;
   transition: transform 0.2s ease, box-shadow 0.3s ease;
 }
-
 .widget:hover {
   transform: translateY(-3px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
 }
-
 .widget-title {
   color: var(--color-muted);
   font-size: 0.9rem;
 }
-
 .widget-value {
   font-size: 1.4rem;
   font-weight: 700;
   color: var(--color-text);
 }
-
-/* ==== Tablas ==== */
 .report-section {
   background: var(--color-card);
   border: 1px solid var(--color-border);
@@ -855,7 +829,6 @@ label {
   flex-direction: column;
   gap: 10px;
 }
-
 .report-section h3 {
   font-size: 1.1rem;
   font-weight: 600;
@@ -865,14 +838,12 @@ label {
   align-items: center;
   gap: 6px;
 }
-
 .report-table {
   width: 100%;
   border-collapse: collapse;
   border-radius: 8px;
   overflow: hidden;
 }
-
 .report-table th {
   text-align: left;
   font-size: 0.9rem;
@@ -881,24 +852,19 @@ label {
   border-bottom: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.03);
 }
-
 .report-table td {
   padding: 10px;
   border-top: 1px solid var(--color-border);
 }
-
 .report-table tr:hover td {
   background: var(--hover-bg);
 }
-
 .report-table-empty {
   text-align: center;
   color: var(--color-muted);
   font-style: italic;
   padding: 12px;
 }
-
-/* ==== Estados visuales ==== */
 .text-success {
   color: #22c55e;
 }
@@ -908,8 +874,6 @@ label {
 .text-muted {
   color: var(--color-muted);
 }
-
-/* ==== Responsividad ==== */
 @media (max-width: 768px) {
   .report-filters {
     grid-template-columns: 1fr;
@@ -926,8 +890,6 @@ label {
 }
 
 /* ==== Generales ==== */
-
-/* === ENLACES UNIFICADOS === */
 .enlace {
   display: inline-block;
   color: var(--color-primary);
@@ -938,18 +900,14 @@ label {
   transition: color 0.2s, background 0.2s, transform 0.1s;
   cursor: pointer;
 }
-
 .enlace:hover {
   background: var(--hover-bg);
   color: var(--color-primary-600);
   transform: translateY(-1px);
 }
-
 .enlace:active {
   transform: translateY(0);
 }
-
-/* 🔹 Versión para tema claro */
 :root[data-theme="light"] .enlace {
   color: var(--color-primary);
 }
@@ -957,16 +915,10 @@ label {
   background: rgba(0, 0, 0, 0.04);
   color: var(--color-primary-600);
 }
-
-/* 🔸 Enlaces dentro de títulos o encabezados */
 .title .enlace {
   font-size: 0.95rem;
   margin-left: 10px;
 }
-
-/* === ESPACIADOS GENERALES === */
-
-/* Añade aire vertical entre secciones, tarjetas y formularios */
 section,
 .card,
 .report-card,
@@ -978,16 +930,12 @@ form,
   margin-top: 20px;
   margin-bottom: 20px;
 }
-
-/* Reduce el exceso dentro de contenedores estrechos */
 .container > *:first-child {
   margin-top: 0 !important;
 }
 .container > *:last-child {
   margin-bottom: 0 !important;
 }
-
-/* Espaciado más equilibrado dentro de los stacks */
 .vstack {
   display: flex;
   flex-direction: column;
@@ -1000,9 +948,6 @@ form,
   gap: 16px;
   flex-wrap: wrap;
 }
-
-/* === TÍTULOS DE FORMULARIOS Y SECCIONES === */
-
 .title {
   position: relative;
   font-size: 1.4rem;
@@ -1012,8 +957,6 @@ form,
   line-height: 1.3;
   letter-spacing: 0.3px;
 }
-
-/* Pequeña barra decorativa a la izquierda */
 .title::before {
   content: "";
   position: absolute;
@@ -1026,8 +969,6 @@ form,
   background: var(--color-primary);
   opacity: 0.8;
 }
-
-/* Cuando está dentro de una card o formulario */
 .card .title,
 form .title,
 .detail-card .title {
@@ -1038,8 +979,6 @@ form .title,
   font-size: 1.2rem;
   font-weight: 600;
 }
-
-/* Subtítulos o títulos secundarios */
 .subtitle {
   font-size: 1rem;
   font-weight: 500;
@@ -1047,22 +986,17 @@ form .title,
   margin-top: 8px;
   margin-bottom: 8px;
 }
-
-/* === Aire adicional entre secciones de formulario === */
 form > .card,
 form > .vstack,
 form > .detail-card {
   margin-top: 20px;
   margin-bottom: 20px;
 }
-
-/* === Adaptaciones modo claro === */
 :root[data-theme="light"] .title::before {
   background: var(--color-primary-600);
 }
 
 /* === Modal genérico === */
-/* === Modal genérico (unificado, compatible dark / light) === */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1073,8 +1007,6 @@ form > .detail-card {
   z-index: 2000;
   backdrop-filter: blur(2px);
 }
-
-/* Versión “card” que usan tus modales (PaymentMethod, AddPayment, etc.) */
 .modal-card {
   background: var(--color-card);
   color: var(--color-text);
@@ -1089,8 +1021,6 @@ form > .detail-card {
   gap: 14px;
   animation: modalFade 0.3s ease;
 }
-
-/* Si usás algún otro modal tipo “box” lo mantenemos igual de coherente */
 .modal-box {
   background: var(--color-card);
   color: var(--color-text);
@@ -1105,7 +1035,6 @@ form > .detail-card {
   gap: 14px;
   animation: modalFade 0.3s ease;
 }
-
 .modal-card h3,
 .modal-box h3 {
   font-size: 1.2rem;
@@ -1113,7 +1042,6 @@ form > .detail-card {
   margin-bottom: 6px;
   color: var(--color-text);
 }
-
 @keyframes modalFade {
   from {
     opacity: 0;
@@ -1124,21 +1052,16 @@ form > .detail-card {
     transform: translateY(0);
   }
 }
-
-/* Texto de error dentro de modales */
 .text-danger {
   color: var(--color-danger);
 }
 
 /* ======= CHECKLIST BADGES ======= */
-
 .checklist-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-
-/* 🔹 Estilo base: usa las variables del tema */
 .check-badge {
   position: relative;
   width: 26px;
@@ -1149,30 +1072,25 @@ form > .detail-card {
   justify-content: center;
   font-size: 0.9rem;
   cursor: default;
-  background: transparent; /* 👈 sin fondo */
-  border: 0px solid var(--color-border); /* respeta tema claro/oscuro */
+  background: transparent;
+  border: 0px solid var(--color-border);
   color: var(--color-text);
   transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease,
     border-color 0.12s ease;
-  opacity: 0.35; /* base tenue */
+  opacity: 0.35;
 }
-
 .check-badge.on {
   opacity: 1;
-  border-color: var(--color-primary); /* marcado = borde de color */
+  border-color: var(--color-primary);
 }
-
 .check-badge.off .check-badge-icon {
   filter: grayscale(1);
   opacity: 0.5;
 }
-
 .check-badge:hover {
   transform: translateY(-1px);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); /* suave, no tapa el fondo */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
-
-/* Tooltip */
 .check-badge-tooltip {
   position: absolute;
   bottom: 130%;
@@ -1189,13 +1107,10 @@ form > .detail-card {
   transition: opacity 0.15s ease, transform 0.15s ease;
   z-index: 10;
 }
-
 .check-badge:hover .check-badge-tooltip {
   opacity: 1;
   transform: translate(-50%, -2px);
 }
-
-/* Flechita del tooltip */
 .check-badge-tooltip::after {
   content: "";
   position: absolute;
@@ -1206,8 +1121,6 @@ form > .detail-card {
   border-style: solid;
   border-color: rgba(0, 0, 0, 0.9) transparent transparent transparent;
 }
-
-/* 🔆 Ajuste fino solo para tema claro (más visibles los apagados) */
 :root[data-theme="light"] .check-badge.off {
   opacity: 0.55;
 }
@@ -1219,26 +1132,20 @@ form > .detail-card {
   gap: 12px;
   cursor: pointer;
   user-select: none;
-  min-height: 32px; /* Altura cómoda para dedo/mouse */
+  min-height: 32px;
 }
-
-/* Escondemos el checkbox original feo */
 .toggle-input {
   display: none;
 }
-
-/* El carril (fondo) */
 .toggle-track {
   position: relative;
   width: 48px;
   height: 26px;
-  background-color: var(--color-border); /* Gris del tema */
+  background-color: var(--color-border);
   border-radius: 999px;
   transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
 }
-
-/* El círculo (botón) */
 .toggle-thumb {
   position: absolute;
   top: 3px;
@@ -1247,28 +1154,21 @@ form > .detail-card {
   height: 20px;
   background-color: #ffffff;
   border-radius: 50%;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* Efecto rebote suave */
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
-
-/* Estado ACTIVO (Checked) */
 .toggle-input:checked + .toggle-track {
   background-color: var(--color-primary);
 }
-
 .toggle-input:checked + .toggle-track .toggle-thumb {
-  transform: translateX(22px); /* Se mueve a la derecha */
+  transform: translateX(22px);
 }
-
-/* Texto del label */
 .toggle-label {
   font-size: 0.95rem;
   color: var(--color-text);
   font-weight: 500;
   transition: color 0.3s;
 }
-
-/* Hover effect */
 .toggle-wrapper:hover .toggle-thumb {
   transform: scale(1.1);
 }
@@ -1276,15 +1176,14 @@ form > .detail-card {
   transform: translateX(22px) scale(1.1);
 }
 
-/* ================= SELECTION CARDS (Reemplazo de Radios) ================= */
+/* ================= SELECTION CARDS ================= */
 .selection-grid {
   display: flex;
   gap: 12px;
   width: 100%;
 }
-
 .selection-card {
-  flex: 1; /* Ocupan el mismo ancho */
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1300,38 +1199,29 @@ form > .detail-card {
   position: relative;
   user-select: none;
 }
-
 .selection-card:hover {
   border-color: var(--color-muted);
   background: var(--hover-bg);
 }
-
-/* Estado ACTIVO (Seleccionado) */
 .selection-card.selected {
   border-color: var(--color-primary);
-  background: rgba(30, 167, 255, 0.08); /* Un toque azul transparente */
+  background: rgba(30, 167, 255, 0.08);
   color: var(--color-primary);
   font-weight: 600;
-  box-shadow: 0 0 0 1px var(--color-primary); /* Borde doble sutil */
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
-
-/* Título de la tarjeta */
 .selection-title {
   font-size: 1rem;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
-/* Subtítulo (opcional) */
 .selection-subtitle {
   font-size: 0.8rem;
   margin-top: 4px;
   opacity: 0.8;
   font-weight: 400;
 }
-
-/* Estado DESHABILITADO */
 .selection-card.disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1341,11 +1231,10 @@ form > .detail-card {
 /* ================= TABLAS MODERNAS ================= */
 .modern-table {
   width: 100%;
-  border-collapse: separate; /* Permite bordes redondeados */
+  border-collapse: separate;
   border-spacing: 0;
   margin-top: 10px;
 }
-
 .modern-table th {
   text-align: left;
   padding: 12px 16px;
@@ -1356,7 +1245,6 @@ form > .detail-card {
   color: var(--color-muted);
   border-bottom: 1px solid var(--color-border);
 }
-
 .modern-table td {
   padding: 14px 16px;
   border-bottom: 1px solid var(--color-border);
@@ -1364,20 +1252,15 @@ form > .detail-card {
   color: var(--color-text);
   font-size: 0.95rem;
 }
-
 .modern-table tbody tr {
   transition: background-color 0.2s;
 }
-
 .modern-table tbody tr:hover {
   background-color: var(--hover-bg);
 }
-
 .modern-table tbody tr:last-child td {
   border-bottom: none;
 }
-
-/* Acciones (botones en la tabla) */
 .action-btn {
   background: transparent;
   border: none;
@@ -1390,23 +1273,18 @@ form > .detail-card {
   align-items: center;
   justify-content: center;
 }
-
 .action-btn:hover {
   background: var(--hover-bg);
   color: var(--color-primary);
 }
-
 .action-btn.danger:hover {
   background: rgba(239, 68, 68, 0.1);
   color: var(--color-danger);
 }
-
 .action-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
-
-/* Badges (Pastillas de estado) */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1418,15 +1296,12 @@ form > .detail-card {
   text-transform: uppercase;
   line-height: 1;
 }
-
-/* Colores de badges */
 .badge.blue { background: rgba(30, 167, 255, 0.15); color: #3b82f6; }
 .badge.green { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
 .badge.orange { background: rgba(249, 115, 22, 0.15); color: #f97316; }
 .badge.purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 .badge.gray { background: rgba(107, 114, 128, 0.15); color: #9ca3af; }
 
-/* Acordeón headers */
 .accordion-header {
   display: flex;
   align-items: center;
@@ -1442,11 +1317,9 @@ form > .detail-card {
   transition: all 0.2s;
   margin-bottom: 8px;
 }
-
 .accordion-header:hover {
   border-color: var(--color-muted);
 }
-
 .accordion-header.active {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
@@ -1458,10 +1331,9 @@ form > .detail-card {
 /* === Dashboard Cards === */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Responsive automático */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
 }
-
 .dashboard-card {
   background: var(--color-card);
   border: 1px solid var(--color-border);
@@ -1476,14 +1348,11 @@ form > .detail-card {
   box-shadow: var(--shadow);
   height: 100%;
 }
-
 .dashboard-card:hover {
   transform: translateY(-5px);
   border-color: var(--color-primary);
-  box-shadow: 0 12px 20px -10px rgba(0, 0, 0, 0.3); /* Sombra más profunda */
+  box-shadow: 0 12px 20px -10px rgba(0, 0, 0, 0.3);
 }
-
-/* El círculo del ícono */
 .card-icon {
   width: 48px;
   height: 48px;
@@ -1496,63 +1365,46 @@ form > .detail-card {
 }
 
 /* ===== LAYOUT FIX SCROLL ===== */
-
-/* 1. Bloqueamos el scroll del navegador */
 html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden; /* ⛔ Adiós scroll del body */
+  overflow: hidden;
 }
-
 #root {
   height: 100%;
 }
-
-/* 2. El contenedor ocupa toda la pantalla fija */
 .layout-container {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Altura total del viewport */
+  height: 100vh;
   background: var(--color-bg);
 }
-
-/* 3. La grilla ocupa el espacio restante (debajo del header) */
 .layout-grid {
-  display: flex; /* Usamos flex para mejor control que grid aquí */
-  flex: 1;       /* Ocupa todo el espacio vertical sobrante */
-  overflow: hidden; /* ⛔ Para que no scrollee el wrapper */
+  display: flex;
+  flex: 1;
+  overflow: hidden;
   position: relative;
 }
-
-/* 4. Sidebar: Scroll independiente si es muy largo */
 .sidebar {
   width: 260px;
   background: var(--color-card);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto; /* ✅ Scroll propio si el menú es eterno */
-  flex-shrink: 0;   /* No te achiques nunca */
+  overflow-y: auto;
+  flex-shrink: 0;
   z-index: 10;
 }
-
-/* 5. Main Content: EL ÚNICO QUE SCROLLEA EL CONTENIDO */
 .main-content {
-  flex: 1; /* Ocupa el ancho restante */
-  background: var(--color-bg); /* O var(--color-card) según tu gusto */
-  padding: 20px; /* Aire alrededor */
-  
-  /* ✨ LA MAGIA: Solo este div tiene scroll vertical */
+  flex: 1;
+  background: var(--color-bg);
+  padding: 20px;
   overflow-y: auto; 
   overflow-x: hidden;
   height: 100%;
-  
-  /* Suavizado */
   scroll-behavior: smooth;
 }
-
-/* Ajustes Mobile */
 @media (max-width: 900px) {
   .sidebar {
     position: absolute;
@@ -1561,16 +1413,48 @@ html, body {
     transition: transform 0.3s ease;
     z-index: 50;
   }
-  
-  .sidebar.open {
-    transform: translateX(0);
-    box-shadow: 0 0 50px rgba(0,0,0,0.5);
-  }
-  
-  /* En móvil el main ocupa todo el ancho */
-  .main-content {
-    width: 100%; 
-    padding: 16px;
-  }
 }
 
+/* ⬇️⬇️⬇️ SECCIÓN CORREGIDA DEFINITIVA: BADGES ⬇️⬇️⬇️ */
+
+.nav-link-badge-container {
+  /* 🔥 CRÍTICO: Forzamos el inicio. 
+     Esto asegura que Icono y Texto estén siempre a la izquierda 
+     respetando el 'gap: 12px' original de .nav-link */
+  justify-content: flex-start !important; 
+  position: relative;
+  width: 100%;
+}
+
+.nav-badge {
+  background-color: var(--color-danger);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 2px 8px;
+  min-width: 22px;
+  height: 22px;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  
+  /* 🔥 LA MAGIA: 
+     Esto le dice al badge: "Tomá todo el espacio disponible a tu izquierda".
+     Así se empuja solo a la derecha, sin afectar al texto cuando el badge no está. */
+  margin-left: auto; 
+  
+  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
+  animation: pulse-badge 2s infinite;
+}
+
+/* Animación */
+@keyframes pulse-badge {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* ⬆️⬆️⬆️ FIN SECCIÓN BADGES ⬆️⬆️⬆️ */

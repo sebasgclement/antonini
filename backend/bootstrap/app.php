@@ -13,6 +13,13 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        [
+            'prefix' => 'api', // 👈 Esto le pone /api adelante
+            'middleware' => ['api', 'auth:sanctum'], // 👈 Esto valida el Token
+        ],
+    )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->web(append: [
             EnsureFrontendRequestsAreStateful::class,
