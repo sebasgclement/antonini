@@ -297,7 +297,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
 
       {/* --- IZQUIERDA --- */}
       <div className="hstack" style={{ gap: 16 }}>
-        <button className="menu-btn" onClick={onToggleSidebar}>
+        <button className="menu-btn menu-toggle" onClick={onToggleSidebar}>
           <svg
             width="24"
             height="24"

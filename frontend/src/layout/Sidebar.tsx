@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
-import Button from "../components/ui/Button";
 import { useNotifications } from "../context/NotificationContext";
 
 // 🔹 Íconos (Mantenemos los mismos)
@@ -16,7 +15,7 @@ const Icons = {
 };
 
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
-  const { isAdmin, user, logout } = useAuth();
+  const { isAdmin } = useAuth();
   
   // Consumimos el contexto
   const { pendingReservationsCount } = useNotifications();
@@ -25,7 +24,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   // console.log("📊 Sidebar renderizado. Pendientes:", pendingReservationsCount);
 
   return (
-    <div className="sidebar-inner" style={{ height: "100%", display: 'flex', flexDirection: 'column' }}>
+    <div className="sidebar-inner" style={{  display: 'flex', flexDirection: 'column' }}>
       
       <button className="sidebar-close" onClick={onClose} style={{marginBottom: 20}}>
         <Icons.Close />
@@ -82,34 +81,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         )}
       </nav>
 
-      {/* Footer */}
-      <div className="sidebar-footer" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 16 }}>
-        <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12}}>
-          <div className="avatar-circle" style={{background: 'var(--color-primary)', color: '#fff'}}>
-              {user?.name?.[0] || 'U'}
-          </div>
-          <div style={{display: 'flex', flexDirection: 'column'}}>
-              <span style={{fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)'}}>
-                  {user?.name?.split(' ')[0] || 'Usuario'}
-              </span>
-              <span style={{fontSize: '0.75rem', color: 'var(--color-muted)'}}>
-                  {isAdmin ? 'Administrador' : 'Vendedor'}
-              </span>
-          </div>
-        </div>
 
-        <button
-          className="btn"
-          style={{width: '100%', marginBottom: 8, background: 'var(--color-card)', color: 'var(--color-text)', border: '1px solid var(--color-border)'}}
-          onClick={() => { onClose?.(); window.location.href = "/perfil/password"; }}
-        >
-          🔒 Mi Cuenta
-        </button>
-
-        <Button onClick={logout} style={{width: '100%'}}>
-            Cerrar Sesión
-        </Button>
-      </div>
     </div>
   );
 }
