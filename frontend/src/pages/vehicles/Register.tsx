@@ -2,7 +2,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
-import Toggle from "../../components/ui/Toggle"; // 👈 Asegurate de importar el Toggle que creamos
+import Toggle from "../../components/ui/Toggle"; 
 import useRedirectAfterSave from "../../hooks/useRedirectAfterSave";
 import api from "../../lib/api";
 
@@ -12,7 +12,7 @@ export default function RegisterVehicle() {
   // 🔹 ESTADO: Controla si el auto está físico o es solo un dato
   const [locationStatus, setLocationStatus] = useState<'stock' | 'ofrecido'>('stock');
 
-  // 🔹 Estado de marcas (desde BD)
+  // 🔹 Estado de marcas
   const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [brand, setBrand] = useState("");
   const [newBrand, setNewBrand] = useState("");
@@ -35,7 +35,7 @@ export default function RegisterVehicle() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   
-  // Toggles
+  // Toggles Checklist
   const [checkSpare, setCheckSpare] = useState(true);
   const [checkJack, setCheckJack] = useState(true);
   const [checkTools, setCheckTools] = useState(true);
@@ -43,9 +43,12 @@ export default function RegisterVehicle() {
   const [checkKeyCopy, setCheckKeyCopy] = useState(true);
   const [checkManual, setCheckManual] = useState(true);
 
+  // Estado de publicación web
+  const [published, setPublished] = useState(false);
+
   const [notes, setNotes] = useState("");
 
-  // 📸 Fotos
+  // Fotos
   const [photoFront, setPhotoFront] = useState<File | null>(null);
   const [photoBack, setPhotoBack] = useState<File | null>(null);
   const [photoLeft, setPhotoLeft] = useState<File | null>(null);
@@ -60,7 +63,7 @@ export default function RegisterVehicle() {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    // 🔹 Restaurar formulario si se había guardado antes
+    // 🔹 Restaurar formulario
     const saved = localStorage.getItem("vehicleFormBackup");
     if (saved) {
       const data = JSON.parse(saved);
@@ -81,12 +84,16 @@ export default function RegisterVehicle() {
       setCustomerName(data.customerName || "");
       setCustomerEmail(data.customerEmail || "");
       setCustomerPhone(data.customerPhone || "");
+      
       setCheckSpare(data.checkSpare ?? true);
       setCheckJack(data.checkJack ?? true);
       setCheckDocs(data.checkDocs ?? true);
       setCheckKeyCopy(data.checkKeyCopy ?? true);
       setCheckManual(data.checkManual ?? true);
       setCheckTools(data.checkTools ?? true);
+      
+      setPublished(data.published ?? false);
+
       setNotes(data.notes || "");
       localStorage.removeItem("vehicleFormBackup");
     }
@@ -187,6 +194,7 @@ export default function RegisterVehicle() {
       if (price) form.append("price", String(price));
       
       form.append("ownership", ownership);
+      form.append("published", published ? "1" : "0");
       
       if (locationStatus === 'stock') {
         form.append("check_spare", checkSpare ? "1" : "0");
@@ -200,7 +208,9 @@ export default function RegisterVehicle() {
       if (notes) form.append("notes", notes);
       
       if (ownership === "consignado") {
-        form.append("customer_dni", dni);
+        // Enviar DNI solo si existe, sino el backend debería manejar la creación del lead por nombre
+        if (dni) form.append("customer_dni", dni);
+        
         form.append("customer_name", customerName);
         if (customerEmail) form.append("customer_email", customerEmail);
         if (customerPhone) form.append("customer_phone", customerPhone);
@@ -276,7 +286,7 @@ export default function RegisterVehicle() {
           {locationStatus === 'ofrecido' && (
               <div style={{ marginTop: 12, padding: '10px', background: 'rgba(245, 158, 11, 0.1)', color: 'orange', borderRadius: 8, fontSize: '0.9rem', display:'flex', gap: 8, alignItems:'center' }}>
                   <span>💡</span>
-                  <span>Se ocultarán campos técnicos (VIN, Checklist) y la patente será opcional.</span>
+                  <span>Se ocultarán campos técnicos. El contacto se registrará como Lead.</span>
               </div>
           )}
         </div>
@@ -387,42 +397,45 @@ export default function RegisterVehicle() {
           </div>
         </div>
 
-        {/* 🟢 PROPIEDAD (CON CARDS) */}
-        <div className="card vstack" style={{ gap: 12 }}>
-          <div className="title">Propiedad</div>
-          
-          <div className="selection-grid">
-            <div 
-              className={`selection-card ${ownership === 'propio' ? 'selected' : ''} ${locationStatus === 'ofrecido' ? 'disabled' : ''}`}
-              onClick={() => {
-                  if (locationStatus !== 'ofrecido') setOwnership('propio');
-              }}
-            >
-              <div className="selection-title">🏢 Propio</div>
-              <div className="selection-subtitle">Unidad de la agencia</div>
-            </div>
+        {/* 🟢 PROPIEDAD (SOLO VISIBLE SI ES STOCK) */}
+        {locationStatus === 'stock' && (
+            <div className="card vstack" style={{ gap: 12 }}>
+            <div className="title">Propiedad</div>
+            
+            <div className="selection-grid">
+                <div 
+                className={`selection-card ${ownership === 'propio' ? 'selected' : ''}`}
+                onClick={() => setOwnership('propio')}
+                >
+                <div className="selection-title">🏢 Propio</div>
+                <div className="selection-subtitle">Unidad de la agencia</div>
+                </div>
 
-            <div 
-              className={`selection-card ${ownership === 'consignado' ? 'selected' : ''}`}
-              onClick={() => setOwnership('consignado')}
-            >
-              <div className="selection-title">🤝 Consignado</div>
-              <div className="selection-subtitle">Unidad de terceros</div>
+                <div 
+                className={`selection-card ${ownership === 'consignado' ? 'selected' : ''}`}
+                onClick={() => setOwnership('consignado')}
+                >
+                <div className="selection-title">🤝 Consignado</div>
+                <div className="selection-subtitle">Unidad de terceros</div>
+                </div>
             </div>
-          </div>
-        </div>
+            </div>
+        )}
 
+        {/* 🟢 DATOS CLIENTE: Visible si es consignado (Stock o Ofrecido) */}
         {ownership === "consignado" && (
           <div className="card vstack" style={{ gap: 16 }}>
-            <div className="title">Datos del cliente / Dueño</div>
+            <div className="title">
+                {locationStatus === 'stock' ? 'Datos del Dueño' : 'Datos del Interesado / Dueño'}
+            </div>
 
             <div className="form-row" style={{ alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <Input
-                  label="DNI *"
+                  label={locationStatus === 'stock' ? "DNI *" : "DNI (Opcional)"}
                   value={dni}
                   onChange={(e) => setDni(e.currentTarget.value)}
-                  required
+                  required={locationStatus === 'stock'} // 🔥 DNI Opcional si es Ofrecido
                 />
               </div>
               <Button type="button" onClick={searchByDni}>
@@ -439,6 +452,7 @@ export default function RegisterVehicle() {
                   referencePrice, takePrice, price, ownership,
                   dni, customerName, customerEmail, customerPhone,
                   checkSpare, checkJack, checkTools, checkDocs, checkKeyCopy, checkManual,
+                  published,
                   notes,
                 };
                 localStorage.setItem("vehicleFormBackup", JSON.stringify(state));
@@ -448,10 +462,12 @@ export default function RegisterVehicle() {
               + Registrar nuevo cliente
             </Button>
 
+            {/* 🔥 Si es 'ofrecido' y no hay DNI, estos campos son vitales (required) */}
             <Input
-              label="Nombre completo"
+              label={locationStatus === 'ofrecido' ? "Nombre completo *" : "Nombre completo"}
               value={customerName}
               onChange={(e) => setCustomerName(e.currentTarget.value)}
+              required={locationStatus === 'ofrecido'} 
             />
             <Input
               label="Email"
@@ -460,9 +476,10 @@ export default function RegisterVehicle() {
               onChange={(e) => setCustomerEmail(e.currentTarget.value)}
             />
             <Input
-              label="Teléfono"
+              label={locationStatus === 'ofrecido' ? "Teléfono *" : "Teléfono"}
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.currentTarget.value)}
+              required={locationStatus === 'ofrecido'}
             />
           </div>
         )}
@@ -508,7 +525,7 @@ export default function RegisterVehicle() {
           </div>
         </div>
 
-        {/* 🟢 CHECKLIST CON TOGGLES NUEVOS */}
+        {/* Checklist */}
         {locationStatus === 'stock' && (
             <div className="card vstack" style={{ gap: 16 }}>
                 <div className="title">Checklist de Ingreso</div>
@@ -543,6 +560,18 @@ export default function RegisterVehicle() {
                 />
              </div>
         )}
+
+        {/* Visibilidad Online */}
+        <div className="card">
+            <div className="title" style={{fontSize: '1.1rem', marginBottom: 16}}>Visibilidad Online</div>
+            <div className="hstack" style={{justifyContent: 'space-between', alignItems: 'center'}}>
+                <div>
+                   <div style={{fontWeight: 600}}>Publicar en Página Web</div>
+                   <p className="text-muted" style={{margin:0, fontSize: '0.9rem'}}>El vehículo será visible en la galería online.</p>
+                </div>
+                <Toggle checked={published} onChange={setPublished} />
+            </div>
+        </div>
 
         <div className="hstack" style={{ justifyContent: "flex-end" }}>
           <Button type="submit" loading={loading}>

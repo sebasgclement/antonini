@@ -65,6 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ RESERVAS
     Route::get('/reservations/create', [ReservationController::class, 'create']);
+    Route::post('/reservations/{id}/cancel', [ReservationController::class, 'cancel']);
     Route::apiResource('reservations', ReservationController::class);
 
     // ✅ PAGOS DE RESERVAS
@@ -72,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post  ('/reservation-payments',              [ReservationPaymentController::class, 'store']);
     Route::put   ('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'update']);
     Route::delete('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'destroy']);
+    
 
 }); 
 

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import api from '../lib/api'
 
-type PagedApiResponse<T> =
+export type PagedApiResponse<T> =
   | { data: { data: T[]; last_page: number } }   
   | { data: T[]; last_page?: number }            
   | T[]                                          

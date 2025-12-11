@@ -1,5 +1,4 @@
 import { pdf } from "@react-pdf/renderer";
-import { saveAs } from "file-saver";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -28,6 +27,7 @@ type Reservation = {
   deposit?: number;
   credit_bank?: number;
   balance?: number;
+  paid_amount?: number; 
   payment_method?: string;
   comments?: string;
   vehicle?: { id: number; plate: string; brand: string; model: string };
@@ -50,7 +50,6 @@ export default function ReservationsList() {
   const { showToast } = useToast(); 
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // 👇 GATILLO PARA ACTUALIZACIÓN AUTOMÁTICA
   const { refreshTrigger, fetchInitialCounts } = useNotifications();
 
   // ESTADO PARA EL MODAL DE PAGO
@@ -67,15 +66,10 @@ export default function ReservationsList() {
     items, loading, error, page, setPage, totalPages, search, setSearch, refetch,
   } = usePagedList<Reservation>("/reservations");
 
-  // ✅ EFECTO: Si llega notificación, recarga la tabla
   useEffect(() => {
-    if (refreshTrigger > 0) {
-        console.log("🔄 Actualizando tabla por notificación...");
-        refetch();
-    }
+    if (refreshTrigger > 0) refetch();
   }, [refreshTrigger, refetch]);
 
-  // ✅ LÓGICA DE ADMIN
   const isAdmin = 
     user?.roles?.some((r: any) => ['admin', 'superadmin', 'gerente'].includes(r.name?.toLowerCase())) || 
     user?.role === 'admin' || 
@@ -104,12 +98,13 @@ export default function ReservationsList() {
           concept="Seña / Reserva de Unidad"
         />
       ).toBlob();
-      saveAs(blob, `Recibo_Seña_${reservation.id}.pdf`);
 
-      showToast("¡Seña confirmada y recibo generado!", "success");
-      
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+
+      showToast("¡Seña confirmada! Recibo abierto en nueva pestaña 📄", "success");
       await refetch();
-      fetchInitialCounts(); // Actualizar badge
+      fetchInitialCounts(); 
     } catch (err) {
       console.error(err);
       showToast("Error al confirmar la seña", "error");
@@ -124,7 +119,8 @@ export default function ReservationsList() {
     setConfirmModal({ isOpen: true, type: 'cancel', reservation });
   };
 
-  const processCancelReservation = async () => {
+  // refund = true (Devolver plata) | refund = false (Retener plata)
+  const processCancelReservation = async (refund: boolean) => {
     const reservation = confirmModal.reservation;
     if (!reservation) return;
 
@@ -132,14 +128,19 @@ export default function ReservationsList() {
     setConfirmModal({ ...confirmModal, isOpen: false });
 
     try {
-      await api.delete(`/reservations/${reservation.id}`);
-      showToast("Reserva eliminada y vehículo liberado 🗑️", "success");
+      await api.post(`/reservations/${reservation.id}/cancel`, { refund });
+      
+      const msg = refund 
+        ? "Reserva anulada. Dinero devuelto y pagos eliminados. 💸"
+        : "Reserva anulada. El dinero queda como penalidad/ganancia. 🔒";
+
+      showToast(msg, "success");
       
       await refetch();
-      fetchInitialCounts(); // Actualizar badge (baja el número)
+      fetchInitialCounts();
     } catch (err) {
       console.error(err);
-      showToast("Error al cancelar la reserva", "error");
+      showToast("Error al anular la reserva", "error");
     } finally {
       setIsProcessing(false);
       setConfirmModal({ isOpen: false, type: null, reservation: null });
@@ -149,6 +150,16 @@ export default function ReservationsList() {
   const renderStatusBadge = (status: Reservation["status"]) => {
     const config = STATUS_CONFIG[status] || STATUS_CONFIG["pendiente"];
     return <span className={`badge ${config.colorClass}`}>{config.label}</span>;
+  };
+
+  // 🔥 CALCULAR TOTAL REAL (Para evitar el error del modal)
+  // Usamos una función helper o variable local dentro del render del modal
+  const getReservationTotalPaid = (res: Reservation) => {
+      // Si paid_amount existe y es mayor a 0, usalo. Si no, usá el deposit.
+      // NO SUMARLOS para evitar duplicados.
+      const paid = Number(res.paid_amount || 0);
+      const deposit = Number(res.deposit || 0);
+      return paid > 0 ? paid : deposit;
   };
 
   return (
@@ -198,8 +209,6 @@ export default function ReservationsList() {
                 {items.map((r) => {
                   const balance = r.balance ?? 0;
                   const hasBalance = balance > 0;
-                  
-                  // Lógica para confirmar seña (Solo Admin y pendiente)
                   const canConfirmDeposit = r.status === "pendiente" && (r.deposit || 0) > 0 && isAdmin;
 
                   return (
@@ -235,7 +244,6 @@ export default function ReservationsList() {
                       <td style={{ textAlign: "right" }}>
                         <div className="hstack" style={{ justifyContent: "flex-end", gap: 8 }}>
                           
-                          {/* 1. CONFIRMAR SEÑA (Solo Admin) */}
                           {canConfirmDeposit && (
                             <button
                               className="action-btn"
@@ -247,13 +255,10 @@ export default function ReservationsList() {
                             </button>
                           )}
 
-                          {/* 2. VER DETALLE */}
                           <button className="action-btn" title="Ver Detalle" onClick={() => nav(`/reservas/${r.id}`)}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                           </button>
 
-                          {/* 3. REGISTRAR COBRO (MODAL) */}
-                          {/* 🔥 CORREGIDO: Aparece si hay deuda y NO está anulada (independiente de si es pendiente o confirmada) */}
                           {hasBalance && r.status !== "anulada" && isAdmin && (
                               <button
                                 className="action-btn"
@@ -268,18 +273,16 @@ export default function ReservationsList() {
                               </button>
                             )}
 
-                          {/* 4. BOTÓN ELIMINAR/CANCELAR (Solo Admin) */}
-                          {/* 🔥 CORREGIDO: Siempre visible para Admin */}
-                          {isAdmin && (
+                          {isAdmin && r.status !== 'anulada' && r.status !== 'vendido' && (
                             <button
                               className="action-btn danger"
-                              title="Cancelar Reserva y Liberar Unidad"
+                              title="Cancelar / Anular"
                               onClick={() => requestCancelReservation(r)}
                               style={{ color: "var(--color-danger)", borderColor: "var(--color-danger)" }}
                             >
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2 2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                               </svg>
                             </button>
                           )}
@@ -297,36 +300,108 @@ export default function ReservationsList() {
 
       <Pagination page={page} totalPages={totalPages} onPage={setPage} />
 
-      {/* RENDERIZADO DEL MODAL DE PAGO */}
+      {/* MODAL DE PAGO */}
       {reservationToPay && (
         <PaymentModal
           reservation={reservationToPay}
           onClose={() => setReservationToPay(null)}
           onSuccess={() => {
             setReservationToPay(null);
-            refetch(); // Recargar la tabla
+            refetch(); 
             showToast("Pago registrado correctamente", "success");
           }}
         />
       )}
 
-      {/* MODAL DE CONFIRMACIÓN */}
+      {/* 🔥 MODAL DE CONFIRMACIÓN INTELIGENTE 🔥 */}
       {confirmModal.isOpen && confirmModal.reservation && (
         <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: 400 }}>
-            <h3>{confirmModal.type === 'deposit' ? '💰 Confirmar Seña' : '⚠️ Cancelar Reserva'}</h3>
-            <p style={{ color: 'var(--color-muted)', marginBottom: 20 }}>
-              {confirmModal.type === 'deposit' 
-                ? `¿Confirmas el ingreso de la seña por $${(confirmModal.reservation.deposit || 0).toLocaleString('es-AR')}?`
-                : `¿Estás seguro de ELIMINAR la reserva #${confirmModal.reservation.id}? El vehículo volverá a estar disponible.`
-              }
-            </p>
-            <div className="hstack" style={{ justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn" style={{ background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} onClick={() => setConfirmModal({ isOpen: false, type: null, reservation: null })}>Cancelar</button>
-              <button className="btn" style={{ background: confirmModal.type === 'deposit' ? 'var(--color-primary)' : 'var(--color-danger)' }} onClick={confirmModal.type === 'deposit' ? processConfirmDeposit : processCancelReservation} disabled={isProcessing}>
-                {isProcessing ? 'Procesando...' : (confirmModal.type === 'deposit' ? 'Sí, Confirmar' : 'Sí, Eliminar')}
-              </button>
-            </div>
+          <div className="modal-card" style={{ maxWidth: 450 }}>
+            
+            {/* --- CASO 1: CONFIRMAR SEÑA (SIMPLE) --- */}
+            {confirmModal.type === 'deposit' && (
+                <>
+                    <h3>💰 Confirmar Seña</h3>
+                    <p style={{ color: 'var(--color-muted)', marginBottom: 20 }}>
+                        ¿Confirmas el ingreso de la seña por <b>${(confirmModal.reservation.deposit || 0).toLocaleString('es-AR')}</b>?
+                        <br/>Se generará el recibo automáticamente.
+                    </p>
+                    <div className="hstack" style={{ justifyContent: 'flex-end', gap: 10 }}>
+                        <button className="btn" style={{background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--color-text)'}} onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}>Cancelar</button>
+                        <button className="btn" onClick={processConfirmDeposit} disabled={isProcessing}>
+                            {isProcessing ? 'Procesando...' : 'Sí, Confirmar'}
+                        </button>
+                    </div>
+                </>
+            )}
+
+            {/* --- CASO 2: ANULAR RESERVA (COMPLEJO) --- */}
+            {confirmModal.type === 'cancel' && (
+                <>
+                    <h3>🚫 Anular Reserva #{confirmModal.reservation.id}</h3>
+                    
+                    {/* Verificamos si hay dinero pagado usando la función corregida */}
+                    { getReservationTotalPaid(confirmModal.reservation) > 0 ? (
+                        <div className="vstack" style={{gap: 16}}>
+                            <div style={{background: 'rgba(239, 68, 68, 0.1)', padding: 12, borderRadius: 8, color: 'var(--color-danger)'}}>
+                                ⚠️ <b>Atención:</b> Esta reserva tiene dinero ingresado. <br/>
+                                <small>Total recibido: <b>${getReservationTotalPaid(confirmModal.reservation).toLocaleString('es-AR')}</b></small>
+                            </div>
+                            
+                            <p style={{marginBottom: 0, fontSize: '0.95rem'}}>
+                                ¿Cómo deseas proceder con el dinero?
+                            </p>
+                            
+                            <div className="vstack" style={{gap: 10}}>
+                                {/* OPCIÓN 1: Devolver */}
+                                <button 
+                                    className="btn" 
+                                    onClick={() => processCancelReservation(true)} // TRUE = Devolver
+                                    disabled={isProcessing}
+                                    style={{justifyContent: 'flex-start', background: 'var(--hover-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', textAlign:'left', padding: '10px 14px'}}
+                                >
+                                    <div>
+                                        <div style={{fontWeight: 600}}>💸 Devolver dinero al cliente</div>
+                                        <div style={{fontSize: '0.8rem', color: 'var(--color-muted)'}}>• Se eliminan los registros de pago.</div>
+                                        <div style={{fontSize: '0.8rem', color: 'var(--color-success)'}}>• El vehículo se libera (Stock).</div>
+                                    </div>
+                                </button>
+
+                                {/* OPCIÓN 2: Retener (Penalidad) */}
+                                <button 
+                                    className="btn" 
+                                    onClick={() => processCancelReservation(false)} // FALSE = Retener
+                                    disabled={isProcessing}
+                                    style={{justifyContent: 'flex-start', background: 'var(--hover-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', textAlign:'left', padding: '10px 14px'}}
+                                >
+                                    <div>
+                                        <div style={{fontWeight: 600}}>💼 Retener dinero (Penalidad)</div>
+                                        <div style={{fontSize: '0.8rem', color: 'var(--color-muted)'}}>• El dinero queda en caja (Reportes).</div>
+                                        <div style={{fontSize: '0.8rem', color: 'var(--color-success)'}}>• El vehículo se libera (Stock).</div>
+                                    </div>
+                                </button>
+                            </div>
+                            <div style={{marginTop: 10, textAlign: 'right'}}>
+                                <button className="btn-link" style={{fontSize: '0.9rem', color: 'var(--color-muted)', background:'none', border:'none', textDecoration:'underline', cursor:'pointer'}} onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}>Cancelar operación</button>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Si NO hay dinero, mostramos la anulación simple */
+                        <>
+                            <p style={{ color: 'var(--color-muted)', marginBottom: 20 }}>
+                                El vehículo volverá a estar disponible para la venta.
+                            </p>
+                            <div className="hstack" style={{ justifyContent: 'flex-end', gap: 10 }}>
+                                <button className="btn" style={{background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--color-text)'}} onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}>Cancelar</button>
+                                <button className="btn danger" onClick={() => processCancelReservation(true)} disabled={isProcessing}>
+                                    {isProcessing ? 'Procesando...' : 'Confirmar Anulación'}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </>
+            )}
+
           </div>
         </div>
       )}

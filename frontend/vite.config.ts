@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react()],
+    base: '/app/',
     define: {
       __APP_NAME__: JSON.stringify(env.VITE_APP_NAME || 'Antonini'),
     },

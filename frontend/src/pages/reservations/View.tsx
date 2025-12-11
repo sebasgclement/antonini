@@ -1,7 +1,9 @@
+import { pdf } from "@react-pdf/renderer";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import api from "../../lib/api";
+import { PaymentReceipt } from "../../components/pdfs/PaymentReceipt";
 
 // --- TIPOS ---
 type PaymentDetails = {
@@ -91,8 +93,37 @@ export default function ReservationView() {
     fetchReservation();
   }, [id]);
 
-  if (loading)
-    return <div className="p-4 text-center">Cargando detalle...</div>;
+  // 🖨️ FUNCIÓN PARA GENERAR RECIBO INDIVIDUAL
+  const handlePrintReceipt = async (payment: ReservationPayment) => {
+    if (!reservation) return;
+
+    try {
+      // Armamos un objeto reserva temporal para el recibo
+      const reservationForPdf = { 
+          ...reservation, 
+          // Pasamos el método de ESTE pago para que salga bien en el PDF
+          payment_method: payment.method?.name || 'Efectivo' 
+      };
+
+      const blob = await pdf(
+        <PaymentReceipt
+          reservation={reservationForPdf}
+          amount={Number(payment.amount)}
+          concept={`Pago registrado el ${new Date(payment.created_at || Date.now()).toLocaleDateString()}`}
+        />
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+
+    } catch (error) {
+      console.error("Error generando recibo", error);
+      alert("No se pudo generar el recibo");
+    }
+  };
+
+  if (loading) return <div className="p-4 text-center">Cargando detalle...</div>;
+  
   if (error || !reservation)
     return (
       <div className="p-4">
@@ -109,15 +140,11 @@ export default function ReservationView() {
   const precioVenta = reservation.price || 0;
   const valorUsado = reservation.usedVehicle?.price || 0;
   const creditoBanco = reservation.credit_bank || 0;
-  const totalPagosRegistrados =
-    reservation.payments?.reduce((acc, p) => acc + Number(p.amount), 0) ?? 0;
+  const totalPagosRegistrados = reservation.payments?.reduce((acc, p) => acc + Number(p.amount), 0) ?? 0;
   const totalPagado = reservation.paid_amount ?? totalPagosRegistrados;
-  const saldo =
-    reservation.balance ??
-    precioVenta - totalPagado - valorUsado - creditoBanco;
+  const saldo = reservation.balance ?? precioVenta - totalPagado - valorUsado - creditoBanco;
 
-  const statusInfo =
-    STATUS_CONFIG[reservation.status] || STATUS_CONFIG.pendiente;
+  const statusInfo = STATUS_CONFIG[reservation.status] || STATUS_CONFIG.pendiente;
 
   return (
     <div className="vstack" style={{ gap: 24, paddingBottom: 50 }}>
@@ -236,7 +263,6 @@ export default function ReservationView() {
                 <Button
                   className="btn-sm"
                   style={{ marginTop: 10, alignSelf: "flex-start" }}
-                  // CORREGIDO: Ruta completa
                   onClick={() =>
                     nav(`/vehiculos/${reservation.vehicle?.id}/ver`, {
                       state: { from: location.pathname },
@@ -294,7 +320,6 @@ export default function ReservationView() {
                     alignSelf: "flex-start",
                     fontSize: "0.8rem",
                   }}
-                  // CORREGIDO: Ruta completa
                   onClick={() =>
                     nav(`/vehiculos/${reservation.usedVehicle?.id}/ver`)
                   }
@@ -418,6 +443,7 @@ export default function ReservationView() {
                     key={pago.id}
                     payment={pago}
                     isLast={index === (reservation.payments?.length || 0) - 1}
+                    onPrint={() => handlePrintReceipt(pago)}
                   />
                 ))
               ) : (
@@ -476,9 +502,11 @@ const InfoBox = ({
 const PaymentItem = ({
   payment,
   isLast,
+  onPrint,
 }: {
   payment: ReservationPayment;
   isLast: boolean;
+  onPrint: () => void;
 }) => {
   const d = payment.details || {};
 
@@ -489,6 +517,7 @@ const PaymentItem = ({
         borderBottom: isLast ? "none" : "1px solid var(--border-color)",
         display: "flex",
         gap: 15,
+        alignItems: "center",
       }}
     >
       <div
@@ -513,8 +542,13 @@ const PaymentItem = ({
             {payment.method?.name || "Pago registrado"}
           </span>
           <span style={{ fontWeight: 700, color: "var(--color-primary)" }}>
-            ${payment.amount.toLocaleString("es-AR")}
+            ${Number(payment.amount).toLocaleString("es-AR")}
           </span>
+        </div>
+
+        {/* Fecha */}
+        <div style={{fontSize: '0.75rem', color: 'var(--color-muted)'}}>
+            {payment.created_at ? new Date(payment.created_at).toLocaleString() : '-'}
         </div>
 
         <div
@@ -535,6 +569,16 @@ const PaymentItem = ({
             !d.operation_number && <span>Pago regular</span>}
         </div>
       </div>
+
+      {/* 🖨️ BOTÓN IMPRIMIR */}
+      <Button 
+        onClick={onPrint} 
+        className="btn-icon" 
+        title="Generar Recibo"
+        style={{background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--color-text)', padding: 8}}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+      </Button>
     </div>
   );
 };

@@ -132,9 +132,9 @@ export default function ReportsDashboard() {
 
   // 🔹 Sumar totales
   const totals = monthly.reduce((acc, curr) => ({
-    cantidad: acc.cantidad + (curr.cantidad || 0),
-    total: acc.total + (curr.total || 0),
-    ganancia: acc.ganancia + (curr.ganancia || 0),
+    cantidad: (acc.cantidad || 0) + (curr.cantidad || 0),
+    total: (acc.total || 0) + (curr.total || 0),
+    ganancia: (acc.ganancia || 0) + (curr.ganancia || 0),
   }), { cantidad: 0, total: 0, ganancia: 0 });
 
   return (

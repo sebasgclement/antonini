@@ -1,8 +1,5 @@
-import { pdf } from "@react-pdf/renderer";
-import { saveAs } from "file-saver";
 import { useEffect, useState } from "react";
 import api from "../../lib/api";
-import { PaymentReceipt } from "../pdfs/PaymentReceipt";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 import PaymentMethodModal from "./PaymentMethodModal";
@@ -71,9 +68,7 @@ export default function PaymentModal({
     setLoading(true);
 
     try {
-      const selectedMethod = methods.find((m) => m.id.toString() === methodId);
-      const methodName = selectedMethod?.name || "Desconocido";
-
+      // SOLO REGISTRO, SIN PDF AUTOMÁTICO
       await api.post("/reservation-payments", {
         reservation_id: reservation.id, 
         amount: numAmount,
@@ -81,18 +76,7 @@ export default function PaymentModal({
         payment_method_id: methodId,
       });
 
-      const reservationForPdf = { ...reservation, payment_method: methodName };
-
-      const blob = await pdf(
-        <PaymentReceipt
-          reservation={reservationForPdf}
-          amount={numAmount}
-          concept={concept || "Pago Parcial / Cuota"}
-        />
-      ).toBlob();
-
-      saveAs(blob, `Recibo_Pago_${reservation.id}.pdf`);
-      onSuccess();
+      onSuccess(); // Cierra y refresca
     } catch (error: any) {
       console.error(error);
       const msg = error?.response?.data?.message || "Error al registrar el pago.";
@@ -110,7 +94,6 @@ export default function PaymentModal({
 
   return (
     <>
-      {/* 🔥 FIX: Variables correctas para el dropdown */}
       <style>{`
         .adaptive-select option {
           background-color: var(--color-card);
@@ -130,8 +113,6 @@ export default function PaymentModal({
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-
-            // 🔥 FIX: Variables CSS correctas
             backgroundColor: "var(--color-card)",
             color: "var(--color-text)",
             border: "1px solid var(--color-border)",
@@ -193,7 +174,6 @@ export default function PaymentModal({
                     className="adaptive-select"
                     style={{
                       width: "100%", padding: "10px 12px", borderRadius: "6px", fontSize: "1rem", appearance: "none", cursor: "pointer",
-                      // 🔥 FIX: Variables CSS correctas
                       border: "1px solid var(--color-border)",
                       background: "var(--input-bg)",
                       color: "var(--color-text)",
@@ -236,14 +216,13 @@ export default function PaymentModal({
               style={{
                 background: "transparent",
                 border: "1px solid var(--color-border)",
-                // 🔥 FIX: Color de texto correcto
                 color: "var(--color-text)", 
               }}
             >
               Cancelar
             </Button>
             <Button type="submit" form="payment-form" loading={loading}>
-              {loading ? "Procesando..." : "Confirmar e Imprimir"}
+              {loading ? "Registrando..." : "Registrar Cobro"}
             </Button>
           </div>
         </div>

@@ -10,8 +10,13 @@ import useAuth from "../../src/hooks/useAuth"; // Ajustá la ruta si es necesari
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const [email, setEmail] = useState("admin@antonini.local");
-  const [password, setPassword] = useState("secret123");
+
+  // 🔥 DETECCIÓN AUTOMÁTICA DE ENTORNO
+  // Si estás en tu PC (dev), pone los datos. Si es build (prod), los deja vacíos.
+  const isDev = import.meta.env.DEV; 
+
+  const [email, setEmail] = useState(isDev ? "admin@antonini.local" : "");
+  const [password, setPassword] = useState(isDev ? "secret123" : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
