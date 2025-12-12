@@ -3,7 +3,11 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api',
-  headers: { 'Accept': 'application/json' }
+  headers: { 
+    'Accept': 'application/json',
+    'Content-Type': 'application/json' // Agregalo por las dudas
+  },
+  withCredentials: true // 👈 ¡AHORA SÍ! ADENTRO DEL OBJETO
 })
 
 // Interceptor para token Bearer
@@ -19,7 +23,11 @@ api.interceptors.response.use(
     if (err?.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      if (location.pathname !== '/login') location.href = '/login'
+      // Ajuste para que redireccione bien a /app/login
+      if (!location.pathname.includes('/login')) {
+         const base = import.meta.env.BASE_URL; 
+         window.location.href = `${base}login`.replace('//', '/');
+      }
     }
     return Promise.reject(err)
   }

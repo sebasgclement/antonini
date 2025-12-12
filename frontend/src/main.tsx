@@ -1,4 +1,3 @@
-
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
@@ -11,7 +10,9 @@ import { NotificationProvider } from './context/NotificationContext'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   // ❌ SACAMOS React.StrictMode para que el WebSocket no se conecte/desconecte a lo loco
-  <BrowserRouter>
+  
+  // 👇 ACÁ ESTÁ EL CAMBIO: basename="/app"
+  <BrowserRouter basename="/app">
     <AuthProvider>
       <ToastProvider>
         <NotificationProvider>

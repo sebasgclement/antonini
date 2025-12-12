@@ -125,6 +125,7 @@ export default function useAuth() {
 
   // ---- LOGIN (usa wrapper { ok, user, token }) ----
   const login = useCallback(async (email: string, password: string) => {
+    await api.get('/sanctum/csrf-cookie');
     const { data } = await api.post<LoginResponse>('/auth/login', { email, password })
     if (data?.token) localStorage.setItem('token', data.token)
     if (data?.user) saveUser(data.user) // guardamos SOLO el usuario plano
@@ -137,7 +138,17 @@ export default function useAuth() {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     setUser(null)
-    if (location.pathname !== '/login') location.href = '/login'
+    
+    // 👇 EL FIX: Usamos la variable de entorno de Vite
+    // Esto vale "/app/" en producción y "/" en tu compu local.
+    const baseUrl = import.meta.env.BASE_URL; 
+    
+    // Construimos la ruta correcta: /app/login
+    // (replace evita que quede doble barra // si pasa)
+    const target = `${baseUrl}login`.replace('//', '/');
+
+    // Redirección forzada del navegador
+    window.location.href = target;
   }, [])
 
   // Cálculo de roles e isAdmin

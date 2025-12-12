@@ -60,7 +60,7 @@ const DolarWidget = () => {
             <div className="vstack" style={{ gap: 2 }}>
                 <div className="hstack" style={{gap: 6, alignItems: 'center'}}>
                     <span style={{fontSize: '1.2rem'}}>💵</span>
-                    <span style={{fontWeight: 700, color: 'var(--color-text)', fontSize: '0.95rem'}}>Dólar Blue</span>
+                    <span style={{fontWeight: 700, color: 'var(--color-text)', fontSize: '0.95rem'}}>Cotización Dolar</span>
                 </div>
                 <span style={{fontSize: '0.75rem', color: 'var(--color-muted)'}}>Venta Actual</span>
             </div>
