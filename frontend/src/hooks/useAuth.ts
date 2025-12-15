@@ -1,167 +1,177 @@
-import { useEffect, useState, useCallback } from 'react'
-import api from '../lib/api'
+import { useCallback, useEffect, useState } from "react";
+import api from "../lib/api";
 
 // ----- Tipos que matchean tu backend -----
-type RoleObj = { id: number; name: string }
+type RoleObj = { id: number; name: string };
 
 export type AuthUser = {
-  id: number
-  name: string
-  email: string
+  id: number;
+  name: string;
+  email: string;
   // el back puede traer 'role' plano o 'roles' como relación
-  role?: unknown
-  roles?: unknown[] | RoleObj[]
+  role?: unknown;
+  roles?: unknown[] | RoleObj[];
   // ...otros campos si hiciera falta
-}
+};
 
-type MeResponse = { ok: boolean; user: AuthUser }
-type LoginResponse = { ok: boolean; user: AuthUser; token: string }
+type MeResponse = { ok: boolean; user: AuthUser };
+type LoginResponse = { ok: boolean; user: AuthUser; token: string };
 
 // ----- Helpers seguros -----
 function readRoleName(input: unknown): string {
-  if (!input) return ''
-  if (typeof input === 'string') return input
-  if (typeof input === 'object') {
-    const o = input as Record<string, unknown>
-    const cand = o.name ?? o.nombre ?? o.role ?? o.rol ?? o.slug ?? o.id
-    return cand != null ? String(cand) : ''
+  if (!input) return "";
+  if (typeof input === "string") return input;
+  if (typeof input === "object") {
+    const o = input as Record<string, unknown>;
+    const cand = o.name ?? o.nombre ?? o.role ?? o.rol ?? o.slug ?? o.id;
+    return cand != null ? String(cand) : "";
   }
-  return String(input)
+  return String(input);
 }
 
 function normalizeRolesFromUser(user: AuthUser | null): string[] {
-  if (!user) return []
-  const set = new Set<string>()
+  if (!user) return [];
+  const set = new Set<string>();
 
   // role “sueltito”
   if (user.role !== undefined) {
-    const r = readRoleName(user.role).trim()
-    if (r) set.add(r.toLowerCase())
+    const r = readRoleName(user.role).trim();
+    if (r) set.add(r.toLowerCase());
   }
 
   // roles[] como relación (strings u objetos {id,name})
   if (Array.isArray(user.roles)) {
     for (const it of user.roles) {
-      const r = readRoleName(it).trim()
-      if (r) set.add(r.toLowerCase())
+      const r = readRoleName(it).trim();
+      if (r) set.add(r.toLowerCase());
     }
   }
 
-  return Array.from(set)
+  return Array.from(set);
 }
 
 // Extrae el usuario desde respuestas envueltas o no
 function extractUser(payload: any): AuthUser | null {
-  if (!payload) return null
+  if (!payload) return null;
   // /auth/me => { ok, user }
-  if (payload.user && typeof payload.user === 'object') return payload.user as AuthUser
+  if (payload.user && typeof payload.user === "object")
+    return payload.user as AuthUser;
   // por si algún día devuelves el user directo
-  if (payload.id && payload.email) return payload as AuthUser
-  return null
+  if (payload.id && payload.email) return payload as AuthUser;
+  return null;
 }
 
 export default function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const saveUser = (u: AuthUser | null) => {
-    setUser(u)
-    if (u) localStorage.setItem('user', JSON.stringify(u))
-    else localStorage.removeItem('user')
-  }
+    setUser(u);
+    if (u) localStorage.setItem("user", JSON.stringify(u));
+    else localStorage.removeItem("user");
+  };
 
   const fetchMe = useCallback(async () => {
-    let aborted = false
+    let aborted = false;
     try {
-      setLoading(true)
+      setLoading(true);
 
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem("token");
       if (!token) {
-        if (!aborted) saveUser(null)
-        return
+        if (!aborted) saveUser(null);
+        return;
       }
 
       // Render rápido con cache válido (usuario directo, no wrapper)
-      const cached = localStorage.getItem('user')
+      const cached = localStorage.getItem("user");
       if (cached) {
         try {
-          const parsed = JSON.parse(cached)
+          const parsed = JSON.parse(cached);
           if (parsed && parsed.id && parsed.email) {
-            if (!aborted) setUser(parsed)
+            if (!aborted) setUser(parsed);
           } else {
-            localStorage.removeItem('user')
+            localStorage.removeItem("user");
           }
         } catch {
-          localStorage.removeItem('user')
+          localStorage.removeItem("user");
         }
       }
 
       // Confirmar con el backend
-      const { data } = await api.get<MeResponse>('/auth/me')
-      const u = extractUser(data)
-      if (!aborted) saveUser(u)
+      const { data } = await api.get<MeResponse>("/auth/me");
+      const u = extractUser(data);
+      if (!aborted) saveUser(u);
     } catch {
-      if (!aborted) saveUser(null)
+      if (!aborted) saveUser(null);
     } finally {
-      if (!aborted) setLoading(false)
+      if (!aborted) setLoading(false);
     }
-    return () => { aborted = true }
-  }, [])
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
-  useEffect(() => { fetchMe() }, [fetchMe])
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe]);
 
   // Sincroniza cambios desde otras pestañas
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'user') {
-        const val = e.newValue ? JSON.parse(e.newValue) : null
-        setUser(val)
+      if (e.key === "user") {
+        const val = e.newValue ? JSON.parse(e.newValue) : null;
+        setUser(val);
       }
-      if (e.key === 'token' && !e.newValue) setUser(null)
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
+      if (e.key === "token" && !e.newValue) setUser(null);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   // ---- LOGIN (usa wrapper { ok, user, token }) ----
   const login = useCallback(async (email: string, password: string) => {
-    await api.get('/sanctum/csrf-cookie');
-    const { data } = await api.post<LoginResponse>('/auth/login', { email, password })
-    if (data?.token) localStorage.setItem('token', data.token)
-    if (data?.user) saveUser(data.user) // guardamos SOLO el usuario plano
-    return data.user
-  }, [])
+    await api.get("/sanctum/csrf-cookie");
+    const { data } = await api.post<LoginResponse>("/auth/login", {
+      email,
+      password,
+    });
+    if (data?.token) localStorage.setItem("token", data.token);
+    if (data?.user) saveUser(data.user); // guardamos SOLO el usuario plano
+    return data.user;
+  }, []);
 
   // ---- LOGOUT ----
   const logout = useCallback(async () => {
-    try { await api.post('/auth/logout') } catch {}
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setUser(null)
-    
-    // 👇 EL FIX: Usamos la variable de entorno de Vite
-    // Esto vale "/app/" en producción y "/" en tu compu local.
-    const baseUrl = import.meta.env.BASE_URL; 
-    
-    // Construimos la ruta correcta: /app/login
-    // (replace evita que quede doble barra // si pasa)
-    const target = `${baseUrl}login`.replace('//', '/');
+    try {
+      await api.post("/auth/logout");
+    } catch {}
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
 
-    // Redirección forzada del navegador
-    window.location.href = target;
-  }, [])
+    // 👇 FORZAMOS LA RUTA CORRECTA
+    window.location.href = "/app/login";
+  }, []);
 
   // Cálculo de roles e isAdmin
-  const roles = normalizeRolesFromUser(user)
+  const roles = normalizeRolesFromUser(user);
   const ADMIN_ALIASES = new Set([
-    'admin','administrator','superadmin','super-admin','role_admin','role:admin'
-  ])
-  const isAdmin = roles.some(r => ADMIN_ALIASES.has(r))
-  const isAuthenticated = !!user
+    "admin",
+    "administrator",
+    "superadmin",
+    "super-admin",
+    "role_admin",
+    "role:admin",
+  ]);
+  const isAdmin = roles.some((r) => ADMIN_ALIASES.has(r));
+  const isAuthenticated = !!user;
 
-  const hasRole = useCallback((role: string) => {
-    return roles.includes(role.toLowerCase())
-  }, [roles])
+  const hasRole = useCallback(
+    (role: string) => {
+      return roles.includes(role.toLowerCase());
+    },
+    [roles]
+  );
 
   return {
     user,
@@ -173,5 +183,5 @@ export default function useAuth() {
     hasRole,
     login,
     logout,
-  }
+  };
 }

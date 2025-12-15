@@ -1,45 +1,49 @@
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
+import Echo from "laravel-echo";
+import Pusher from "pusher-js";
 
 declare global {
-    interface Window {
-        Pusher: any;
-        Echo: any;
-    }
+  interface Window {
+    Pusher: any;
+    Echo: any;
+  }
 }
 
 window.Pusher = Pusher;
 
 export const setupEcho = (token: string) => {
-    if (window.Echo) {
-        window.Echo.disconnect();
-    }
+  if (window.Echo) {
+    window.Echo.disconnect();
+  }
 
-    console.log("🛠️ Intentando conectar a Reverb MANUALMENTE...");
+  console.log("🛠️ Conectando a Reverb...");
 
-    const echo = new Echo({
-        broadcaster: 'reverb',
-        key: 'AnoniniAutoReverb', // <--- Pongo la key directo
-        wsHost: window.location.hostname,
-        
-        // 🔥 HARDCODEAMOS EL PUERTO 9000
-        wsPort: 9000,
-        wssPort: 9000,
-        
-        forceTLS: false,
-        enabledTransports: ['ws', 'wss'],
-        
-        // Autenticación
-        authEndpoint: 'http://127.0.0.1:8000/api/broadcasting/auth', 
-        auth: {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: 'application/json',
-            },
-        },
-        disableStats: true,
-    });
+  // Usamos el host actual (la web) o el fallback
+  const host = window.location.hostname;
 
-    window.Echo = echo;
-    return echo;
+  const echo = new Echo({
+    broadcaster: "reverb",
+    key: "AnoniniAutoReverb",
+    wsHost: host,
+
+    // Puerto estándar para producción (o el que estés usando con SSL)
+    wsPort: 9000,
+    wssPort: 9000,
+
+    forceTLS: false, // Probá true si tenés certificados SSL en el socket
+    enabledTransports: ["ws", "wss"],
+
+    // ✅ CORREGIDO: Auth endpoint apunta al servidor real
+    authEndpoint: "https://antoniniautomotores.com.ar/api/broadcasting/auth",
+
+    auth: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    },
+    disableStats: true,
+  });
+
+  window.Echo = echo;
+  return echo;
 };

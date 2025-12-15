@@ -360,7 +360,6 @@ export default function VehicleView() {
       </div>
 
       {/* === FOTOS === */}
-      {/* ... (Podés mantener la galería como estaba o mejorarla con un grid más prolijo) ... */}
       <div className="card">
         <div className="title" style={{ fontSize: "1.1rem" }}>
           Galería de Fotos
@@ -375,8 +374,15 @@ export default function VehicleView() {
             { key: "interior_back", label: "Interior Atrás" },
             { key: "trunk", label: "Baúl" },
           ].map(({ key, label }) => {
-            const url = vehicle[`photo_${key}_url`] || vehicle[`photo_${key}`];
+            let url = vehicle[`photo_${key}_url`] || vehicle[`photo_${key}`];
+
             if (!url) return null;
+
+            // 🔥 FIX: Limpiamos la URL si viene sucia con /api
+            if (typeof url === "string" && url.includes("/api/storage")) {
+              url = url.replace("/api/storage", "/storage");
+            }
+
             return (
               <div
                 className="photo-item"
@@ -387,6 +393,10 @@ export default function VehicleView() {
                   src={url}
                   alt={label}
                   style={{ aspectRatio: "4/3", objectFit: "cover" }}
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "https://via.placeholder.com/400x300?text=Sin+Imagen";
+                  }}
                 />
                 <p
                   style={{ marginTop: 8, fontSize: "0.85rem", fontWeight: 500 }}
