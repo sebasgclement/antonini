@@ -13,6 +13,7 @@ class CustomerStoreRequest extends FormRequest
         return [
             'first_name' => ['required','string','max:80'],
             'last_name'  => ['required','string','max:80'],
+            'status' => 'nullable|string',
 
             'doc_type'   => ['nullable','string','max:20'], // Subí a 20 por las dudas ("Pasaporte Extranjero")
             'doc_number' => ['required','string','max:20','unique:customers,doc_number'], // Lo puse required porque es clave

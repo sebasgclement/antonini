@@ -2,39 +2,39 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Customer extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
+        'user_id',      // 👈 Importante para saber quién lo cargó
+        'status',       // 👈 Importante para el filtro (consulta vs cliente)
         'first_name',
         'last_name',
-        'doc_type',
-        'doc_number',
-        'cuit',            
-        'marital_status',  
         'email',
         'phone',
-        'alt_phone',       
-        'address',         
-        'city',            
-        'notes',           
+        'alt_phone',
+        'doc_type',
+        'doc_number',
+        'cuit',
+        'marital_status',
+        'address',
+        'city',
+        'notes',
         'dni_front',
-        'dni_back'
+        'dni_back',
     ];
 
-    public function events()
+    // 👇 ESTA ES LA FUNCIÓN QUE TE FALTA Y DA EL ERROR
+    public function user()
     {
-        return $this->hasMany(CustomerEvent::class)->orderBy('date', 'desc');
+        return $this->belongsTo(User::class);
     }
 
-    // Relaciones
-    public function reservations()
-    {
-        return $this->hasMany(Reservation::class);
-    }
-
-    // 🔗 Accessors para devolver URLs completas
+    // Accessors para las URLs de las fotos (ya los tenías, los dejo por las dudas)
     protected $appends = ['dni_front_url', 'dni_back_url'];
 
     public function getDniFrontUrlAttribute()

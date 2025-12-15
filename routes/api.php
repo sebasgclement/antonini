@@ -3,12 +3,13 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
-// Controladores
+// Controladores Principales
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\VehicleBrandController;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\RoleController; // Added RoleController import
 
 // Controladores API (Namespace Api)
 use App\Http\Controllers\Api\VehicleController;
@@ -18,7 +19,7 @@ use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\ReservationPaymentController;
 use App\Http\Controllers\Api\DashboardController;
 
-// Modelos (Necesario para el contador de notificaciones)
+// Modelos
 use App\Models\Reservation; 
 
 // ================== RUTAS PÚBLICAS ==================
@@ -35,10 +36,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/user/change-password', [AuthController::class, 'changePassword']);
 
     // ✅ DASHBOARD / GRAL
-    Route::get('/dolar', [DashboardController::class, 'getDolar']); // 👈 ACÁ ESTÁ EL DOLAR QUE FALLABA
+    Route::get('/dolar', [DashboardController::class, 'getDolar']); 
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 
     // ✅ NOTIFICACIONES (Contador para el Sidebar)
+    // Usamos closure directo para rapidez, como tenías en local
     Route::get('/reservas/pendientes/count', function () {
         $count = Reservation::where('status', 'pendiente')->count();
         return response()->json(['count' => $count]);
@@ -74,6 +76,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put   ('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'update']);
     Route::delete('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'destroy']);
     
+    // ✅ DASHBOARD STATS (Agregado para que no de error el Home)
+    Route::get('/dashboard/stats', [DashboardController::class, 'index']);
 
 }); 
 

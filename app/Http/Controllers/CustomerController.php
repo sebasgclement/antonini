@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\CustomerEvent;
+use App\Models\Reservation;
+use App\Models\Vehicle;
 use Illuminate\Http\Request;
 use App\Http\Requests\CustomerStoreRequest;
 use App\Http\Requests\CustomerUpdateRequest;
@@ -16,7 +19,8 @@ class CustomerController extends Controller
         // 🔹 Búsqueda directa por DNI
         if ($request->filled('dni')) {
             $dni = trim($request->query('dni'));
-            $customer = Customer::where('doc_number', $dni)->first();
+            // Agregamos ->with('user') para saber quién lo cargó
+            $customer = Customer::with('user')->where('doc_number', $dni)->first();
 
             return response()->json([
                 'ok' => true,
@@ -28,16 +32,17 @@ class CustomerController extends Controller
         $term = (string) $request->query('search', '');
 
         $rows = Customer::query()
+            ->with('user') // 👈 IMPORTANTE: Trae los datos del vendedor
             ->when($term, function ($q) use ($term) {
                 $q->where(function ($qq) use ($term) {
                     $qq->where('first_name', 'like', "%$term%")
-                       ->orWhere('last_name', 'like', "%$term%")
-                       ->orWhere('email', 'like', "%$term%")
-                       ->orWhere('doc_number', 'like', "%$term%")
-                       ->orWhere('cuit', 'like', "%$term%")
-                       ->orWhere('phone', 'like', "%$term%")
-                       ->orWhere('alt_phone', 'like', "%$term%")
-                       ->orWhere('city', 'like', "%$term%");
+                        ->orWhere('last_name', 'like', "%$term%")
+                        ->orWhere('email', 'like', "%$term%")
+                        ->orWhere('doc_number', 'like', "%$term%")
+                        ->orWhere('cuit', 'like', "%$term%")
+                        ->orWhere('phone', 'like', "%$term%")
+                        ->orWhere('alt_phone', 'like', "%$term%")
+                        ->orWhere('city', 'like', "%$term%");
                 });
             })
             ->latest()
@@ -59,6 +64,9 @@ class CustomerController extends Controller
             $data['dni_back'] = $req->file('dni_back')->store('dni', 'public');
         }
 
+        // ✍️ Asignar vendedor actual (quién carga al cliente)
+        $data['user_id'] = auth()->id() ?? 1;
+
         $c = Customer::create($data);
 
         return response()->json(['ok' => true, 'data' => $c], 201);
@@ -67,6 +75,9 @@ class CustomerController extends Controller
     // GET /api/customers/{id}
     public function show(Customer $customer)
     {
+        // Cargar relación con usuario para mostrar "Vendedor: Juan"
+        $customer->load('user');
+
         // 🔹 Incluir URLs absolutas de las imágenes
         $customer->dni_front_url = $customer->dni_front ? asset('storage/' . $customer->dni_front) : null;
         $customer->dni_back_url  = $customer->dni_back  ? asset('storage/' . $customer->dni_back)  : null;
@@ -110,27 +121,29 @@ class CustomerController extends Controller
         return response()->json(['ok' => true, 'data' => $customer]);
     }
 
-       // Guardar evento
-    public function storeEvent(Request $request, $customerId)
-{
-    $data = $request->validate([
-        'type' => 'required|string',
-        'description' => 'nullable|string',
-        'date' => 'required|date',
-    ]);
-
-    $data['customer_id'] = $customerId;
-    
-    $event = CustomerEvent::create($data);
-
-    return response()->json(['message' => 'Evento guardado', 'data' => $event]);
-}
-
-
     // DELETE /api/customers/{id}
     public function destroy(Customer $customer)
     {
-        // 🧹 Eliminar imágenes asociadas si existen
+        // 🛡️ REGLA 1: Verificar si tiene Reservas (Compras)
+        if (Reservation::where('customer_id', $customer->id)->exists()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se puede eliminar: El cliente tiene operaciones (reservas/ventas) registradas.'
+            ], 409); // 409 = Conflicto
+        }
+
+        // 🛡️ REGLA 2: Verificar si es dueño de Vehículos (Consignaciones)
+        // Buscamos autos donde él sea el 'customer_id' (dueño consignante)
+        if (Vehicle::where('customer_id', $customer->id)->exists()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se puede eliminar: El cliente tiene vehículos asignados en stock.'
+            ], 409);
+        }
+
+        // --- Si pasó los filtros, procedemos a borrar ---
+
+        // 🧹 Eliminar imágenes asociadas
         if ($customer->dni_front) {
             Storage::disk('public')->delete($customer->dni_front);
         }
@@ -141,5 +154,42 @@ class CustomerController extends Controller
         $customer->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    // ---------------------------------------------------
+    // EVENTOS / AGENDA
+    // ---------------------------------------------------
+
+    // GET /api/customers/{id}/events
+    public function getEvents($id)
+    {
+        $events = CustomerEvent::where('customer_id', $id)
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+
+        return response()->json($events);
+    }
+
+    // POST /api/customers/{id}/events
+    public function storeEvent(Request $request, $id)
+    {
+        $data = $request->validate([
+            'type' => 'required|string',
+            'description' => 'nullable|string',
+            'date' => 'required|date',
+        ]);
+
+        $event = new CustomerEvent();
+        $event->customer_id = $id;
+        $event->type = $data['type'];
+        $event->description = $data['description'];
+        $event->date = $data['date'];
+        
+        // Asignamos el usuario actual (o 1 si no hay auth)
+        $event->user_id = auth()->id() ?? 1;
+        
+        $event->save();
+
+        return response()->json(['message' => 'Evento guardado', 'data' => $event]);
     }
 }
