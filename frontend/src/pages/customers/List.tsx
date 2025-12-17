@@ -57,7 +57,7 @@ export default function CustomersList() {
     <div className="hstack" style={{ justifyContent: "flex-end", gap: 4 }}>
       <button
         className="action-btn"
-        title="Agenda"
+        title="Acciones"
         style={{ color: "#eab308" }}
         onClick={(e) => {
           e.stopPropagation();
