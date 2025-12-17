@@ -157,7 +157,7 @@ class CustomerController extends Controller
     }
 
     // ---------------------------------------------------
-    // EVENTOS / AGENDA
+    // EVENTOS / ACCIONES
     // ---------------------------------------------------
 
     // GET /api/customers/{id}/events
