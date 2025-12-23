@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"; // Agregué useEffect
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Confirm from "../../components/ui/Confirm";
 import Pagination from "../../components/ui/Pagination";
@@ -7,7 +7,6 @@ import useAuth from "../../hooks/useAuth";
 import usePagedList from "../../hooks/usePagedList";
 import api from "../../lib/api";
 
-// ... (Tu tipo Vehicle se mantiene igual)
 type Vehicle = {
   id: number;
   plate: string;
@@ -66,23 +65,21 @@ export default function VehiclesList() {
 
   const rows = useMemo(() => items, [items]);
 
-  // --- DEBUGGER: Esto te dirá la verdad en la consola ---
+  // --- DEBUGGER ---
   useEffect(() => {
     if (items.length > 0) {
       console.group("🔍 Inspección de Vehículos");
       items.forEach((v) => {
         if (v.status === "ofrecido" || v.status === "disponible") {
           console.log(
-            `Patente: ${
-              v.plate
-            } | Status: ${v.status.toUpperCase()} | Ownership: ${v.ownership}`
+            `Patente: ${v.plate} | Status: ${v.status.toUpperCase()} | Ownership: ${v.ownership}`
           );
         }
       });
       console.groupEnd();
     }
   }, [items]);
-  // -----------------------------------------------------
+  // ----------------
 
   const toggleSection = (status: string) => {
     setOpenSections((prev) =>
@@ -138,8 +135,6 @@ export default function VehiclesList() {
   };
 
   const renderSection = (statusFilter: string, title: string, icon: string) => {
-    // Aquí está la clave: este filtro es estricto.
-    // Si status no es EXACTAMENTE igual al filtro, no entra.
     const filtered = rows.filter((v) => v.status === statusFilter);
 
     if (filtered.length === 0) return null;
@@ -206,7 +201,7 @@ export default function VehiclesList() {
                       )}
                     </td>
 
-                    {/* Badges de Estado - Lógica Mejorada */}
+                    {/* Badges de Estado - CORREGIDO AQUÍ */}
                     <td>
                       <div
                         style={{
@@ -225,23 +220,24 @@ export default function VehiclesList() {
                             📞 OFRECIDO
                           </span>
                         ) : (
-                          // 2. Si no es ofrecido, mostramos si es Stock o Reservado
+                          // 2. Si no es ofrecido, mostramos si es Stock
                           v.status === "disponible" && (
                             <span className="badge green">🏠 Stock</span>
                           )
                         )}
 
-                        {/* 3. Propiedad (Propio vs Consignado) */}
-                        {/* Si es ofrecido, quizás no hace falta mostrar propiedad, pero lo dejo por si acaso */}
-                        {v.ownership === "propio" ? (
-                          <span className="badge purple">🏢 Propio</span>
-                        ) : (
-                          <span className="badge blue">👤 Consignado</span>
+                        {/* 3. Propiedad: Solo mostramos Propio/Consignado si NO es Ofrecido */}
+                        {v.status !== "ofrecido" && (
+                          v.ownership === "propio" ? (
+                            <span className="badge purple">🏢 Propio</span>
+                          ) : (
+                            <span className="badge blue">👤 Consignado</span>
+                          )
                         )}
                       </div>
                     </td>
 
-                    {/* Resto de columnas... */}
+                    {/* Marca Modelo */}
                     <td>
                       <div
                         style={{ fontWeight: 600, color: "var(--color-text)" }}
@@ -258,6 +254,7 @@ export default function VehiclesList() {
                       </div>
                     </td>
 
+                    {/* Año Km */}
                     <td>
                       <div>{v.year || "—"}</div>
                       <div
@@ -270,8 +267,12 @@ export default function VehiclesList() {
                       </div>
                     </td>
 
+                    {/* Precio */}
                     <td
-                      style={{ fontWeight: 600, color: "var(--color-primary)" }}
+                      style={{
+                        fontWeight: 600,
+                        color: "var(--color-primary)",
+                      }}
                     >
                       {v.price ? (
                         `$ ${v.price.toLocaleString()}`
@@ -282,6 +283,7 @@ export default function VehiclesList() {
                       )}
                     </td>
 
+                    {/* Acciones */}
                     <td style={{ textAlign: "right" }}>
                       <div
                         className="hstack"
@@ -325,7 +327,6 @@ export default function VehiclesList() {
                           </button>
                         )}
 
-                        {/* Acciones contextuales */}
                         {v.status !== "vendido" ? (
                           <button
                             className="action-btn"

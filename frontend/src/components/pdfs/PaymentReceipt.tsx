@@ -123,7 +123,6 @@ export const PaymentReceipt = ({
 
       <View style={styles.footer}>
         <Text>Documento no válido como factura fiscal.</Text>
-        <Text>Antonini Automotores - Firma Autorizada</Text>
       </View>
     </Page>
   </Document>

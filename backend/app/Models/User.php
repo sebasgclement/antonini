@@ -35,4 +35,10 @@ class User extends Authenticatable
         return $this->hasMany(Reservation::class, 'seller_id');
     }
 
+    public function isAdmin(): bool
+    {
+        // Verifica si el rol es 'admin' O si el ID es 1 (Super Admin)
+        return $this->role === 'admin' || $this->id === 1;
+    }
+
 }

@@ -1,6 +1,8 @@
 import { pdf } from "@react-pdf/renderer";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+// IMPORTANTE: Asegúrate de importar el componente PDF que creamos arriba
+import { ReservationDetailPdf } from "../../components/pdfs/ReservationDetailPdf"; 
 import { PaymentReceipt } from "../../components/pdfs/PaymentReceipt";
 import Button from "../../components/ui/Button";
 import api from "../../lib/api";
@@ -93,15 +95,27 @@ export default function ReservationView() {
     fetchReservation();
   }, [id]);
 
-  // 🖨️ FUNCIÓN PARA GENERAR RECIBO INDIVIDUAL
+  // 🖨️ FUNCIÓN: IMPRIMIR RESERVA COMPLETA
+  const handlePrintFullReservation = async () => {
+    if (!reservation) return;
+    try {
+      const blob = await pdf(
+        <ReservationDetailPdf reservation={reservation} />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Error generando PDF de reserva", error);
+      alert("Error al generar el PDF");
+    }
+  };
+
+  // 🖨️ FUNCIÓN: IMPRIMIR RECIBO DE PAGO INDIVIDUAL
   const handlePrintReceipt = async (payment: ReservationPayment) => {
     if (!reservation) return;
-
     try {
-      // Armamos un objeto reserva temporal para el recibo
       const reservationForPdf = {
         ...reservation,
-        // Pasamos el método de ESTE pago para que salga bien en el PDF
         payment_method: payment.method?.name || "Efectivo",
       };
 
@@ -181,6 +195,20 @@ export default function ReservationView() {
         </div>
 
         <div className="hstack" style={{ gap: 10 }}>
+          {/* NUEVO BOTÓN: IMPRIMIR RESERVA */}
+          <Button
+            onClick={handlePrintFullReservation}
+            style={{
+              background: "var(--color-primary)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span>🖨️</span> Imprimir Reserva
+          </Button>
+
           <Button
             onClick={() => nav("/reservas")}
             className="btn-secondary"
@@ -366,6 +394,7 @@ export default function ReservationView() {
               💰 Resumen Económico
             </h3>
 
+            {/* SECCIÓN EDITADA: Solo Precio Venta y Restas */}
             <div
               style={{
                 display: "grid",
@@ -374,6 +403,8 @@ export default function ReservationView() {
               }}
             >
               <InfoBox label="Precio Venta" value={precioVenta} />
+              {/* Omitimos cualquier precio de referencia o de compra aquí */}
+              
               <InfoBox label="Crédito Banco" value={creditoBanco} />
               <InfoBox label="Toma Usado" value={valorUsado} />
               <InfoBox
@@ -691,7 +722,7 @@ const PaymentItem = ({
         </div>
       </div>
 
-      {/* 🖨️ BOTÓN IMPRIMIR */}
+      {/* 🖨️ BOTÓN IMPRIMIR RECIBO INDIVIDUAL */}
       <Button
         onClick={onPrint}
         className="btn-icon"

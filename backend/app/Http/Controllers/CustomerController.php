@@ -10,13 +10,13 @@ use Illuminate\Http\Request;
 use App\Http\Requests\CustomerStoreRequest;
 use App\Http\Requests\CustomerUpdateRequest;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class CustomerController extends Controller
 {
     // GET /api/customers
     public function index(Request $request)
     {
-        // 🔹 Búsqueda directa por DNI
         if ($request->filled('dni')) {
             $dni = trim($request->query('dni'));
             $customer = Customer::with(['user', 'seller'])->where('doc_number', $dni)->first();
@@ -27,11 +27,10 @@ class CustomerController extends Controller
             ]);
         }
 
-        // 🔹 Búsqueda general
         $term = (string) $request->query('search', '');
 
         $rows = Customer::query()
-            ->with(['user', 'seller']) // Traemos creador y vendedor actual
+            ->with(['user', 'seller'])
             ->when($term, function ($q) use ($term) {
                 $q->where(function ($qq) use ($term) {
                     $qq->where('first_name', 'like', "%$term%")
@@ -60,13 +59,17 @@ class CustomerController extends Controller
             $data['dni_back'] = $req->file('dni_back')->store('dni', 'public');
         }
 
-        // El que lo crea queda registrado como creador (user_id)
-        $data['user_id'] = auth()->id() ?? 1;
+        // El usuario que crea el registro (Creator)
+        $user = auth()->user();
+        $data['user_id'] = $user->id;
+
+        // 👇 CORRECCIÓN AQUÍ 👇
+        // Usamos el que viene del formulario. Si no viene nada, usamos el usuario logueado.
+        $data['seller_id'] = $req->input('seller_id') ? $req->input('seller_id') : $user->id;
         
-        // OPCIONAL: ¿El que lo crea se lo asigna automáticamente?
-        // Si querés que al crear ya sea "propiedad" del vendedor, descomenta esto:
-        // $data['seller_id'] = auth()->id();
-        // $data['locked_until'] = now()->addDays(15);
+        // Siempre asignamos el bloqueo de 15 días al crear
+        $data['locked_until'] = now()->addDays(15);
+        // 👆 FIN CORRECCIÓN 👆
 
         $c = Customer::create($data);
 
@@ -77,7 +80,6 @@ class CustomerController extends Controller
     public function show(Customer $customer)
     {
         $customer->load(['user', 'seller']);
-
         $customer->dni_front_url = $customer->dni_front ? asset('storage/' . $customer->dni_front) : null;
         $customer->dni_back_url  = $customer->dni_back  ? asset('storage/' . $customer->dni_back)  : null;
 
@@ -87,10 +89,19 @@ class CustomerController extends Controller
     // PUT /api/customers/{id}
     public function update(CustomerUpdateRequest $req, Customer $customer)
     {
-        // 🛡️ PROTECCIÓN: Si el cliente es de otro y está bloqueado, no podés editar sus datos
         $user = auth()->user();
+        
+        // 👇 CORRECCIÓN 1: Comparación segura de IDs (int)
+        $isOwner = (int)$customer->seller_id === (int)$user->id;
+        
+        // 👇 CORRECCIÓN 2: Detectar si es Admin (ajusta según tu lógica de roles)
+        // Asumo que role_id 1 es admin o role 'admin'
+        $isAdmin = $user->role === 'admin' || $user->role_id === 1;
+
+        // PROTECCIÓN: Si tiene dueño, NO soy yo, está bloqueado y NO soy admin -> Error
         if ($customer->seller_id && 
-            $customer->seller_id !== $user->id && 
+            !$isOwner && 
+            !$isAdmin &&
             $customer->locked_until && 
             $customer->locked_until > now()) {
              return response()->json(['message' => 'Cliente bloqueado por otro vendedor.'], 403);
@@ -98,7 +109,7 @@ class CustomerController extends Controller
 
         $data = $req->validated();
 
-        // Manejo de imágenes (borrar/subir)
+        // Manejo de imágenes
         if ($req->has('delete_dni_front')) {
             if ($customer->dni_front) Storage::disk('public')->delete($customer->dni_front);
             $customer->dni_front = null;
@@ -139,12 +150,12 @@ class CustomerController extends Controller
     }
 
     // ---------------------------------------------------
-    // EVENTOS Y BLOQUEO (LA PARTE IMPORTANTE)
+    // EVENTOS Y BLOQUEO (AQUÍ ESTABA EL ERROR)
     // ---------------------------------------------------
 
     public function getEvents($id)
     {
-        $events = CustomerEvent::with('user') // Traer nombre del que hizo la nota
+        $events = CustomerEvent::with('user')
                     ->where('customer_id', $id)
                     ->orderBy('created_at', 'desc')
                     ->get();
@@ -157,24 +168,32 @@ class CustomerController extends Controller
             'type' => 'required|string',
             'description' => 'required|string',
             'date' => 'required|date',
-            'is_schedule' => 'boolean' // True si es "Agendar"
+            'is_schedule' => 'boolean'
         ]);
 
         $customer = Customer::findOrFail($id);
         $user = auth()->user();
 
-        // 1. VALIDAR BLOQUEO
-        if ($customer->seller_id && 
-            $customer->seller_id !== $user->id && 
-            $customer->locked_until && 
-            $customer->locked_until > now()) 
-        {
+        // 👇 LÓGICA DE PERMISOS CORREGIDA
+        
+        // 1. ¿Soy el dueño? (Forzamos a entero para evitar error 5 !== "5")
+        $isOwner = (int)$customer->seller_id === (int)$user->id;
+
+        // 2. ¿Soy Admin? (Permite saltarse el bloqueo)
+        $isAdmin = $user->role === 'admin' || $user->role_id === 1;
+
+        // 3. ¿El bloqueo está activo?
+        $isLocked = $customer->locked_until && $customer->locked_until > now();
+
+        // CONDICIÓN:
+        // Si tiene dueño Y no soy yo Y no soy admin Y está bloqueado -> ERROR
+        if ($customer->seller_id && !$isOwner && !$isAdmin && $isLocked) {
             return response()->json([
                 'message' => 'Este cliente pertenece a ' . ($customer->seller->name ?? 'otro vendedor')
             ], 403);
         }
 
-        // 2. GUARDAR EVENTO
+        // 4. GUARDAR EVENTO
         $event = new CustomerEvent();
         $event->customer_id = $id;
         $event->user_id = $user->id;
@@ -183,19 +202,21 @@ class CustomerController extends Controller
         $event->date = $request->date;
         $event->save();
 
-        // 3. APLICAR LÓGICA DE PROPIEDAD
-        // Si es "Agendar" (is_schedule = true) -> Bloqueo fuerte por 15 días
-        if ($request->boolean('is_schedule')) {
+        // 5. ACTUALIZAR PROPIEDAD
+        // Si es "Agendar" O si el cliente estaba libre O vencido -> Me lo quedo (o renuevo)
+        // NOTA: Si soy Admin y agendo, también me lo asigno a mi mismo o al dueño actual?
+        // Por defecto aquí dejamos que si se agenda, se renueva la propiedad al usuario actual.
+        
+        $shouldAssign = $request->boolean('is_schedule') || is_null($customer->seller_id) || !$isLocked;
+
+        if ($shouldAssign) {
+            // Si soy admin, tal vez no quiero "robárselo" al vendedor solo por poner una nota.
+            // Pero si es "Agendar" (Próximo paso), tiene sentido renovar.
+            
+            // Lógica: Asignar al usuario actual por 15 días
             $customer->update([
                 'seller_id' => $user->id,
                 'locked_until' => now()->addDays(15)
-            ]);
-        }
-        // Si el cliente estaba libre -> Se lo asigna (aunque sea nota simple)
-        elseif (is_null($customer->seller_id) || ($customer->locked_until && $customer->locked_until < now())) {
-            $customer->update([
-                'seller_id' => $user->id,
-                'locked_until' => now()->addDays(15) // Opcional: ¿Nota simple también bloquea? Acá puse que sí.
             ]);
         }
 
@@ -209,5 +230,23 @@ class CustomerController extends Controller
                 'locked_until' => $customer->locked_until
             ]
         ]);
+    }
+
+    // GET /api/my-agenda
+    public function myAgenda()
+    {
+        $userId = auth()->id();
+
+        $events = CustomerEvent::with('customer') // Traemos al cliente para mostrar el nombre
+            ->where('user_id', $userId)
+            // Solo eventos futuros o de hoy
+            ->whereDate('date', '>=', now()) 
+            // Ordenados por fecha (el más próximo primero)
+            ->orderBy('date', 'asc') 
+            // Traemos solo los próximos 5 para no saturar el dashboard
+            ->take(5) 
+            ->get();
+
+        return response()->json($events);
     }
 }

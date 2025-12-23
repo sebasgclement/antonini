@@ -46,6 +46,17 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json(['count' => $count]);
     });
 
+    // ✅ CONTADOR AGENDA (Solo eventos de HOY para el usuario actual)
+    Route::get('/my-agenda/count', function () {
+        $count = \App\Models\CustomerEvent::where('user_id', auth()->id())
+            ->whereDate('date', \Carbon\Carbon::today())
+            ->count();
+        return response()->json(['count' => $count]);
+    });
+
+    // ✅ AGENDA USERS
+    Route::get('/my-agenda', [CustomerController::class, 'myAgenda']);
+
     // ✅ CLIENTES
     Route::apiResource('customers', CustomerController::class);
     Route::post('/customers/{id}/events', [CustomerController::class, 'storeEvent']);

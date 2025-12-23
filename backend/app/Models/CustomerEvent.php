@@ -8,20 +8,26 @@ class CustomerEvent extends Model
 {
     protected $fillable = [
         'customer_id', 
-        'user_id',      // 👈 AGREGADO: Importante para saber quién registró el evento
+        'user_id',
         'type', 
         'description', 
         'date'
     ];
     
-    // Castear la fecha para que Laravel la maneje como objeto Carbon
     protected $casts = [
         'date' => 'datetime',
     ];
 
-    // 👈 NUEVA RELACIÓN: Para poder mostrar "Agendado por: Juan" en el historial
+    // Relación con el Usuario (Vendedor)
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // 👇 ESTA ES LA QUE FALTABA
+    // Relación con el Cliente (Para saber de quién es el evento)
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
     }
 }

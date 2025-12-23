@@ -21,7 +21,6 @@ export interface PaginationData {
 }
 
 export const useCustomers = () => {
-  // Usamos TU tipo Customer aquí
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [pagination, setPagination] = useState<PaginationData>({
@@ -131,7 +130,6 @@ export const useCustomers = () => {
         setCustomers((prev) =>
           prev.map((c) => {
             if (c.id === customerId) {
-              // Mezclamos los datos viejos con los nuevos estados de bloqueo
               return {
                 ...c,
                 seller_id: data.customer_status.seller_id,
@@ -144,7 +142,7 @@ export const useCustomers = () => {
       }
       return data;
     } catch (err) {
-      throw err; // El componente mostrará el Toast con el error
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -160,6 +158,22 @@ export const useCustomers = () => {
     }
   };
 
+  // ✏️ 6. ACTUALIZAR DATOS CLIENTE (Nuevo)
+  // (La movimos ANTES del return y cambiamos 'client' por 'api')
+  const updateCustomer = async (id: number, data: Partial<Customer>) => {
+    const response = await api.put(`/customers/${id}`, data);
+    return response.data;
+  };
+
+  // 👥 7. OBTENER VENDEDORES (Nuevo - Solo Admin)
+  // (La movimos ANTES del return y cambiamos 'client' por 'api')
+  const getSellers = async () => {
+    const response = await api.get('/admin/users');
+    // Manejo robusto de la respuesta por si viene paginada o directa
+    return response.data.data || response.data; 
+  };
+
+  // Retornamos TODO (incluyendo las nuevas funciones)
   return {
     customers,
     loading,
@@ -169,5 +183,7 @@ export const useCustomers = () => {
     deleteCustomer,
     addEvent,
     getCustomerEvents,
+    updateCustomer, // <--- Agregado
+    getSellers,     // <--- Agregado
   };
 };
