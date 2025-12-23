@@ -2,28 +2,18 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
-{
-    // Usuario de prueba
-    User::factory()->create([
-        'name'  => 'Test User',
-        'email' => 'test@example.com',
-    ]);
-
-    // Ejecutar todos los seeders
-    $this->call([
-        RoleSeeder::class,
-        CustomerSeeder::class,
-        VehicleSeeder::class,
-        VehicleExpenseSeeder::class,
-        AdminUserSeeder::class,
-        PaymentMethodSeeder::class,
-    ]);
-}
-
+    {
+        // Llamamos solo a los seeders de datos reales para la demo
+        $this->call([
+            CustomerSeeder::class,       // 1. Clientes (necesario para asignar dueños)
+            VehicleSeeder::class,        // 2. Vehículos (Hilux, Gol, etc.)
+            VehicleExpenseSeeder::class, // 3. Gastos asociados a esos vehículos
+            PaymentMethodSeeder::class,  // 4. Métodos de pago actualizados
+        ]);
+    }
 }

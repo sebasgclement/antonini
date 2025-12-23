@@ -14,6 +14,7 @@ class CustomerStoreRequest extends FormRequest
             'first_name' => ['required','string','max:80'],
             'last_name'  => ['required','string','max:80'],
             'status'     => 'nullable|string',
+            'seller_id'  => 'nullable|exists:users,id',
 
             'doc_type'   => ['nullable','string','max:20'],
             'doc_number' => ['required','string','max:20','unique:customers,doc_number'],

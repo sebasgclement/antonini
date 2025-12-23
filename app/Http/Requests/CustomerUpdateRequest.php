@@ -17,6 +17,7 @@ class CustomerUpdateRequest extends FormRequest
             'first_name' => ['sometimes','required','string','max:80'],
             'last_name'  => ['sometimes','required','string','max:80'],
             'status'     => 'nullable|string',
+            'seller_id'  => 'nullable|exists:users,id',
 
             'doc_type'   => ['nullable','string','max:20'],
             'doc_number' => ['nullable','string','max:20', Rule::unique('customers','doc_number')->ignore($id)],
