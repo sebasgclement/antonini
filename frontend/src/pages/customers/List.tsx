@@ -10,6 +10,7 @@ import { displayCustomerName, type Customer } from "../../types/customer";
 
 export default function CustomersList() {
   const nav = useNavigate();
+
   const {
     items,
     setItems,
@@ -23,11 +24,13 @@ export default function CustomersList() {
     refetch,
   } = usePagedList<Customer>("/customers");
 
-  const [toast, setToast] = useState("");
+  const [toastConfig, setToastConfig] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
   const [toDelete, setToDelete] = useState<Customer | null>(null);
   const [agendaCustomer, setAgendaCustomer] = useState<Customer | null>(null);
 
-  // 🔹 ESTADOS PARA COLAPSAR LAS TABLAS (Por defecto abiertas)
   const [showRegistrados, setShowRegistrados] = useState(true);
   const [showConsultas, setShowConsultas] = useState(true);
 
@@ -41,23 +44,38 @@ export default function CustomersList() {
     try {
       await api.delete(`/customers/${toDelete.id}`);
       setItems((prev) => prev.filter((c) => c.id !== toDelete.id));
+
       if (rows.length === 1 && page > 1) {
         setPage(page - 1);
         setTimeout(refetch, 0);
       }
-      setToast("Cliente eliminado ✅");
+      setToastConfig({ message: "Cliente eliminado ✅", type: "success" });
     } catch (e: any) {
-      setToast(e?.response?.data?.message || "No se pudo eliminar");
+      setToastConfig({
+        message: e?.response?.data?.message || "No se pudo eliminar",
+        type: "error",
+      });
     } finally {
       setToDelete(null);
     }
+  };
+
+  const isLocked = (c: Customer) => {
+    if (!c.locked_until) return false;
+    return new Date(c.locked_until) > new Date();
+  };
+
+  const handleModalSuccess = (msg: string) => {
+    setToastConfig({ message: msg, type: "success" });
+    setAgendaCustomer(null);
+    refetch();
   };
 
   const ActionButtons = ({ c }: { c: Customer }) => (
     <div className="hstack" style={{ justifyContent: "flex-end", gap: 4 }}>
       <button
         className="action-btn"
-        title="Acciones"
+        title="Gestión y Eventos"
         style={{ color: "#eab308" }}
         onClick={(e) => {
           e.stopPropagation();
@@ -78,9 +96,10 @@ export default function CustomersList() {
           <line x1="3" y1="10" x2="21" y2="10"></line>
         </svg>
       </button>
+
       <button
         className="action-btn"
-        title="Ver"
+        title="Ver ficha completa"
         onClick={(e) => {
           e.stopPropagation();
           nav(`/clientes/${c.id}/ver`);
@@ -98,6 +117,7 @@ export default function CustomersList() {
           <circle cx="12" cy="12" r="3" />
         </svg>
       </button>
+
       <button
         className="action-btn"
         title="Editar"
@@ -118,6 +138,7 @@ export default function CustomersList() {
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
       </button>
+
       <button
         className="action-btn danger"
         title="Eliminar"
@@ -141,9 +162,32 @@ export default function CustomersList() {
     </div>
   );
 
+  const LockBadge = ({ c }: { c: Customer }) => {
+    if (!isLocked(c)) return null;
+    return (
+      <span
+        style={{
+          fontSize: "0.75rem",
+          background: "#fee2e2",
+          color: "#dc2626",
+          padding: "2px 6px",
+          borderRadius: 4,
+          marginLeft: 8,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontWeight: 600,
+          border: "1px solid #fecaca",
+        }}
+        title={`Bloqueado hasta: ${new Date(c.locked_until!).toLocaleString()}`}
+      >
+        🔒 {c.seller?.name?.split(" ")[0] || "Ocupado"}
+      </span>
+    );
+  };
+
   return (
     <div className="vstack" style={{ gap: 20 }}>
-      {/* HEADER */}
       <div
         className="hstack"
         style={{ justifyContent: "space-between", alignItems: "center" }}
@@ -156,7 +200,6 @@ export default function CustomersList() {
         </Link>
       </div>
 
-      {/* BUSCADOR */}
       <div className="card hstack" style={{ padding: "12px 16px" }}>
         <input
           className="input-search"
@@ -189,7 +232,6 @@ export default function CustomersList() {
         </div>
       ) : (
         <>
-          {/* === TABLA 1: CLIENTES REGISTRADOS (COLLAPSIBLE) === */}
           {clientesRegistrados.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div
@@ -254,9 +296,12 @@ export default function CustomersList() {
                               style={{
                                 fontWeight: 600,
                                 color: "var(--color-text)",
+                                display: "flex",
+                                alignItems: "center",
                               }}
                             >
                               {displayCustomerName(c)}
+                              <LockBadge c={c} />
                             </div>
                             <div
                               style={{
@@ -302,7 +347,6 @@ export default function CustomersList() {
             </div>
           )}
 
-          {/* === TABLA 2: CONSULTAS (COLLAPSIBLE) === */}
           {consultas.length > 0 && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div
@@ -365,9 +409,12 @@ export default function CustomersList() {
                               style={{
                                 fontWeight: 600,
                                 color: "var(--color-text)",
+                                display: "flex",
+                                alignItems: "center",
                               }}
                             >
                               {c.first_name} {c.last_name}
+                              <LockBadge c={c} />
                             </div>
                             <div
                               style={{
@@ -441,10 +488,11 @@ export default function CustomersList() {
 
       <Pagination page={page} totalPages={totalPages} onPage={setPage} />
 
-      {toast && (
+      {toastConfig && (
         <Toast
-          message={toast}
-          type={toast.includes("✅") ? "success" : "error"}
+          message={toastConfig.message}
+          type={toastConfig.type}
+          onClose={() => setToastConfig(null)}
         />
       )}
 
@@ -470,6 +518,8 @@ export default function CustomersList() {
         <CustomerEventsModal
           customer={agendaCustomer}
           onClose={() => setAgendaCustomer(null)}
+          onSuccess={handleModalSuccess}
+          onError={(msg) => setToastConfig({ message: msg, type: "error" })}
         />
       )}
     </div>
