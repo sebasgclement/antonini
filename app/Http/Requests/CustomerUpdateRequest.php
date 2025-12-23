@@ -16,12 +16,13 @@ class CustomerUpdateRequest extends FormRequest
         return [
             'first_name' => ['sometimes','required','string','max:80'],
             'last_name'  => ['sometimes','required','string','max:80'],
-            'status' => 'nullable|string',
+            'status'     => 'nullable|string',
 
-            'doc_type'   => ['nullable','string','max:10'],
+            'doc_type'   => ['nullable','string','max:20'],
             'doc_number' => ['nullable','string','max:20', Rule::unique('customers','doc_number')->ignore($id)],
-
             'cuit'       => ['nullable','string','max:20', Rule::unique('customers','cuit')->ignore($id)],
+
+            'marital_status' => ['nullable','string','max:20'],
 
             'email'      => ['nullable','email','max:150', Rule::unique('customers','email')->ignore($id)],
             'phone'      => ['nullable','string','max:40'],
@@ -30,6 +31,9 @@ class CustomerUpdateRequest extends FormRequest
             'city'       => ['nullable','string','max:80'],
             'address'    => ['nullable','string','max:160'],
             'notes'      => ['nullable','string'],
+
+            'dni_front'  => ['nullable', 'image', 'max:10240'],
+            'dni_back'   => ['nullable', 'image', 'max:10240'],
         ];
     }
 }
