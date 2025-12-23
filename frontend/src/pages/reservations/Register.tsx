@@ -5,8 +5,8 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Toast from "../../components/ui/Toast";
 import Toggle from "../../components/ui/Toggle";
-import api from "../../lib/api";
 import { useDolar } from "../../hooks/useDolar";
+import api from "../../lib/api";
 
 /* TIPOS */
 type Vehicle = {
@@ -57,6 +57,8 @@ export default function RegisterReservation() {
   // Toma de Usado
   const [includeUsed, setIncludeUsed] = useState(false);
   const [usedVehicle, setUsedVehicle] = useState<Vehicle | null>(null);
+  // Nuevo: Valor de toma negociado (puede diferir del precio de lista del usado)
+  const [usedValue, setUsedValue] = useState<number | "">("");
   const [usedChecklist, setUsedChecklist] = useState({
     titulo: false,
     cedula: false,
@@ -84,19 +86,18 @@ export default function RegisterReservation() {
     (Number(price) || 0) +
     (Number(transferCost) || 0) +
     (Number(adminCost) || 0);
-  
+
   const totalPaid =
     (includeDeposit
       ? payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
-      : 0) +
-    (includeUsed && usedVehicle?.price ? Number(usedVehicle.price) : 0);
-  
+      : 0) + (includeUsed ? Number(usedValue) || 0 : 0);
+
   const balance = totalOperation - totalPaid;
 
-  // Actualizar cotización automática al cargar
+  // Actualizar cotización automática al cargar si estamos en ARS (default)
   useEffect(() => {
     if (dolar?.venta && exchangeRate === 1) {
-       setExchangeRate(dolar.venta);
+      setExchangeRate(dolar.venta);
     }
   }, [dolar, exchangeRate]);
 
@@ -124,7 +125,9 @@ export default function RegisterReservation() {
 
         const savedU = localStorage.getItem("temp_reservation_used");
         if (savedU) {
-          setUsedVehicle(JSON.parse(savedU));
+          const u = JSON.parse(savedU);
+          setUsedVehicle(u);
+          setUsedValue(u.price || ""); // Seteamos valor inicial
           setIncludeUsed(true);
         }
 
@@ -148,47 +151,70 @@ export default function RegisterReservation() {
 
   // --- 🔥 LÓGICA DE CONVERSIÓN DE MONEDA 🔥 ---
   const handleSwitchCurrency = (targetCurrency: "ARS" | "USD") => {
-    if (currency === targetCurrency) return; // Si es la misma, no hacemos nada
+    if (currency === targetCurrency) return;
 
     const rate = Number(exchangeRate);
     if (!rate || rate <= 1) {
-        // Si no hay cotización válida, solo cambiamos la etiqueta
-        setCurrency(targetCurrency);
-        return;
+      setCurrency(targetCurrency);
+      return;
     }
 
-    // Función helper para convertir un valor individual
+    // Helper para convertir
     const convertValue = (val: number | "") => {
-        if (!val) return "";
-        if (targetCurrency === "USD") {
-            // ARS -> USD (Dividir)
-            return Number((Number(val) / rate).toFixed(2));
-        } else {
-            // USD -> ARS (Multiplicar)
-            return Math.round(Number(val) * rate);
-        }
+      if (!val) return "";
+      if (targetCurrency === "USD") {
+        // ARS -> USD (Dividir)
+        return Number((Number(val) / rate).toFixed(2));
+      } else {
+        // USD -> ARS (Multiplicar)
+        return Math.round(Number(val) * rate);
+      }
     };
 
-    // Convertimos todos los campos monetarios
+    // Convertimos todos los campos monetarios, INCLUYENDO LA TOMA
     setPrice(convertValue(price));
     setTransferCost(convertValue(transferCost));
     setAdminCost(convertValue(adminCost));
+    setUsedValue(convertValue(usedValue));
+
+    // Ajustamos los pagos si existieran (opcional, suele ser mejor resetearlos o convertirlos)
+    // Por seguridad UX, convertimos los montos de pagos ya ingresados:
+    const newPayments = payments.map((p) => ({
+      ...p,
+      amount: convertValue(p.amount),
+    }));
+    setPayments(newPayments as Payment[]);
 
     setCurrency(targetCurrency);
   };
 
   const saveTempState = () => {
-    if (vehicle) localStorage.setItem("temp_reservation_vehicle", JSON.stringify(vehicle));
-    if (customer) localStorage.setItem("temp_reservation_customer", JSON.stringify(customer));
-    if (usedVehicle) localStorage.setItem("temp_reservation_used", JSON.stringify(usedVehicle));
+    if (vehicle)
+      localStorage.setItem("temp_reservation_vehicle", JSON.stringify(vehicle));
+    if (customer)
+      localStorage.setItem(
+        "temp_reservation_customer",
+        JSON.stringify(customer)
+      );
+    if (usedVehicle)
+      localStorage.setItem(
+        "temp_reservation_used",
+        JSON.stringify(usedVehicle)
+      );
   };
 
-  const searchEntity = async (type: "vehicle" | "customer" | "used", query: string) => {
+  const searchEntity = async (
+    type: "vehicle" | "customer" | "used",
+    query: string
+  ) => {
     if (!query) return;
     try {
-      const endpoint = type === "customer" ? `/customers?dni=${query}` : `/vehicles?search=${query}`;
+      const endpoint =
+        type === "customer"
+          ? `/customers?dni=${query}`
+          : `/vehicles?search=${query}`;
       const res = await api.get(endpoint);
-      const data = res.data?.data?.data?.[0] || res.data?.data?.[0];
+      const data = res.data?.data?.data?.[0] || res.data?.data?.[0]; // Ajuste por si la API devuelve paginación
 
       if (data) {
         if (type === "vehicle") {
@@ -202,6 +228,7 @@ export default function RegisterReservation() {
         }
         if (type === "used") {
           setUsedVehicle(data);
+          setUsedValue(data.price || ""); // Precargar valor
           setToast("Usado cargado ✅");
         }
       } else {
@@ -235,6 +262,7 @@ export default function RegisterReservation() {
         second_buyer_phone: hasCoowner ? coPhone : null,
 
         used_vehicle_id: includeUsed ? usedVehicle?.id : null,
+        used_vehicle_price: includeUsed ? Number(usedValue) : null, // Guardamos el valor de toma acordado
         used_vehicle_checklist: includeUsed ? usedChecklist : null,
 
         payment_methods: includeDeposit
@@ -267,71 +295,151 @@ export default function RegisterReservation() {
   return (
     <div className="container vstack" style={{ gap: 20 }}>
       {/* HEADER */}
-      <div className="hstack" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <h1 className="title" style={{ margin: 0 }}>Nueva Operación</h1>
+      <div
+        className="hstack"
+        style={{ justifyContent: "space-between", alignItems: "center" }}
+      >
+        <h1 className="title" style={{ margin: 0 }}>
+          Nueva Operación
+        </h1>
         <Button
           onClick={() => nav("/reservas")}
-          style={{ background: "transparent", color: "var(--color-muted)", border: "none" }}
+          style={{
+            background: "transparent",
+            color: "var(--color-muted)",
+            border: "none",
+          }}
         >
           Cancelar
         </Button>
       </div>
 
-      <form onSubmit={onSubmit} className="vstack" style={{ gap: 20, paddingBottom: 80 }}>
-        
+      <form
+        onSubmit={onSubmit}
+        className="vstack"
+        style={{ gap: 20, paddingBottom: 100 }}
+      >
         {/* === 1. DATOS DE LA OPERACIÓN === */}
         <div className="card vstack" style={{ gap: 16 }}>
-          <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>Vehículo y Cliente</div>
+          <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
+            Vehículo y Cliente
+          </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: 20 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+              gap: 20,
+            }}
+          >
             {/* VEHÍCULO A VENDER */}
             <div className="vstack" style={{ gap: 8 }}>
-              <div className="hstack" style={{ justifyContent: "space-between" }}>
+              <div
+                className="hstack"
+                style={{ justifyContent: "space-between" }}
+              >
                 <label>Unidad a Vender</label>
-                <a className="enlace" style={{ fontSize: "0.85rem", cursor: "pointer" }}
+                <a
+                  className="enlace"
+                  style={{ fontSize: "0.85rem", cursor: "pointer" }}
                   onClick={(e) => {
                     e.preventDefault();
                     saveTempState();
-                    window.location.href = "/vehiculos/registro?redirect=/reservas/nueva";
+                    // Usar window.location asegura recarga limpia, pero nav() conserva estado SPA
+                    window.location.href =
+                      "/vehiculos/registro?redirect=/reservas/nueva";
                   }}
                 >
                   + Nuevo Vehículo
                 </a>
               </div>
               <div className="hstack">
-                <Input placeholder="Patente / Modelo..." value={searchPlate} onChange={(e) => setSearchPlate(e.currentTarget.value)} />
-                <Button type="button" onClick={() => searchEntity("vehicle", searchPlate)}>Buscar</Button>
+                <Input
+                  placeholder="Patente / Modelo..."
+                  value={searchPlate}
+                  onChange={(e) => setSearchPlate(e.currentTarget.value)}
+                />
+                <Button
+                  type="button"
+                  onClick={() => searchEntity("vehicle", searchPlate)}
+                >
+                  Buscar
+                </Button>
               </div>
               {vehicle && (
-                <div style={{ padding: 10, background: "var(--hover-bg)", borderRadius: "var(--radius)", fontSize: "0.9rem", border: "1px solid var(--color-primary)" }}>
-                  🚗 <strong>{vehicle.brand} {vehicle.model}</strong> <br />
-                  <small style={{ color: "var(--color-muted)" }}>Patente: {vehicle.plate} • Precio Lista: ${vehicle.price?.toLocaleString()}</small>
+                <div
+                  style={{
+                    padding: 10,
+                    background: "var(--hover-bg)",
+                    borderRadius: "var(--radius)",
+                    fontSize: "0.9rem",
+                    border: "1px solid var(--color-primary)",
+                  }}
+                >
+                  🚗{" "}
+                  <strong>
+                    {vehicle.brand} {vehicle.model}
+                  </strong>{" "}
+                  <br />
+                  <small style={{ color: "var(--color-muted)" }}>
+                    Patente: {vehicle.plate} • Lista: $
+                    {vehicle.price?.toLocaleString()}
+                  </small>
                 </div>
               )}
             </div>
 
             {/* CLIENTE */}
             <div className="vstack" style={{ gap: 8 }}>
-              <div className="hstack" style={{ justifyContent: "space-between" }}>
+              <div
+                className="hstack"
+                style={{ justifyContent: "space-between" }}
+              >
                 <label>Cliente Titular</label>
-                <a className="enlace" style={{ fontSize: "0.85rem", cursor: "pointer" }}
+                <a
+                  className="enlace"
+                  style={{ fontSize: "0.85rem", cursor: "pointer" }}
                   onClick={(e) => {
                     e.preventDefault();
                     saveTempState();
-                    window.location.href = "/clientes/registro?redirect=/reservas/nueva";
+                    window.location.href =
+                      "/clientes/registro?redirect=/reservas/nueva";
                   }}
                 >
                   + Nuevo Cliente
                 </a>
               </div>
               <div className="hstack">
-                <Input placeholder="DNI / Apellido..." value={searchDni} onChange={(e) => setSearchDni(e.currentTarget.value)} />
-                <Button type="button" onClick={() => searchEntity("customer", searchDni)}>Buscar</Button>
+                <Input
+                  placeholder="DNI / Apellido..."
+                  value={searchDni}
+                  onChange={(e) => setSearchDni(e.currentTarget.value)}
+                />
+                <Button
+                  type="button"
+                  onClick={() => searchEntity("customer", searchDni)}
+                >
+                  Buscar
+                </Button>
               </div>
               {customer && (
-                <div style={{ padding: 10, background: "var(--hover-bg)", borderRadius: "var(--radius)", fontSize: "0.9rem", border: "1px solid var(--color-primary)" }}>
-                  👤 <strong>{customer.first_name} {customer.last_name}</strong> <br />
-                  <small style={{ color: "var(--color-muted)" }}>Doc: {customer.doc_number}</small>
+                <div
+                  style={{
+                    padding: 10,
+                    background: "var(--hover-bg)",
+                    borderRadius: "var(--radius)",
+                    fontSize: "0.9rem",
+                    border: "1px solid var(--color-primary)",
+                  }}
+                >
+                  👤{" "}
+                  <strong>
+                    {customer.first_name} {customer.last_name}
+                  </strong>{" "}
+                  <br />
+                  <small style={{ color: "var(--color-muted)" }}>
+                    Doc: {customer.doc_number}
+                  </small>
                 </div>
               )}
             </div>
@@ -339,12 +447,31 @@ export default function RegisterReservation() {
 
           {/* COTITULAR */}
           <div style={{ marginTop: 8 }}>
-            <Toggle label="Agregar Segundo Titular / Cónyuge" checked={hasCoowner} onChange={setHasCoowner} />
+            <Toggle
+              label="Agregar Segundo Titular / Cónyuge"
+              checked={hasCoowner}
+              onChange={setHasCoowner}
+            />
             {hasCoowner && (
-              <div className="hstack" style={{ marginTop: 12, alignItems: "end" }}>
-                <Input label="Nombre Completo" value={coName} onChange={(e) => setCoName(e.currentTarget.value)} />
-                <Input label="DNI" value={coDni} onChange={(e) => setCoDni(e.currentTarget.value)} />
-                <Input label="Teléfono" value={coPhone} onChange={(e) => setCoPhone(e.currentTarget.value)} />
+              <div
+                className="hstack"
+                style={{ marginTop: 12, alignItems: "end", gap: 10 }}
+              >
+                <Input
+                  label="Nombre Completo"
+                  value={coName}
+                  onChange={(e) => setCoName(e.currentTarget.value)}
+                />
+                <Input
+                  label="DNI"
+                  value={coDni}
+                  onChange={(e) => setCoDni(e.currentTarget.value)}
+                />
+                <Input
+                  label="Teléfono"
+                  value={coPhone}
+                  onChange={(e) => setCoPhone(e.currentTarget.value)}
+                />
               </div>
             )}
           </div>
@@ -352,18 +479,37 @@ export default function RegisterReservation() {
 
         {/* === 2. VALORES === */}
         <div className="card vstack" style={{ gap: 16 }}>
-          <div className="hstack" style={{ justifyContent: "space-between" }}>
-            <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>Valores de la Operación</div>
+          <div
+            className="hstack"
+            style={{
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
+              Valores de la Operación
+            </div>
 
             {/* Selector Moneda */}
-            <div className="hstack" style={{ gap: 0, border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+            <div
+              className="hstack"
+              style={{
+                gap: 0,
+                border: "1px solid var(--color-border)",
+                borderRadius: 8,
+                overflow: "hidden",
+              }}
+            >
               <button
                 type="button"
-                // 🔥 CAMBIO: Usamos handleSwitchCurrency
                 onClick={() => handleSwitchCurrency("ARS")}
                 style={{
-                  padding: "6px 12px", border: "none", cursor: "pointer",
-                  background: currency === "ARS" ? "var(--color-primary)" : "transparent",
+                  padding: "6px 12px",
+                  border: "none",
+                  cursor: "pointer",
+                  background:
+                    currency === "ARS" ? "var(--color-primary)" : "transparent",
                   color: currency === "ARS" ? "#fff" : "var(--color-muted)",
                 }}
               >
@@ -371,10 +517,11 @@ export default function RegisterReservation() {
               </button>
               <button
                 type="button"
-                // 🔥 CAMBIO: Usamos handleSwitchCurrency
                 onClick={() => handleSwitchCurrency("USD")}
                 style={{
-                  padding: "6px 12px", border: "none", cursor: "pointer",
+                  padding: "6px 12px",
+                  border: "none",
+                  cursor: "pointer",
                   background: currency === "USD" ? "#22c55e" : "transparent",
                   color: currency === "USD" ? "#fff" : "var(--color-muted)",
                 }}
@@ -384,7 +531,13 @@ export default function RegisterReservation() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 20,
+            }}
+          >
             {/* Precio Venta */}
             <div className="vstack" style={{ gap: 6 }}>
               <Input
@@ -394,40 +547,66 @@ export default function RegisterReservation() {
                 onChange={(e) => setPrice(parseFloat(e.currentTarget.value))}
                 style={{ fontWeight: "bold", fontSize: "1.1rem" }}
               />
-              
-              {/* HELPER VISUAL (Muestra la conversión en tiempo real) */}
+
+              {/* HELPER VISUAL */}
               {price && exchangeRate > 1 && (
-                <div style={{ fontSize: "0.8rem", color: "var(--color-muted)", paddingLeft: 4 }}>
-                    Equivale a: <strong>{currency === 'USD' ? '$' : 'USD'} {
-                        currency === 'USD' 
-                        ? (Number(price) * exchangeRate).toLocaleString('es-AR')
-                        : (Number(price) / exchangeRate).toLocaleString('en-US', {maximumFractionDigits: 2})
-                    }</strong>
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-muted)",
+                    paddingLeft: 4,
+                  }}
+                >
+                  Equivale a:{" "}
+                  <strong>
+                    {currency === "USD" ? "$" : "USD"}{" "}
+                    {currency === "USD"
+                      ? (Number(price) * exchangeRate).toLocaleString("es-AR")
+                      : (Number(price) / exchangeRate).toLocaleString("en-US", {
+                          maximumFractionDigits: 2,
+                        })}
+                  </strong>
                 </div>
               )}
 
-              {/* COTIZACIÓN DÓLAR */}
-              <div className="hstack" style={{ gap: 8, alignItems: "center", marginTop: 4 }}>
-                <span style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}>Cotización (USD):</span>
-                <div style={{ position: 'relative', width: 100 }}>
-                    <input
+              {/* COTIZACIÓN */}
+              <div
+                className="hstack"
+                style={{ gap: 8, alignItems: "center", marginTop: 4 }}
+              >
+                <span
+                  style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}
+                >
+                  Cotización (USD):
+                </span>
+                <div style={{ position: "relative", width: 100 }}>
+                  <input
                     type="number"
                     value={exchangeRate}
                     onChange={(e) => setExchangeRate(Number(e.target.value))}
                     style={{
-                        width: '100%', padding: "4px 8px", borderRadius: 6,
-                        border: "1px solid var(--color-border)", background: "var(--input-bg)",
-                        color: "var(--color-text)", textAlign: "right", fontWeight: 600,
+                      width: "100%",
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid var(--color-border)",
+                      background: "var(--input-bg)",
+                      color: "var(--color-text)",
+                      textAlign: "right",
+                      fontWeight: 600,
                     }}
-                    />
+                  />
                 </div>
-                <button 
-                    type="button"
-                    onClick={() => dolar?.venta && setExchangeRate(dolar.venta)}
-                    title={`Usar cotización actual: $${dolar?.venta || '...'}`}
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+                <button
+                  type="button"
+                  onClick={() => dolar?.venta && setExchangeRate(dolar.venta)}
+                  title={`Usar cotización actual: $${dolar?.venta || "..."}`}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
                 >
-                    🔄
+                  🔄
                 </button>
               </div>
             </div>
@@ -436,7 +615,9 @@ export default function RegisterReservation() {
               label="Gastos Transferencia"
               type="number"
               value={transferCost as any}
-              onChange={(e) => setTransferCost(parseFloat(e.currentTarget.value))}
+              onChange={(e) =>
+                setTransferCost(parseFloat(e.currentTarget.value))
+              }
               placeholder="0.00"
             />
             <Input
@@ -451,18 +632,42 @@ export default function RegisterReservation() {
 
         {/* === 3. PAGOS Y TOMA === */}
         <div className="card vstack" style={{ gap: 20 }}>
-          <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>Forma de Pago</div>
+          <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>
+            Forma de Pago
+          </div>
 
           {/* TOMA DE USADO */}
-          <div style={{ background: "var(--input-bg)", borderRadius: 8, padding: 16, border: "1px solid var(--color-border)" }}>
-            <Toggle label="Recibir Vehículo Usado (Permuta)" checked={includeUsed} onChange={setIncludeUsed} />
+          <div
+            style={{
+              background: "var(--input-bg)",
+              borderRadius: 8,
+              padding: 16,
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            <Toggle
+              label="Recibir Vehículo Usado (Permuta)"
+              checked={includeUsed}
+              onChange={setIncludeUsed}
+            />
 
             {includeUsed && (
               <div className="vstack" style={{ marginTop: 16, gap: 16 }}>
                 <div className="hstack">
-                  <Input placeholder="Patente del usado..." value={searchUsedPlate} onChange={(e) => setSearchUsedPlate(e.currentTarget.value)} />
-                  <Button type="button" onClick={() => searchEntity("used", searchUsedPlate)}>Buscar</Button>
-                  <a className="enlace" style={{ cursor: "pointer" }}
+                  <Input
+                    placeholder="Patente del usado..."
+                    value={searchUsedPlate}
+                    onChange={(e) => setSearchUsedPlate(e.currentTarget.value)}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => searchEntity("used", searchUsedPlate)}
+                  >
+                    Buscar
+                  </Button>
+                  <a
+                    className="enlace"
+                    style={{ cursor: "pointer" }}
                     onClick={(e) => {
                       e.preventDefault();
                       saveTempState();
@@ -475,18 +680,91 @@ export default function RegisterReservation() {
 
                 {usedVehicle && (
                   <>
-                    <div style={{ padding: 10, background: "var(--color-card)", borderRadius: 8, border: "1px solid var(--color-border)" }}>
-                      🚗 Toma: <strong>{usedVehicle.brand} {usedVehicle.model}</strong> - Valor Toma: <strong style={{ color: "#22c55e" }}>${usedVehicle.price?.toLocaleString()}</strong>
+                    <div
+                      className="hstack"
+                      style={{
+                        padding: 12,
+                        background: "var(--color-card)",
+                        borderRadius: 8,
+                        border: "1px solid var(--color-border)",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: 15,
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        🚗 Toma:{" "}
+                        <strong>
+                          {usedVehicle.brand} {usedVehicle.model}
+                        </strong>
+                      </div>
+
+                      {/* INPUT PARA EL VALOR DE LA TOMA (NEGOCIABLE) */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
+                        <label
+                          style={{ whiteSpace: "nowrap", fontSize: "0.9rem" }}
+                        >
+                          Valor de Toma ({currency}):
+                        </label>
+                        <Input
+                          type="number"
+                          value={usedValue as any}
+                          onChange={(e) =>
+                            setUsedValue(parseFloat(e.currentTarget.value))
+                          }
+                          style={{
+                            width: 140,
+                            fontWeight: "bold",
+                            color: "#22c55e",
+                            textAlign: "right",
+                          }}
+                        />
+                      </div>
                     </div>
 
-                    <label style={{ fontSize: "0.9rem", color: "var(--color-muted)", marginTop: 8 }}>Documentación Recibida:</label>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                    <label
+                      style={{
+                        fontSize: "0.9rem",
+                        color: "var(--color-muted)",
+                        marginTop: 8,
+                      }}
+                    >
+                      Documentación Recibida:
+                    </label>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(140px, 1fr))",
+                        gap: 10,
+                      }}
+                    >
                       {Object.keys(usedChecklist).map((key) => (
-                        <label key={key} style={{ fontSize: "0.9rem", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                        <label
+                          key={key}
+                          style={{
+                            fontSize: "0.9rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            cursor: "pointer",
+                          }}
+                        >
                           <input
                             type="checkbox"
                             checked={(usedChecklist as any)[key]}
-                            onChange={(e) => setUsedChecklist({ ...usedChecklist, [key]: e.target.checked })}
+                            onChange={(e) =>
+                              setUsedChecklist({
+                                ...usedChecklist,
+                                [key]: e.target.checked,
+                              })
+                            }
                           />
                           {key.replace("_", " ").toUpperCase()}
                         </label>
@@ -499,16 +777,39 @@ export default function RegisterReservation() {
           </div>
 
           {/* SEÑA / PAGOS */}
-          <div style={{ background: "var(--input-bg)", borderRadius: 8, padding: 16, border: "1px solid var(--color-border)" }}>
-            <Toggle label="Registrar Seña / Anticipo" checked={includeDeposit} onChange={setIncludeDeposit} />
+          <div
+            style={{
+              background: "var(--input-bg)",
+              borderRadius: 8,
+              padding: 16,
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            <Toggle
+              label="Registrar Seña / Anticipo"
+              checked={includeDeposit}
+              onChange={setIncludeDeposit}
+            />
 
             {includeDeposit && (
               <div className="vstack" style={{ marginTop: 16, gap: 12 }}>
                 {payments.map((p, i) => (
-                  <div key={i} className="hstack" style={{ alignItems: "flex-start" }}>
+                  <div
+                    key={i}
+                    className="hstack"
+                    style={{ alignItems: "flex-start", gap: 10 }}
+                  >
                     <div style={{ flex: 1 }}>
+                      {/* Styled Select mejorado */}
                       <select
-                        className="form-control"
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "var(--radius)",
+                          border: "1px solid var(--color-border)",
+                          background: "var(--color-card)",
+                          color: "var(--color-text)",
+                        }}
                         value={p.method_id}
                         onChange={(e) => {
                           const copy = [...payments];
@@ -516,9 +817,11 @@ export default function RegisterReservation() {
                           setPayments(copy);
                         }}
                       >
-                        <option value="">Método...</option>
+                        <option value="">Seleccionar Método...</option>
                         {paymentMethods.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -534,12 +837,40 @@ export default function RegisterReservation() {
                         }}
                       />
                     </div>
-                    <Button type="button" onClick={() => setPayments(payments.filter((_, idx) => idx !== i))} style={{ padding: "10px" }}>🗑</Button>
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        setPayments(payments.filter((_, idx) => idx !== i))
+                      }
+                      style={{
+                        padding: "10px",
+                        background: "var(--hover-bg)",
+                        color: "var(--color-danger)",
+                      }}
+                    >
+                      🗑
+                    </Button>
                   </div>
                 ))}
                 <div className="hstack">
-                  <Button type="button" onClick={() => setPayments([...payments, { method_id: "", amount: "" }])}>+ Agregar Pago</Button>
-                  <a className="enlace" style={{ cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowPaymentModal(true); }}>+ Nuevo método</a>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      setPayments([...payments, { method_id: "", amount: "" }])
+                    }
+                  >
+                    + Agregar Pago
+                  </Button>
+                  <a
+                    className="enlace"
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowPaymentModal(true);
+                    }}
+                  >
+                    + Nuevo método
+                  </a>
                 </div>
               </div>
             )}
@@ -547,25 +878,85 @@ export default function RegisterReservation() {
         </div>
 
         {/* 4. RESUMEN FINAL */}
-        <div className="card" style={{ position: "sticky", bottom: 20, zIndex: 10, border: "2px solid var(--color-primary)", background: "var(--color-card)", boxShadow: "0 -4px 20px rgba(0,0,0,0.3)", padding: "16px 24px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-            <div style={{ display: "flex", gap: 32 }}>
+        <div
+          className="card"
+          style={{
+            position: "sticky",
+            bottom: 20,
+            zIndex: 100,
+            border: "2px solid var(--color-primary)",
+            background: "var(--color-card)",
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.2)",
+            padding: "16px 24px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 20,
+            }}
+          >
+            <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", textTransform: "uppercase" }}>Total Operación</span>
-                <span style={{ fontSize: "1.4rem", fontWeight: 800, whiteSpace: "nowrap" }}>
-                  {currency === "USD" ? "USD" : "$"} {totalOperation.toLocaleString()}
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-muted)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Total Operación
+                </span>
+                <span
+                  style={{
+                    fontSize: "1.4rem",
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {currency === "USD" ? "USD" : "$"}{" "}
+                  {totalOperation.toLocaleString()}
                 </span>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", textTransform: "uppercase" }}>Saldo a Pagar</span>
-                <span style={{ fontSize: "1.4rem", fontWeight: 800, color: balance > 0 ? "var(--color-danger)" : "var(--color-primary)", whiteSpace: "nowrap" }}>
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-muted)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Saldo a Pagar
+                </span>
+                <span
+                  style={{
+                    fontSize: "1.4rem",
+                    fontWeight: 800,
+                    color:
+                      balance > 0
+                        ? "var(--color-danger)"
+                        : "var(--color-success)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   {currency === "USD" ? "USD" : "$"} {balance.toLocaleString()}
                 </span>
               </div>
             </div>
 
-            <Button type="submit" loading={loading} style={{ padding: "12px 24px", fontSize: "1.1rem", fontWeight: 700, minWidth: "fit-content" }}>
+            <Button
+              type="submit"
+              loading={loading}
+              style={{
+                padding: "12px 30px",
+                fontSize: "1.1rem",
+                fontWeight: 700,
+              }}
+            >
               CONFIRMAR 📝
             </Button>
           </div>
@@ -583,7 +974,12 @@ export default function RegisterReservation() {
         />
       )}
 
-      {toast && <Toast message={toast} type={toast.includes("✅") ? "success" : "error"} />}
+      {toast && (
+        <Toast
+          message={toast}
+          type={toast.includes("✅") ? "success" : "error"}
+        />
+      )}
     </div>
   );
 }

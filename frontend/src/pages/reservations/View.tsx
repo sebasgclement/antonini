@@ -1,9 +1,9 @@
 import { pdf } from "@react-pdf/renderer";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { PaymentReceipt } from "../../components/pdfs/PaymentReceipt";
 import Button from "../../components/ui/Button";
 import api from "../../lib/api";
-import { PaymentReceipt } from "../../components/pdfs/PaymentReceipt";
 
 // --- TIPOS ---
 type PaymentDetails = {
@@ -99,31 +99,33 @@ export default function ReservationView() {
 
     try {
       // Armamos un objeto reserva temporal para el recibo
-      const reservationForPdf = { 
-          ...reservation, 
-          // Pasamos el método de ESTE pago para que salga bien en el PDF
-          payment_method: payment.method?.name || 'Efectivo' 
+      const reservationForPdf = {
+        ...reservation,
+        // Pasamos el método de ESTE pago para que salga bien en el PDF
+        payment_method: payment.method?.name || "Efectivo",
       };
 
       const blob = await pdf(
         <PaymentReceipt
           reservation={reservationForPdf}
           amount={Number(payment.amount)}
-          concept={`Pago registrado el ${new Date(payment.created_at || Date.now()).toLocaleDateString()}`}
+          concept={`Pago registrado el ${new Date(
+            payment.created_at || Date.now()
+          ).toLocaleDateString()}`}
         />
       ).toBlob();
 
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
-
     } catch (error) {
       console.error("Error generando recibo", error);
       alert("No se pudo generar el recibo");
     }
   };
 
-  if (loading) return <div className="p-4 text-center">Cargando detalle...</div>;
-  
+  if (loading)
+    return <div className="p-4 text-center">Cargando detalle...</div>;
+
   if (error || !reservation)
     return (
       <div className="p-4">
@@ -140,11 +142,15 @@ export default function ReservationView() {
   const precioVenta = reservation.price || 0;
   const valorUsado = reservation.usedVehicle?.price || 0;
   const creditoBanco = reservation.credit_bank || 0;
-  const totalPagosRegistrados = reservation.payments?.reduce((acc, p) => acc + Number(p.amount), 0) ?? 0;
+  const totalPagosRegistrados =
+    reservation.payments?.reduce((acc, p) => acc + Number(p.amount), 0) ?? 0;
   const totalPagado = reservation.paid_amount ?? totalPagosRegistrados;
-  const saldo = reservation.balance ?? precioVenta - totalPagado - valorUsado - creditoBanco;
+  const saldo =
+    reservation.balance ??
+    precioVenta - totalPagado - valorUsado - creditoBanco;
 
-  const statusInfo = STATUS_CONFIG[reservation.status] || STATUS_CONFIG.pendiente;
+  const statusInfo =
+    STATUS_CONFIG[reservation.status] || STATUS_CONFIG.pendiente;
 
   return (
     <div className="vstack" style={{ gap: 24, paddingBottom: 50 }}>
@@ -298,7 +304,10 @@ export default function ReservationView() {
                   {reservation.usedVehicle.model}
                 </div>
                 <div
-                  style={{ fontSize: "0.9rem", color: "var(--color-muted)" }}
+                  style={{
+                    fontSize: "0.9rem",
+                    color: "var(--color-muted)",
+                  }}
                 >
                   Patente: {reservation.usedVehicle.plate}
                 </div>
@@ -499,6 +508,7 @@ const InfoBox = ({
   </div>
 );
 
+// --- COMPONENTE DE ITEM DE PAGO MEJORADO ---
 const PaymentItem = ({
   payment,
   isLast,
@@ -510,6 +520,13 @@ const PaymentItem = ({
 }) => {
   const d = payment.details || {};
 
+  // Helper para formatear fecha YYYY-MM-DD
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("T")[0].split("-");
+    return `${d}/${m}/${y}`;
+  };
+
   return (
     <div
       style={{
@@ -517,9 +534,10 @@ const PaymentItem = ({
         borderBottom: isLast ? "none" : "1px solid var(--border-color)",
         display: "flex",
         gap: 15,
-        alignItems: "center",
+        alignItems: "flex-start",
       }}
     >
+      {/* ÍCONO */}
       <div
         style={{
           width: 40,
@@ -531,53 +549,173 @@ const PaymentItem = ({
           justifyContent: "center",
           fontSize: "1.2rem",
           flexShrink: 0,
+          marginTop: 4,
         }}
       >
         {getPaymentIcon(payment.method?.type)}
       </div>
 
-      <div className="vstack" style={{ flex: 1, gap: 4 }}>
+      {/* CONTENIDO PRINCIPAL */}
+      <div className="vstack" style={{ flex: 1, gap: 6 }}>
+        {/* Encabezado: Método y Monto */}
         <div className="hstack" style={{ justifyContent: "space-between" }}>
-          <span style={{ fontWeight: 600 }}>
-            {payment.method?.name || "Pago registrado"}
-          </span>
-          <span style={{ fontWeight: 700, color: "var(--color-primary)" }}>
+          <div className="vstack" style={{ gap: 0 }}>
+            <span style={{ fontWeight: 600, fontSize: "1rem" }}>
+              {payment.method?.name || "Pago registrado"}
+            </span>
+            <span style={{ fontSize: "0.75rem", color: "var(--color-muted)" }}>
+              {payment.created_at
+                ? new Date(payment.created_at).toLocaleString("es-AR")
+                : "-"}
+            </span>
+          </div>
+          <span
+            style={{
+              fontWeight: 700,
+              color: "var(--color-primary)",
+              fontSize: "1.1rem",
+            }}
+          >
             ${Number(payment.amount).toLocaleString("es-AR")}
           </span>
         </div>
 
-        {/* Fecha */}
-        <div style={{fontSize: '0.75rem', color: 'var(--color-muted)'}}>
-            {payment.created_at ? new Date(payment.created_at).toLocaleString() : '-'}
-        </div>
-
+        {/* DETALLES ESPECÍFICOS (Renderizado Condicional) */}
         <div
           style={{
             fontSize: "0.85rem",
-            color: "var(--color-muted)",
-            lineHeight: 1.4,
+            color: "var(--color-text)",
+            background: "rgba(0,0,0,0.02)",
+            padding: "8px 12px",
+            borderRadius: "6px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
           }}
         >
-          {d.bank_name && <span>🏦 {d.bank_name} • </span>}
-          {d.check_number && <span>🎫 Cheque #{d.check_number} • </span>}
-          {d.card_last4 && <span>💳 Termina en ****{d.card_last4} • </span>}
-          {d.operation_number && <span>Ref: {d.operation_number}</span>}
+          {/* 🏦 Caso: TRANSFERENCIA / BANCO */}
+          {(d.bank_name || d.account_alias || d.account_holder) &&
+            !d.check_number && (
+              <>
+                {d.bank_name && (
+                  <span>
+                    🏦 <b>Banco:</b> {d.bank_name}
+                  </span>
+                )}
+                {d.account_alias && (
+                  <span>
+                    🔗 <b>Alias:</b> {d.account_alias}
+                  </span>
+                )}
+                {d.account_holder && (
+                  <span>
+                    👤 <b>Titular:</b> {d.account_holder}
+                  </span>
+                )}
+              </>
+            )}
 
-          {!d.bank_name &&
-            !d.check_number &&
-            !d.card_last4 &&
-            !d.operation_number && <span>Pago regular</span>}
+          {/* 🎫 Caso: CHEQUE */}
+          {d.check_number && (
+            <>
+              <div className="hstack" style={{ gap: 10, flexWrap: "wrap" }}>
+                <span>
+                  🎫 <b>N° Cheque:</b> {d.check_number}
+                </span>
+                {d.bank_name && <span>🏦 {d.bank_name}</span>}
+              </div>
+              {d.check_due_date && (
+                <span style={{ color: "var(--color-danger)" }}>
+                  📅 <b>Fecha de Cobro:</b> {formatDate(d.check_due_date)}
+                </span>
+              )}
+              {d.account_holder && (
+                <span>
+                  👤 <b>Emisor:</b> {d.account_holder}
+                </span>
+              )}
+            </>
+          )}
+
+          {/* 💳 Caso: TARJETA */}
+          {d.card_last4 && (
+            <>
+              <div className="hstack" style={{ gap: 10 }}>
+                <span>
+                  💳 <b>Tarjeta:</b> **** {d.card_last4}
+                </span>
+                {d.installments && <span>( {d.installments} Cuotas )</span>}
+              </div>
+              {d.card_holder && (
+                <span>
+                  👤 <b>Titular:</b> {d.card_holder}
+                </span>
+              )}
+            </>
+          )}
+
+          {/* DATOS COMUNES (Referencia y Notas Raw) */}
+          {d.operation_number && (
+            <span
+              style={{
+                color: "var(--color-muted)",
+                fontSize: "0.8rem",
+                marginTop: 2,
+              }}
+            >
+              #️⃣ Ref/Op: {d.operation_number}
+            </span>
+          )}
+
+          {d.raw && (
+            <div
+              style={{
+                borderTop: "1px dashed var(--border-color)",
+                marginTop: 4,
+                paddingTop: 4,
+                fontSize: "0.8rem",
+                fontStyle: "italic",
+                color: "var(--color-muted)",
+              }}
+            >
+              📝 {d.raw}
+            </div>
+          )}
+
+          {/* Fallback si no hay detalles específicos */}
+          {Object.keys(d).length === 0 && (
+            <span style={{ fontStyle: "italic", color: "var(--color-muted)" }}>
+              Sin detalles adicionales
+            </span>
+          )}
         </div>
       </div>
 
       {/* 🖨️ BOTÓN IMPRIMIR */}
-      <Button 
-        onClick={onPrint} 
-        className="btn-icon" 
+      <Button
+        onClick={onPrint}
+        className="btn-icon"
         title="Generar Recibo"
-        style={{background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--color-text)', padding: 8}}
+        style={{
+          background: "transparent",
+          border: "1px solid var(--border-color)",
+          color: "var(--color-text)",
+          padding: 8,
+          alignSelf: "center",
+        }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
       </Button>
     </div>
   );

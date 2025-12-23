@@ -10,8 +10,10 @@ class Customer extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',      // 👈 Importante para saber quién lo cargó
-        'status',       // 👈 Importante para el filtro (consulta vs cliente)
+        'user_id',      // Usuario que cargó el cliente (Creador)
+        'seller_id',    // 👈 NUEVO: Dueño actual del cliente (Vendedor asignado)
+        'locked_until', // 👈 NUEVO: Fecha hasta cuando es dueño
+        'status',
         'first_name',
         'last_name',
         'email',
@@ -28,13 +30,25 @@ class Customer extends Model
         'dni_back',
     ];
 
-    // 👇 ESTA ES LA FUNCIÓN QUE TE FALTA Y DA EL ERROR
+    // ⚠️ IMPORTANTE: Esto convierte el string de la fecha en un objeto Carbon
+    // para poder preguntar cosas como: if ($customer->locked_until > now())
+    protected $casts = [
+        'locked_until' => 'datetime',
+    ];
+
+    // Relación: Quién cargó el cliente (Creador)
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    // Accessors para las URLs de las fotos (ya los tenías, los dejo por las dudas)
+    // 👈 NUEVA RELACIÓN: Quién es el dueño actual (Vendedor)
+    public function seller()
+    {
+        return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    // Accessors para las URLs de las fotos
     protected $appends = ['dni_front_url', 'dni_back_url'];
 
     public function getDniFrontUrlAttribute()

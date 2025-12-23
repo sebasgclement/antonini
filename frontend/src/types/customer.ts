@@ -35,6 +35,14 @@ export type Customer = {
     name: string;
     email: string;
   };
+
+  seller_id?: number | null; // ID del vendedor que lo tiene asignado
+  locked_until?: string | null; // Fecha hasta cuando es suyo
+  seller?: {
+    // Objeto del vendedor para mostrar su nombre
+    id: number;
+    name: string;
+  };
 };
 
 // Helper para mostrar nombre completo
