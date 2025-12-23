@@ -57,6 +57,8 @@ export default function RegisterReservation() {
   // Toma de Usado
   const [includeUsed, setIncludeUsed] = useState(false);
   const [usedVehicle, setUsedVehicle] = useState<Vehicle | null>(null);
+  // Nuevo: Valor de toma negociado (puede diferir del precio de lista del usado)
+  const [usedValue, setUsedValue] = useState<number | "">(""); 
   const [usedChecklist, setUsedChecklist] = useState({
     titulo: false,
     cedula: false,
@@ -89,11 +91,11 @@ export default function RegisterReservation() {
     (includeDeposit
       ? payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
       : 0) +
-    (includeUsed && usedVehicle?.price ? Number(usedVehicle.price) : 0);
+    (includeUsed ? (Number(usedValue) || 0) : 0);
   
   const balance = totalOperation - totalPaid;
 
-  // Actualizar cotización automática al cargar
+  // Actualizar cotización automática al cargar si estamos en ARS (default)
   useEffect(() => {
     if (dolar?.venta && exchangeRate === 1) {
        setExchangeRate(dolar.venta);
@@ -124,7 +126,9 @@ export default function RegisterReservation() {
 
         const savedU = localStorage.getItem("temp_reservation_used");
         if (savedU) {
-          setUsedVehicle(JSON.parse(savedU));
+          const u = JSON.parse(savedU);
+          setUsedVehicle(u);
+          setUsedValue(u.price || ""); // Seteamos valor inicial
           setIncludeUsed(true);
         }
 
@@ -148,16 +152,15 @@ export default function RegisterReservation() {
 
   // --- 🔥 LÓGICA DE CONVERSIÓN DE MONEDA 🔥 ---
   const handleSwitchCurrency = (targetCurrency: "ARS" | "USD") => {
-    if (currency === targetCurrency) return; // Si es la misma, no hacemos nada
+    if (currency === targetCurrency) return; 
 
     const rate = Number(exchangeRate);
     if (!rate || rate <= 1) {
-        // Si no hay cotización válida, solo cambiamos la etiqueta
-        setCurrency(targetCurrency);
-        return;
+       setCurrency(targetCurrency);
+       return;
     }
 
-    // Función helper para convertir un valor individual
+    // Helper para convertir
     const convertValue = (val: number | "") => {
         if (!val) return "";
         if (targetCurrency === "USD") {
@@ -169,10 +172,19 @@ export default function RegisterReservation() {
         }
     };
 
-    // Convertimos todos los campos monetarios
+    // Convertimos todos los campos monetarios, INCLUYENDO LA TOMA
     setPrice(convertValue(price));
     setTransferCost(convertValue(transferCost));
     setAdminCost(convertValue(adminCost));
+    setUsedValue(convertValue(usedValue)); 
+
+    // Ajustamos los pagos si existieran (opcional, suele ser mejor resetearlos o convertirlos)
+    // Por seguridad UX, convertimos los montos de pagos ya ingresados:
+    const newPayments = payments.map(p => ({
+        ...p,
+        amount: convertValue(p.amount)
+    }));
+    setPayments(newPayments as Payment[]);
 
     setCurrency(targetCurrency);
   };
@@ -188,7 +200,7 @@ export default function RegisterReservation() {
     try {
       const endpoint = type === "customer" ? `/customers?dni=${query}` : `/vehicles?search=${query}`;
       const res = await api.get(endpoint);
-      const data = res.data?.data?.data?.[0] || res.data?.data?.[0];
+      const data = res.data?.data?.data?.[0] || res.data?.data?.[0]; // Ajuste por si la API devuelve paginación
 
       if (data) {
         if (type === "vehicle") {
@@ -202,6 +214,7 @@ export default function RegisterReservation() {
         }
         if (type === "used") {
           setUsedVehicle(data);
+          setUsedValue(data.price || ""); // Precargar valor
           setToast("Usado cargado ✅");
         }
       } else {
@@ -235,6 +248,7 @@ export default function RegisterReservation() {
         second_buyer_phone: hasCoowner ? coPhone : null,
 
         used_vehicle_id: includeUsed ? usedVehicle?.id : null,
+        used_vehicle_price: includeUsed ? Number(usedValue) : null, // Guardamos el valor de toma acordado
         used_vehicle_checklist: includeUsed ? usedChecklist : null,
 
         payment_methods: includeDeposit
@@ -277,7 +291,7 @@ export default function RegisterReservation() {
         </Button>
       </div>
 
-      <form onSubmit={onSubmit} className="vstack" style={{ gap: 20, paddingBottom: 80 }}>
+      <form onSubmit={onSubmit} className="vstack" style={{ gap: 20, paddingBottom: 100 }}>
         
         {/* === 1. DATOS DE LA OPERACIÓN === */}
         <div className="card vstack" style={{ gap: 16 }}>
@@ -292,7 +306,8 @@ export default function RegisterReservation() {
                   onClick={(e) => {
                     e.preventDefault();
                     saveTempState();
-                    window.location.href = "/vehiculos/registro?redirect=/reservas/nueva";
+                    // Usar window.location asegura recarga limpia, pero nav() conserva estado SPA
+                    window.location.href = "/vehiculos/registro?redirect=/reservas/nueva"; 
                   }}
                 >
                   + Nuevo Vehículo
@@ -305,7 +320,7 @@ export default function RegisterReservation() {
               {vehicle && (
                 <div style={{ padding: 10, background: "var(--hover-bg)", borderRadius: "var(--radius)", fontSize: "0.9rem", border: "1px solid var(--color-primary)" }}>
                   🚗 <strong>{vehicle.brand} {vehicle.model}</strong> <br />
-                  <small style={{ color: "var(--color-muted)" }}>Patente: {vehicle.plate} • Precio Lista: ${vehicle.price?.toLocaleString()}</small>
+                  <small style={{ color: "var(--color-muted)" }}>Patente: {vehicle.plate} • Lista: ${vehicle.price?.toLocaleString()}</small>
                 </div>
               )}
             </div>
@@ -341,7 +356,7 @@ export default function RegisterReservation() {
           <div style={{ marginTop: 8 }}>
             <Toggle label="Agregar Segundo Titular / Cónyuge" checked={hasCoowner} onChange={setHasCoowner} />
             {hasCoowner && (
-              <div className="hstack" style={{ marginTop: 12, alignItems: "end" }}>
+              <div className="hstack" style={{ marginTop: 12, alignItems: "end", gap: 10 }}>
                 <Input label="Nombre Completo" value={coName} onChange={(e) => setCoName(e.currentTarget.value)} />
                 <Input label="DNI" value={coDni} onChange={(e) => setCoDni(e.currentTarget.value)} />
                 <Input label="Teléfono" value={coPhone} onChange={(e) => setCoPhone(e.currentTarget.value)} />
@@ -352,14 +367,13 @@ export default function RegisterReservation() {
 
         {/* === 2. VALORES === */}
         <div className="card vstack" style={{ gap: 16 }}>
-          <div className="hstack" style={{ justifyContent: "space-between" }}>
+          <div className="hstack" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
             <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>Valores de la Operación</div>
 
             {/* Selector Moneda */}
             <div className="hstack" style={{ gap: 0, border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
               <button
                 type="button"
-                // 🔥 CAMBIO: Usamos handleSwitchCurrency
                 onClick={() => handleSwitchCurrency("ARS")}
                 style={{
                   padding: "6px 12px", border: "none", cursor: "pointer",
@@ -371,7 +385,6 @@ export default function RegisterReservation() {
               </button>
               <button
                 type="button"
-                // 🔥 CAMBIO: Usamos handleSwitchCurrency
                 onClick={() => handleSwitchCurrency("USD")}
                 style={{
                   padding: "6px 12px", border: "none", cursor: "pointer",
@@ -395,7 +408,7 @@ export default function RegisterReservation() {
                 style={{ fontWeight: "bold", fontSize: "1.1rem" }}
               />
               
-              {/* HELPER VISUAL (Muestra la conversión en tiempo real) */}
+              {/* HELPER VISUAL */}
               {price && exchangeRate > 1 && (
                 <div style={{ fontSize: "0.8rem", color: "var(--color-muted)", paddingLeft: 4 }}>
                     Equivale a: <strong>{currency === 'USD' ? '$' : 'USD'} {
@@ -406,7 +419,7 @@ export default function RegisterReservation() {
                 </div>
               )}
 
-              {/* COTIZACIÓN DÓLAR */}
+              {/* COTIZACIÓN */}
               <div className="hstack" style={{ gap: 8, alignItems: "center", marginTop: 4 }}>
                 <span style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}>Cotización (USD):</span>
                 <div style={{ position: 'relative', width: 100 }}>
@@ -475,8 +488,25 @@ export default function RegisterReservation() {
 
                 {usedVehicle && (
                   <>
-                    <div style={{ padding: 10, background: "var(--color-card)", borderRadius: 8, border: "1px solid var(--color-border)" }}>
-                      🚗 Toma: <strong>{usedVehicle.brand} {usedVehicle.model}</strong> - Valor Toma: <strong style={{ color: "#22c55e" }}>${usedVehicle.price?.toLocaleString()}</strong>
+                    <div className="hstack" style={{ 
+                        padding: 12, background: "var(--color-card)", 
+                        borderRadius: 8, border: "1px solid var(--color-border)", 
+                        flexWrap: 'wrap', alignItems: 'center', gap: 15
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        🚗 Toma: <strong>{usedVehicle.brand} {usedVehicle.model}</strong>
+                      </div>
+                      
+                      {/* INPUT PARA EL VALOR DE LA TOMA (NEGOCIABLE) */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <label style={{ whiteSpace: 'nowrap', fontSize: '0.9rem' }}>Valor de Toma ({currency}):</label>
+                        <Input 
+                            type="number" 
+                            value={usedValue as any} 
+                            onChange={(e) => setUsedValue(parseFloat(e.currentTarget.value))}
+                            style={{ width: 140, fontWeight: 'bold', color: '#22c55e', textAlign: 'right' }}
+                        />
+                      </div>
                     </div>
 
                     <label style={{ fontSize: "0.9rem", color: "var(--color-muted)", marginTop: 8 }}>Documentación Recibida:</label>
@@ -505,10 +535,15 @@ export default function RegisterReservation() {
             {includeDeposit && (
               <div className="vstack" style={{ marginTop: 16, gap: 12 }}>
                 {payments.map((p, i) => (
-                  <div key={i} className="hstack" style={{ alignItems: "flex-start" }}>
+                  <div key={i} className="hstack" style={{ alignItems: "flex-start", gap: 10 }}>
                     <div style={{ flex: 1 }}>
+                      {/* Styled Select mejorado */}
                       <select
-                        className="form-control"
+                        style={{
+                            width: "100%", padding: "10px", borderRadius: "var(--radius)",
+                            border: "1px solid var(--color-border)", background: "var(--color-card)",
+                            color: "var(--color-text)"
+                        }}
                         value={p.method_id}
                         onChange={(e) => {
                           const copy = [...payments];
@@ -516,7 +551,7 @@ export default function RegisterReservation() {
                           setPayments(copy);
                         }}
                       >
-                        <option value="">Método...</option>
+                        <option value="">Seleccionar Método...</option>
                         {paymentMethods.map((m) => (
                           <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
@@ -534,7 +569,7 @@ export default function RegisterReservation() {
                         }}
                       />
                     </div>
-                    <Button type="button" onClick={() => setPayments(payments.filter((_, idx) => idx !== i))} style={{ padding: "10px" }}>🗑</Button>
+                    <Button type="button" onClick={() => setPayments(payments.filter((_, idx) => idx !== i))} style={{ padding: "10px", background: "var(--hover-bg)", color: "var(--color-danger)" }}>🗑</Button>
                   </div>
                 ))}
                 <div className="hstack">
@@ -547,9 +582,9 @@ export default function RegisterReservation() {
         </div>
 
         {/* 4. RESUMEN FINAL */}
-        <div className="card" style={{ position: "sticky", bottom: 20, zIndex: 10, border: "2px solid var(--color-primary)", background: "var(--color-card)", boxShadow: "0 -4px 20px rgba(0,0,0,0.3)", padding: "16px 24px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-            <div style={{ display: "flex", gap: 32 }}>
+        <div className="card" style={{ position: "sticky", bottom: 20, zIndex: 100, border: "2px solid var(--color-primary)", background: "var(--color-card)", boxShadow: "0 -4px 20px rgba(0,0,0,0.2)", padding: "16px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
+            <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", textTransform: "uppercase" }}>Total Operación</span>
                 <span style={{ fontSize: "1.4rem", fontWeight: 800, whiteSpace: "nowrap" }}>
@@ -559,13 +594,13 @@ export default function RegisterReservation() {
 
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", textTransform: "uppercase" }}>Saldo a Pagar</span>
-                <span style={{ fontSize: "1.4rem", fontWeight: 800, color: balance > 0 ? "var(--color-danger)" : "var(--color-primary)", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: "1.4rem", fontWeight: 800, color: balance > 0 ? "var(--color-danger)" : "var(--color-success)", whiteSpace: "nowrap" }}>
                   {currency === "USD" ? "USD" : "$"} {balance.toLocaleString()}
                 </span>
               </div>
             </div>
 
-            <Button type="submit" loading={loading} style={{ padding: "12px 24px", fontSize: "1.1rem", fontWeight: 700, minWidth: "fit-content" }}>
+            <Button type="submit" loading={loading} style={{ padding: "12px 30px", fontSize: "1.1rem", fontWeight: 700 }}>
               CONFIRMAR 📝
             </Button>
           </div>

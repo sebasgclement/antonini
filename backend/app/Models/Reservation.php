@@ -9,11 +9,12 @@ class Reservation extends Model
 {
     use HasFactory;
 
-   protected $fillable = [
+    protected $fillable = [
         'vehicle_id',
         'customer_id',
         'seller_id',
         'used_vehicle_id',
+        'used_vehicle_price', // ✅ Este es el valor de toma específico de esta reserva
         'date',
         'price',             // Precio de venta del vehículo
         'deposit',
@@ -36,23 +37,24 @@ class Reservation extends Model
         'used_vehicle_checklist', // Checklist del usado (JSON)
     ];
 
-   protected $casts = [
+    protected $casts = [
         'price'               => 'decimal:2',
         'deposit'             => 'decimal:2',
         'credit_bank'         => 'decimal:2',
         'balance'             => 'decimal:2',
         'workshop_expenses'   => 'decimal:2',
-        'transfer_cost'       => 'decimal:2', // ✅
-        'administrative_cost' => 'decimal:2', // ✅
+        'transfer_cost'       => 'decimal:2',
+        'administrative_cost' => 'decimal:2',
         'exchange_rate'       => 'decimal:2',
-        'used_vehicle_checklist' => 'array',  // ✅ convierte el JSON de la BD a Array en PHP
+        'used_vehicle_price'  => 'decimal:2', // ✅ AGREGADO: Para asegurar formato numérico
+        'used_vehicle_checklist' => 'array',
         'date'                => 'datetime',
     ];
 
     protected $appends = [
-    'profit',        // si ya lo estás usando
-    'paid_amount',
-    'remaining_amount',
+        'profit',
+        'paid_amount',
+        'remaining_amount',
     ];
 
 
@@ -61,6 +63,11 @@ class Reservation extends Model
     public function vehicle()
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    public function partners()
+    {
+        return $this->hasMany(ReservationPartner::class);
     }
 
     // Vehículo entregado como parte de pago
@@ -79,11 +86,18 @@ class Reservation extends Model
         return $this->belongsTo(User::class, 'seller_id');
     }
 
+    // ================= CÁLCULOS =================
+
     public function getProfitAttribute(): float
     {
         $income = (float) $this->price + (float) $this->administrative_cost;
 
-        $costs = (float) ($this->usedVehicle?->price ?? 0) 
+        // 🔥 CORRECCIÓN IMPORTANTE:
+        // Usamos $this->used_vehicle_price (lo que pagamos en ESTA reserva)
+        // en lugar de $this->usedVehicle->price (que es el precio de lista general)
+        $costOfTradeIn = (float) ($this->used_vehicle_price ?? 0);
+
+        $costs = $costOfTradeIn
                + (float) ($this->workshop_expenses ?? 0)
                + (float) ($this->transfer_cost ?? 0);
 
@@ -91,15 +105,6 @@ class Reservation extends Model
     }
     
     // 💵 TOTAL OPERACIÓN (Lo que paga el cliente en total)
-    // Precio Auto + Transferencia + Honorarios
-    
-
-    // ================= MÉTODOS AUXILIARES =================
-
-    /**
-     * Calcula la ganancia neta:
-     * precio de venta - valor vehículo usado - gastos de taller
-     */
     public function getTotalOperationAttribute(): float
     {
         return (float) $this->price 
@@ -107,24 +112,23 @@ class Reservation extends Model
              + (float) ($this->administrative_cost ?? 0);
     }
 
-        // ================= MÉTODOS DE PAGO =================
+    // ================= MÉTODOS DE PAGO =================
 
-        public function payments()
-{
-    return $this->hasMany(\App\Models\ReservationPayment::class);
-}
+    public function payments()
+    {
+        return $this->hasMany(\App\Models\ReservationPayment::class);
+    }
 
-// Opcional: helpers para ver lo pagado y lo pendiente
-public function getPaidAmountAttribute(): float
-{
-    return (float) $this->payments()->sum('amount');
-}
+    public function getPaidAmountAttribute(): float
+    {
+        return (float) $this->payments()->sum('amount');
+    }
 
-public function getRemainingAmountAttribute(): float
-{
-    $total = (float) ($this->price ?? 0);
-    return max(0, $total - $this->paid_amount);
-}
+    public function getRemainingAmountAttribute(): float
+    {
+        $total = (float) ($this->price ?? 0);
+        return max(0, $total - $this->paid_amount);
+    }
 
 
     // ================= EVENTOS AUTOMÁTICOS =================
@@ -154,8 +158,6 @@ public function getRemainingAmountAttribute(): float
                     break;
             }
         });
-
-        
 
         // Al eliminar una reserva pendiente → liberar vehículo
         static::deleted(function ($reservation) {
