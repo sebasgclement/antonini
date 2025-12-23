@@ -2,17 +2,29 @@
 
 return [
 
-    'default' => 'reverb', // 🔥 FORZAMOS EL DRIVER REVERB
+    /*
+    |--------------------------------------------------------------------------
+    | Default Broadcaster
+    |--------------------------------------------------------------------------
+    */
+
+    'default' => 'log', // 👈 ACÁ FORZAMOS QUE USE LOG
+
+    /*
+    |--------------------------------------------------------------------------
+    | Broadcast Connections
+    |--------------------------------------------------------------------------
+    */
 
     'connections' => [
 
         'pusher' => [
             'driver' => 'pusher',
-            'key' => env('PUSHER_APP_KEY'),
-            'secret' => env('PUSHER_APP_SECRET'),
-            'app_id' => env('PUSHER_APP_ID'),
+            'key' => 'clave_falsa',    // 👈 Evita el error "null given"
+            'secret' => 'secreto_falso',
+            'app_id' => 'id_falso',
             'options' => [
-                'cluster' => env('PUSHER_APP_CLUSTER'),
+                'cluster' => 'mt1',
                 'useTLS' => true,
             ],
         ],
@@ -21,21 +33,16 @@ return [
             'driver' => 'abner',
         ],
 
-        // 👇 ACÁ ESTÁ LA SOLUCIÓN. DATOS HARDCODEADOS.
         'reverb' => [
             'driver' => 'reverb',
-            'key' => env('REVERB_APP_KEY'),
-            'secret' => env('REVERB_APP_SECRET'),
-            'app_id' => env('REVERB_APP_ID'),
+            'key' => 'clave_falsa',
+            'secret' => 'secreto_falso',
+            'app_id' => 'id_falso',
             'options' => [
-                'host' => '127.0.0.1',   // IP Directa (sin env)
-                'port' => 9000,          // Puerto 9000 (sin env)
-                'scheme' => 'http',      // HTTP (sin S)
-                'useTLS' => false,       // TLS Apagado
-            ],
-            'client_options' => [
-                // Esto evita que falle si no hay certificados SSL
-                'verify' => false, 
+                'host' => '127.0.0.1',
+                'port' => 443,
+                'scheme' => 'https',
+                'useTLS' => true,
             ],
         ],
 
