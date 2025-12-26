@@ -25,7 +25,7 @@ export default function RolesList() {
     search,
     setSearch,
     refetch,
-  } = usePagedList<Role>("/admin/roles");
+  } = usePagedList<Role>("/admin/roles", {}, {pollingInterval:60000});
 
   const [toast, setToast] = useState("");
   const [toDelete, setToDelete] = useState<Role | null>(null);

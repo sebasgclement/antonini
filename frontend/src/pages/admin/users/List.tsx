@@ -36,7 +36,7 @@ export default function UsersList() {
     search,
     setSearch,
     refetch,
-  } = usePagedList<User>('/admin/users')
+  } = usePagedList<User>('/admin/users', {}, {pollingInterval:60000})
 
   const [toast, setToast] = useState('')
   const [toDelete, setToDelete] = useState<User | null>(null)

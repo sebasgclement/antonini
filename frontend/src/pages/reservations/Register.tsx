@@ -24,7 +24,23 @@ type Customer = {
   doc_number: string;
   email?: string;
 };
-type Payment = { method_id: number | ""; amount: number | ""; method_name?: string };
+
+// TIPOS ACTUALIZADOS PARA CHEQUES
+type CheckDetails = {
+    bank: string;
+    number: string; // N° Cheque (opcional, pero útil)
+    holder: string;
+    payment_date: string;  // Fecha de Cobro
+    delivery_date: string; // Fecha de Entrega
+};
+
+type Payment = { 
+    method_id: number | ""; 
+    amount: number | ""; 
+    method_name?: string;
+    details?: CheckDetails | null; 
+};
+
 type PaymentMethod = {
   id: number;
   name: string;
@@ -38,6 +54,15 @@ type Partner = {
   phone: string;
   photo: File | null;
 };
+
+const STATIC_METHODS: PaymentMethod[] = [
+    { id: 1, name: "Efectivo", type: "cash" },
+    { id: 2, name: "Transferencia Bancaria", type: "bank" },
+    { id: 3, name: "Cheque / eCheck", type: "check" }, 
+    { id: 4, name: "Tarjeta Débito/Crédito", type: "card" },
+    { id: 5, name: "Crédito Prendario", type: "credit_bank" },
+    { id: 6, name: "Permuta / Usado", type: "trade" },
+  ];
 
 export default function RegisterReservation() {
   const nav = useNavigate();
@@ -77,7 +102,7 @@ export default function RegisterReservation() {
   // Pagos
   const [includeDeposit, setIncludeDeposit] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(STATIC_METHODS);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // UX
@@ -111,8 +136,13 @@ export default function RegisterReservation() {
   useEffect(() => {
     (async () => {
       try {
-        const methods = await api.get("/payment-methods");
-        setPaymentMethods(methods.data?.data || []);
+        const res = await api.get("/payment-methods");
+        const dbMethods: PaymentMethod[] = res.data?.data || [];
+        
+        const newMethods = dbMethods.filter(
+            (dbMethod) => !STATIC_METHODS.some((staticMethod) => staticMethod.id === dbMethod.id)
+        );
+        setPaymentMethods([...STATIC_METHODS, ...newMethods]);
 
         const savedV = localStorage.getItem("temp_reservation_vehicle");
         if (savedV) {
@@ -172,18 +202,42 @@ export default function RegisterReservation() {
   };
 
   const addPayment = (method: PaymentMethod) => {
-    setPayments([...payments, { method_id: method.id, amount: "", method_name: method.name }]);
+    const today = new Date().toISOString().split("T")[0];
+    const initialDetails = method.id === 3 ? {
+        bank: "",
+        number: "",
+        holder: "",
+        payment_date: "",
+        delivery_date: today // Seteamos fecha entrega por defecto hoy
+    } : null;
+
+    setPayments([...payments, { 
+        method_id: method.id, 
+        amount: "", 
+        method_name: method.name,
+        details: initialDetails
+    }]);
     setShowPaymentModal(false);
   };
+
   const removePayment = (index: number) => {
     const newP = [...payments];
     newP.splice(index, 1);
     setPayments(newP);
   };
+
   const updatePaymentAmount = (index: number, val: string) => {
     const newP = [...payments];
     newP[index].amount = val === "" ? "" : parseFloat(val);
     setPayments(newP);
+  };
+
+  const updatePaymentDetails = (index: number, field: keyof CheckDetails, val: string) => {
+      const newP = [...payments];
+      if (newP[index].details) {
+          newP[index].details = { ...newP[index].details!, [field]: val };
+          setPayments(newP);
+      }
   };
 
   const handleSwitchCurrency = (targetCurrency: "ARS" | "USD") => {
@@ -249,47 +303,58 @@ export default function RegisterReservation() {
       setToast("Seleccioná cliente y vehículo usado primero");
       return;
     }
-    const printWindow = window.open('', '', 'height=600,width=800');
-    if (!printWindow) return;
+    
+    // Aquí definimos la fecha
     const dateStr = new Date().toLocaleDateString('es-AR', { year: 'numeric', month: 'long', day: 'numeric' });
 
+    const printWindow = window.open('', '', 'height=600,width=800');
+    if (!printWindow) return;
+
+    // Aquí la USAMOS (mira ${dateStr} dentro del HTML)
     printWindow.document.write(`
       <html>
         <head>
-          <title>DDJJ Kilometraje - ${usedVehicle.plate}</title>
+          <title>DDJJ Kilometraje</title>
           <style>
-            body { font-family: 'Arial', sans-serif; padding: 40px; color: #333; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin: 0; }
-            .data-box { background: #f4f4f4; padding: 15px; border: 1px solid #ddd; margin: 20px 0; }
-            .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-            .signature-section { display: flex; justify-content: space-between; margin-top: 100px; }
-            .sign-box { border-top: 1px solid #333; width: 40%; text-align: center; padding-top: 10px; }
+            body { font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; }
+            h1 { text-align: center; font-size: 18px; text-decoration: underline; margin-bottom: 30px; }
+            p { margin-bottom: 15px; }
+            .firma { margin-top: 100px; text-align: right; border-top: 1px solid #000; width: 200px; margin-left: auto; padding-top: 10px; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1 class="title">Declaración Jurada de Kilometraje</h1>
-            <p style="margin:5px 0 0 0; font-size: 14px;">${dateStr}</p>
+          <h1>DECLARACIÓN JURADA DE KILOMETRAJE</h1>
+          
+          <p>En la ciudad de Rafaela, a los <strong>${dateStr}</strong>.</p>
+
+          <p>
+            Por la presente, yo <strong>${customer.first_name} ${customer.last_name}</strong>, 
+            DNI <strong>${customer.doc_number}</strong>, declaro bajo juramento que el vehículo 
+            usado que entrego en parte de pago:
+          </p>
+          
+          <ul>
+            <li>Marca: <strong>${usedVehicle.brand}</strong></li>
+            <li>Modelo: <strong>${usedVehicle.model}</strong></li>
+            <li>Dominio: <strong>${usedVehicle.plate}</strong></li>
+          </ul>
+
+          <p>
+            Posee el kilometraje real y su odómetro funciona correctamente al momento de la entrega.
+            Asimismo, libero de toda responsabilidad a la agencia por vicios ocultos o desperfectos 
+            que pudieran surgir con posterioridad a esta fecha.
+          </p>
+
+          <div class="firma">
+             Firma y Aclaración
           </div>
-          <div class="content">
-            <p>Por la presente, <strong>${customer.last_name}, ${customer.first_name}</strong> (DNI ${customer.doc_number}), declaro que el vehículo:</p>
-            <div class="data-box">
-              <div class="data-row"><strong>Modelo:</strong> <span>${usedVehicle.brand} ${usedVehicle.model}</span></div>
-              <div class="data-row"><strong>Patente:</strong> <span>${usedVehicle.plate}</span></div>
-              <div class="data-row"><strong>Kilometraje:</strong> <span>____________________ Kms</span></div>
-            </div>
-            <p>El kilometraje indicado es real y asumo responsabilidad por vicios ocultos o adulteraciones previas.</p>
-          </div>
-          <div class="signature-section">
-            <div class="sign-box">Firma Cliente<br><small>${customer.last_name}, ${customer.first_name}</small></div>
-            <div class="sign-box">Aclaración / DNI</div>
-          </div>
-          <script>window.onload = function() { window.print(); }</script>
         </body>
       </html>
     `);
+    
     printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
 
   const onSubmit = async (e: FormEvent) => {
@@ -304,11 +369,23 @@ export default function RegisterReservation() {
       setToast("Falta vehículo o cliente");
       return;
     }
+
+    // Validación de Cheques
+    if (includeDeposit) {
+        for (const p of payments) {
+            if (p.method_id === 3 && p.details) {
+                if(!p.details.bank || !p.details.holder || !p.details.payment_date) {
+                    setToast("❌ Falta completar datos bancarios en el cheque ingresado.");
+                    return;
+                }
+            }
+        }
+    }
+
     setLoading(true);
 
     try {
       const formData = new FormData();
-
       formData.append("vehicle_id", String(vehicle.id));
       formData.append("customer_id", String(customer.id));
       formData.append("price", String(price || 0));
@@ -334,6 +411,9 @@ export default function RegisterReservation() {
         validPayments.forEach((p, index) => {
             formData.append(`payment_methods[${index}][method_id]`, String(p.method_id));
             formData.append(`payment_methods[${index}][amount]`, String(p.amount));
+            if (p.details) {
+                 formData.append(`payment_methods[${index}][details]`, JSON.stringify(p.details));
+            }
         });
       }
 
@@ -369,7 +449,48 @@ export default function RegisterReservation() {
   };
 
   return (
-    <div className="container vstack" style={{ gap: 20 }}>
+    // Agregamos pb-20 para dar espacio al footer flotante
+    <div className="container vstack" style={{ gap: 20, paddingBottom: 100, position: 'relative' }}>
+        <style>{`
+            /* CAMBIO CLAVE: sticky en lugar de fixed.
+              Esto hace que viva DENTRO del contenedor 'container' 
+              y respete los anchos.
+            */
+            .sticky-footer {
+                position: sticky; 
+                bottom: 0;
+                background-color: var(--color-card);
+                border-top: 1px solid var(--color-border);
+                padding: 16px;
+                box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+                z-index: 50;
+                border-radius: 8px 8px 0 0;
+                margin-top: auto; /* Empuja hacia abajo si sobra espacio */
+            }
+
+            .check-inline-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                margin-top: 12px;
+                padding: 12px;
+                background: rgba(0,0,0,0.03);
+                border-radius: 6px;
+                border: 1px dashed var(--color-border);
+            }
+            
+            /* Inputs de fecha más lindos */
+            input[type="date"] {
+               font-family: inherit;
+               cursor: pointer;
+            }
+
+            @media (max-width: 600px) {
+                .check-inline-grid { grid-template-columns: 1fr; }
+                .sticky-footer { flex-direction: column; gap: 10px; }
+            }
+        `}</style>
+
       {/* HEADER */}
       <div className="hstack" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <h1 className="title" style={{ margin: 0 }}>Nueva Operación</h1>
@@ -378,20 +499,19 @@ export default function RegisterReservation() {
         </Button>
       </div>
 
-      <form onSubmit={onSubmit} className="vstack" style={{ gap: 20, paddingBottom: 100 }}>
+      <form id="reservation-form" onSubmit={onSubmit} className="vstack" style={{ gap: 20 }}>
         
-        {/* === 1. DATOS DE LA OPERACIÓN (VEHICULO Y CLIENTE) === */}
+        {/* 1. DATOS OPERACIÓN */}
         <div className="card vstack" style={{ gap: 16 }}>
           <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>Vehículo y Cliente</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: 20 }}>
-            {/* ... INPUTS DE BUSQUEDA VEHICULO Y CLIENTE ... */}
+            {/* ... Buscadores ... */}
             <div className="vstack" style={{ gap: 8 }}>
                <label>Unidad a Vender</label>
                <div className="hstack">
                  <Input placeholder="Patente..." value={searchPlate} onChange={(e) => setSearchPlate(e.currentTarget.value)} />
                  <Button type="button" onClick={() => searchEntity("vehicle", searchPlate)}>Buscar</Button>
                </div>
-               {/* LINK PARA IR A CREAR VEHICULO */}
                <div className="hstack" style={{justifyContent:'flex-end'}}>
                  <a style={{fontSize:'0.8rem', cursor:'pointer', color:'var(--color-primary)'}} onClick={()=>{saveTempState(); window.location.href="/vehiculos/registro?redirect=/reservas/nueva"}}>+ Nuevo Vehículo</a>
                </div>
@@ -404,15 +524,14 @@ export default function RegisterReservation() {
                  <Input placeholder="DNI..." value={searchDni} onChange={(e) => setSearchDni(e.currentTarget.value)} />
                  <Button type="button" onClick={() => searchEntity("customer", searchDni)}>Buscar</Button>
                </div>
-               {/* LINK PARA IR A CREAR CLIENTE */}
                <div className="hstack" style={{justifyContent:'flex-end'}}>
                  <a style={{fontSize:'0.8rem', cursor:'pointer', color:'var(--color-primary)'}} onClick={()=>{saveTempState(); window.location.href="/clientes/registro?redirect=/reservas/nueva"}}>+ Nuevo Cliente</a>
                </div>
                {customer && <div style={{padding:10, background: 'var(--hover-bg)', borderRadius: 8}}>👤 {customer.first_name} {customer.last_name}</div>}
             </div>
           </div>
-
-          {/* SOCIOS */}
+          
+          {/* SOCIOS ... (mismo código) */}
           <div style={{ marginTop: 8 }}>
             <Toggle label="Agregar Socios / Cónyuge" checked={includePartners} onChange={setIncludePartners} />
             {includePartners && (
@@ -423,19 +542,32 @@ export default function RegisterReservation() {
                       <Input label={index===0?"DNI":""} value={partner.dni} onChange={(e)=>updatePartner(partner.id,'dni',e.target.value)} />
                       <Input label={index===0?"Tel":""} value={partner.phone} onChange={(e)=>updatePartner(partner.id,'phone',e.target.value)} />
                       <label className="button" style={{fontSize: '0.8rem', padding: '10px', background: partner.photo ? 'var(--color-success)':'#333', color:'#fff', cursor:'pointer'}}>
-                         {partner.photo ? '📸 Listo' : '📷 DNI'}
-                         <input type="file" hidden accept="image/*" onChange={(e)=>handlePartnerPhoto(partner.id, e)} />
+                          {partner.photo ? '📸 Listo' : '📷 DNI'}
+                          <input type="file" hidden accept="image/*" onChange={(e)=>handlePartnerPhoto(partner.id, e)} />
                       </label>
                       <Button type="button" onClick={()=>handleRemovePartner(partner.id)} style={{background:'red'}}>🗑</Button>
                   </div>
                 ))}
-                <Button type="button" onClick={handleAddPartner} style={{alignSelf:'flex-start', fontSize:'0.8rem'}}>+ Agregar socio</Button>
-              </div>
+<Button 
+  type="button" 
+  onClick={handleAddPartner} 
+  style={{
+    alignSelf: 'flex-start', 
+    fontSize: '0.8rem',
+    // Estilo "Outline" (Bordeado)
+    background: 'transparent',
+    border: '1px solid var(--color-primary)', 
+    color: 'var(--color-primary)',
+    fontWeight: 600
+  }}
+>
+  + Agregar socio
+</Button>              </div>
             )}
           </div>
         </div>
 
-        {/* === 2. VALORES === */}
+        {/* 2. VALORES */}
         <div className="card vstack" style={{ gap: 16 }}>
            <div className="hstack" style={{justifyContent:'space-between'}}>
               <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>Valores ({currency})</div>
@@ -444,7 +576,6 @@ export default function RegisterReservation() {
                  <button type="button" onClick={()=>handleSwitchCurrency('USD')} style={{padding:'5px 10px', background: currency==='USD'?'#22c55e':'#fff', color: currency==='USD'?'#fff':'#333', border:'none', cursor:'pointer'}}>USD</button>
               </div>
            </div>
-           
            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20 }}>
               <div>
                  <Input label="Precio Venta" type="number" value={price as any} onChange={(e)=>setPrice(parseFloat(e.target.value))} style={{fontWeight:'bold', fontSize:'1.1rem'}}/>
@@ -458,22 +589,21 @@ export default function RegisterReservation() {
            </div>
         </div>
 
-        {/* === 3. PAGOS Y TOMA === */}
+        {/* 3. PAGOS Y TOMA */}
         <div className="card vstack" style={{ gap: 20 }}>
           <div className="title" style={{ fontSize: "1.1rem", margin: 0 }}>Forma de Pago</div>
 
           {/* TOMA DE USADO */}
           <div style={{ background: "var(--input-bg)", borderRadius: 8, padding: 16, border: "1px solid var(--color-border)" }}>
             <Toggle label="Recibir Vehículo Usado (Permuta)" checked={includeUsed} onChange={setIncludeUsed} />
-
             {includeUsed && (
               <div className="vstack" style={{ marginTop: 16, gap: 16 }}>
+                {/* ... Buscador Usado ... */}
                 <div className="hstack">
                   <Input placeholder="Patente usado..." value={searchUsedPlate} onChange={(e) => setSearchUsedPlate(e.currentTarget.value)} />
                   <Button type="button" onClick={() => searchEntity("used", searchUsedPlate)}>Buscar</Button>
                    <a style={{fontSize:'0.8rem', cursor:'pointer', color:'var(--color-primary)'}} onClick={()=>{saveTempState(); window.location.href="/vehiculos/registro?redirect=/reservas/nueva&used=1"}}>+ Cargar Usado</a>
                 </div>
-
                 {usedVehicle && (
                   <div className="vstack" style={{gap:10, padding:10, border:'1px solid #ccc', borderRadius:8}}>
                     <div className="hstack" style={{justifyContent:'space-between', flexWrap:'wrap'}}>
@@ -483,11 +613,10 @@ export default function RegisterReservation() {
                           <Input type="number" value={usedValue as any} onChange={(e)=>setUsedValue(parseFloat(e.target.value))} style={{width:120, textAlign:'right', fontWeight:'bold', color:'var(--color-success)'}} />
                        </div>
                     </div>
-
+                    {/* ... Checklist y DDJJ ... */}
                     <div className="hstack" style={{justifyContent:'flex-end'}}>
                         <Button type="button" onClick={printMileageDDJJ} style={{fontSize:'0.8rem', padding:'5px 10px', background:'#555'}}>🖨️ Imprimir DDJJ</Button>
                     </div>
-
                     <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))', gap:10}}>
                        {Object.keys(usedChecklist).map(key => (
                           <label key={key} style={{display:'flex', gap:5, alignItems:'center', cursor:'pointer', color: (key==='08' && !usedChecklist['08']) ? 'red' : 'inherit'}}>
@@ -505,48 +634,113 @@ export default function RegisterReservation() {
 
           {/* PAGOS */}
           <div style={{ background: "var(--input-bg)", borderRadius: 8, padding: 16, border: "1px solid var(--color-border)" }}>
-             <Toggle label="Registrar Seña / Pagos Iniciales" checked={includeDeposit} onChange={setIncludeDeposit} />
-             
-             {includeDeposit && (
+              <Toggle label="Registrar Seña / Pagos Iniciales" checked={includeDeposit} onChange={setIncludeDeposit} />
+              
+              {includeDeposit && (
                 <div className="vstack" style={{marginTop:15, gap:10}}>
-                   {payments.map((p, i) => (
-                      <div key={i} className="hstack" style={{gap:10}}>
-                          <div style={{flex:1, padding:8, background:'#eee', borderRadius:4}}>{p.method_name}</div>
-                          <Input type="number" placeholder="Monto..." value={p.amount as any} onChange={(e)=>updatePaymentAmount(i, e.target.value)} />
-                          <Button type="button" onClick={()=>removePayment(i)} style={{background:'red', padding:'5px 10px'}}>X</Button>
+                   {payments.map((p, i) => {
+                      const isCheck = p.method_id === 3 && p.details;
+                      
+                      return (
+                      <div key={i} className="vstack" style={{gap:5, padding:12, border:'1px solid var(--color-border)', borderRadius:8, background:'var(--color-card)'}}>
+                          <div className="hstack" style={{gap:10, justifyContent:'space-between', flexWrap: 'wrap'}}>
+                              <div style={{fontWeight:600, minWidth: 150}}>
+                                  {p.method_name} 
+                                  {isCheck && <span style={{fontSize:'0.8rem', color:'var(--color-primary)', marginLeft: 6}}>(Cheque)</span>}
+                              </div>
+                              
+                              <div className="hstack" style={{flex:1, justifyContent:'flex-end', minWidth: 200}}>
+                                  {/* Si NO es cheque, mostramos el input de monto simple acá. Si ES cheque, lo mostramos abajo en el grid para ordenarlo */}
+                                  {!isCheck && (
+                                     <Input type="number" placeholder="Monto..." value={p.amount as any} onChange={(e)=>updatePaymentAmount(i, e.target.value)} style={{maxWidth:150}} />
+                                  )}
+                                  <Button type="button" onClick={()=>removePayment(i)} style={{background:'red', padding:'5px 10px'}}>X</Button>
+                              </div>
+                          </div>
+                          
+                          {/* === DATOS DEL CHEQUE === */}
+                          {isCheck && (
+                              <div className="check-inline-grid">
+                                  {/* 1. Fecha Entrega */}
+                                  <div>
+                                      <label style={{fontSize:'0.75rem', fontWeight:600, color:'var(--color-muted)'}}>Fecha de Entrega</label>
+                                      <Input type="date" value={p.details!.delivery_date} onChange={(e)=>updatePaymentDetails(i,'delivery_date', e.target.value)} />
+                                  </div>
+
+                                  {/* 2. Banco */}
+                                  <div>
+                                      <label style={{fontSize:'0.75rem', fontWeight:600, color:'var(--color-muted)'}}>Banco</label>
+                                      <Input value={p.details!.bank} onChange={(e)=>updatePaymentDetails(i,'bank', e.target.value)} placeholder="Ej: Galicia" />
+                                  </div>
+
+                                  {/* 3. Monto (Integrado al grid del cheque) */}
+                                  <div>
+                                      <label style={{fontSize:'0.75rem', fontWeight:600, color:'var(--color-muted)'}}>Monto ($)</label>
+                                      <Input type="number" value={p.amount as any} onChange={(e)=>updatePaymentAmount(i, e.target.value)} placeholder="$ 0.00" style={{fontWeight:'bold'}} />
+                                  </div>
+
+                                  {/* 4. Titular */}
+                                  <div>
+                                      <label style={{fontSize:'0.75rem', fontWeight:600, color:'var(--color-muted)'}}>Titular</label>
+                                      <Input value={p.details!.holder} onChange={(e)=>updatePaymentDetails(i,'holder', e.target.value)} placeholder="Nombre completo" />
+                                  </div>
+
+                                  {/* 5. Fecha Cobro */}
+                                  <div style={{gridColumn: '1 / -1'}}>
+                                      <label style={{fontSize:'0.75rem', fontWeight:600, color:'var(--color-primary)'}}>📅 Fecha de Cobro (Vencimiento)</label>
+                                      <Input type="date" value={p.details!.payment_date} onChange={(e)=>updatePaymentDetails(i,'payment_date', e.target.value)} style={{borderColor: 'var(--color-primary)'}} />
+                                  </div>
+
+                                  {/* Campo extra oculto o secundario para número */}
+                                  <div style={{marginTop:5}}>
+                                      <Input value={p.details!.number} onChange={(e)=>updatePaymentDetails(i,'number', e.target.value)} placeholder="N° Cheque (Opcional)" style={{fontSize:'0.8rem'}} />
+                                  </div>
+                              </div>
+                          )}
                       </div>
-                   ))}
-                   <Button type="button" onClick={()=>setShowPaymentModal(true)} style={{alignSelf:'flex-start'}}>+ Agregar Pago</Button>
+                   )})}
+                   <Button type="button" onClick={()=>setShowPaymentModal(true)} style={{alignSelf:'flex-start', background:'var(--color-secondary)'}}>+ Agregar Pago</Button>
                 </div>
-             )}
+              )}
           </div>
         </div>
-
-        {/* === 4. TOTALES === */}
-        <div className="card hstack" style={{ justifyContent: "space-between", alignItems: "center", flexWrap:'wrap', gap:20 }}>
-           <div className="vstack">
-              <div style={{color:'#666'}}>Total Operación: <strong>$ {totalOperation.toLocaleString()}</strong></div>
-              <div style={{color:'#22c55e'}}>Total Entrega (Usado + Pagos): <strong>$ {totalPaid.toLocaleString()}</strong></div>
-           </div>
-           
-           <div className="vstack" style={{alignItems:'flex-end'}}>
-              <div style={{fontSize:'1.5rem', fontWeight:'bold', color: balance > 0 ? 'var(--color-primary)' : 'var(--color-success)'}}>
-                  Saldo: $ {balance.toLocaleString()}
-              </div>
-              <small>{balance > 0 ? "A Financiar / Abonar contra entrega" : "Operación saldada"}</small>
-           </div>
-        </div>
-
-        <div className="hstack" style={{ justifyContent: "flex-end", gap: 10 }}>
-           {/* SOLUCIÓN AL ERROR DEL BOTÓN: Envolvemos en Boolean() */}
-           <Button type="submit" disabled={loading || Boolean(includeUsed && usedVehicle && !usedChecklist["08"])}>
-             {loading ? "Guardando..." : "Confirmar Operación"}
-           </Button>
-        </div>
-
       </form>
 
-      {/* MODAL CORREGIDO: Sin prop isOpen */}
+      {/* === MODAL FLOTANTE (STICKY FOOTER) === */}
+      <div className="sticky-footer">
+          <div className="hstack" style={{justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap: 16}}>
+            
+            {/* Totales Resumen */}
+            <div className="vstack" style={{gap:2}}>
+                <div style={{color:'var(--color-muted)', fontSize:'0.85rem'}}>
+                    Operación Total: <strong>$ {totalOperation.toLocaleString()}</strong>
+                </div>
+                <div style={{color:'var(--color-success)', fontSize:'0.85rem'}}>
+                    Entrega Pactada: <strong>$ {totalPaid.toLocaleString()}</strong>
+                </div>
+            </div>
+            
+            {/* Botón y Saldo */}
+            <div className="hstack" style={{gap:20, alignItems:'center', flex:1, justifyContent:'flex-end'}}>
+                <div className="vstack" style={{alignItems:'flex-end'}}>
+                   <div style={{fontSize:'1.3rem', fontWeight:'bold', color: balance > 0 ? 'var(--color-primary)' : 'var(--color-success)'}}>
+                       $ {balance.toLocaleString()}
+                   </div>
+                   <small style={{fontSize:'0.75rem', textTransform:'uppercase', letterSpacing:1}}>{balance > 0 ? "Saldo a Financiar" : "Saldado"}</small>
+                </div>
+
+                <Button 
+                  type="submit" 
+                  form="reservation-form" 
+                  disabled={loading || Boolean(includeUsed && usedVehicle && !usedChecklist["08"])}
+                  style={{minWidth: 140, height: 44}}
+                >
+                  {loading ? "Guardando..." : "CONFIRMAR"}
+                </Button>
+            </div>
+          </div>
+      </div>
+
       {showPaymentModal && (
           <PaymentMethodModal 
             onClose={() => setShowPaymentModal(false)} 

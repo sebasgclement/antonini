@@ -51,7 +51,7 @@ export default function VehiclesList() {
     search,
     setSearch,
     refetch,
-  } = usePagedList<Vehicle>("/vehicles");
+  } = usePagedList<Vehicle>("/vehicles", {}, {pollingInterval:60000});
 
   const [toast, setToast] = useState("");
   const [toDelete, setToDelete] = useState<Vehicle | null>(null);

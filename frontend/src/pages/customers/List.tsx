@@ -24,7 +24,7 @@ export default function CustomersList() {
     search,
     setSearch,
     refetch, // 👈 ESTO ES CLAVE: Recarga la lista desde el servidor
-  } = usePagedList<Customer>("/customers");
+  } = usePagedList<Customer>("/customers", {}, {pollingInterval:60000});
 
   const [toastConfig, setToastConfig] = useState<{
     message: string;

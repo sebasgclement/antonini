@@ -361,7 +361,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
               >
                 Conectado como
               </p>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: "0.95rem" }}>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth:"100%", display: "block" }}>
                 {user?.email}
               </p>
             </div>

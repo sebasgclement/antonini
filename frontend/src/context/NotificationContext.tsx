@@ -14,7 +14,7 @@ import { setupEcho } from "../utils/echo";
 
 interface NotificationContextType {
   pendingReservationsCount: number;
-  agendaCount: number; // 👈 NUEVO
+  agendaCount: number;
   fetchInitialCounts: () => Promise<void>;
   refreshTrigger: number;
 }
@@ -36,9 +36,9 @@ export const useNotifications = () => {
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated, isAdmin, loading } = useAuth(); // isAdmin puede ser undefined al inicio
+  const { isAuthenticated, isAdmin, loading } = useAuth();
   const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
-  const [agendaCount, setAgendaCount] = useState(0); // 👈 NUEVO ESTADO
+  const [agendaCount, setAgendaCount] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { showToast } = useToast();
 
@@ -53,42 +53,45 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
     // 1. Cargar Agenda (PARA TODOS)
     try {
       const { data: agendaData } = await api.get("/my-agenda/count");
-      console.log("📅 Agenda count:", agendaData.count);
+      // console.log("📅 Agenda count:", agendaData.count);
       setAgendaCount(agendaData.count || 0);
     } catch (error) {
       console.error("❌ Error cargando agenda count:", error);
     }
 
     // 2. Cargar Reservas (SOLO ADMIN)
-    // Nota: Verificamos isAdmin explícitamente aquí por si cambia dinámicamente
-    // pero idealmente confiamos en el hook useAuth.
-    // Si isAdmin es true, buscamos las reservas.
-    // Accedemos al localStorage o usamos la variable si ya está resuelta.
-    
-    // (Pequeño hack: a veces fetchInitialCounts se llama antes de que useAuth termine, 
-    // así que intentamos si el usuario parece ser admin o si la prop isAdmin es true)
-    
-    // Como isAdmin viene del hook y puede tardar, hacemos la petición 
-    // y si da 403 (Forbidden) simplemente no pasa nada, pero mejor intentarlo si es admin.
     if (isAdmin) {
-        try {
-          const { data: resData } = await api.get("/reservas/pendientes/count");
-          console.log("🔢 Reservas count:", resData.count);
-          setPendingReservationsCount(resData.count || 0);
-        } catch (error) {
-          console.error("❌ Error badge reservas:", error);
-        }
+      try {
+        const { data: resData } = await api.get("/reservas/pendientes/count");
+        // console.log("🔢 Reservas count:", resData.count);
+        setPendingReservationsCount(resData.count || 0);
+      } catch (error) {
+        console.error("❌ Error badge reservas:", error);
+      }
     }
-  }, [isAdmin]); // Se recrea si cambia el estado de admin
+  }, [isAdmin]);
 
-  // --- EFECTO 1: CARGA INICIAL (Separado del WebSocket) ---
-  // Esto asegura que los vendedores normales también carguen su agenda
+  // --- EFECTO 1: CARGA INICIAL + POLLING (Auto-actualización) ---
   useEffect(() => {
-    if (!loading && isAuthenticated) {
-        fetchInitialCounts();
-    }
-  }, [loading, isAuthenticated, fetchInitialCounts]);
+    if (loading || !isAuthenticated) return;
 
+    // A. Carga inmediata al entrar
+    fetchInitialCounts();
+
+    // B. 🔥 POLLING: Preguntar cada 30 segundos si hay algo nuevo
+    // Esto soluciona el problema de que el badge no aparezca si falla el socket
+    const intervalId = setInterval(() => {
+      // Solo consultamos si la pestaña está visible para no gastar recursos al pepe
+      if (document.visibilityState === "visible") {
+        console.log("⏰ Polling: Verificando notificaciones...");
+        fetchInitialCounts();
+      }
+    }, 30000); // 30000 ms = 30 segundos
+
+    // Limpiamos el reloj cuando se desmonta
+    return () => clearInterval(intervalId);
+
+  }, [loading, isAuthenticated, fetchInitialCounts]);
 
   // --- EFECTO 2: CAMBIAR EL TÍTULO DE LA PESTAÑA ---
   useEffect(() => {
@@ -102,10 +105,8 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [pendingReservationsCount, agendaCount]);
 
-
   // --- EFECTO 3: WEBSOCKET (Solo Admin para Reservas) ---
   useEffect(() => {
-    // Si no es admin, no conectamos el socket de "admin-notifications"
     if (loading || !isAuthenticated || !isAdmin) return;
 
     const token = localStorage.getItem("token");
@@ -114,21 +115,21 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
     if (isConnected.current) return;
 
     console.log("🔌 Iniciando conexión Reverb (Admin)...");
-    
-    // Configuramos Echo
+
     const echoInstance = setupEcho(token);
     echoRef.current = echoInstance;
     isConnected.current = true;
 
     const handleEvent = (e: any) => {
-      console.log("🔥 ¡EVENTO RECIBIDO!", e);
+      console.log("🔥 ¡EVENTO RECIBIDO POR SOCKET!", e);
 
       const reserva = e.reserva || e;
       const cliente = reserva.clientName || "Cliente";
 
+      // Mostramos Toast
       showToast(`¡Nueva Reserva de ${cliente}!`, "warning", 8000);
 
-      // Recargamos los contadores
+      // Recargamos los contadores inmediatamente
       fetchInitialCounts();
       setRefreshTrigger((prev) => prev + 1);
     };
@@ -150,7 +151,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
 
   const value = {
     pendingReservationsCount,
-    agendaCount, // 👈 Exportamos el valor
+    agendaCount,
     fetchInitialCounts,
     refreshTrigger,
   };

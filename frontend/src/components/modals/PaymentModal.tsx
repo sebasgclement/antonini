@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import api from "../../lib/api";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 import PaymentMethodModal from "./PaymentMethodModal";
 
-interface Props {
-  reservation: any;
-  onClose: () => void;
-  onSuccess: () => void;
-}
+type Reservation = {
+  id: number;
+  total_amount?: number; 
+  pending_amount?: number;
+  [key: string]: any;
+};
 
 type PaymentMethod = {
   id: number;
@@ -16,226 +17,228 @@ type PaymentMethod = {
   type: string;
 };
 
-export default function PaymentModal({
-  reservation,
-  onClose,
-  onSuccess,
-}: Props) {
-  const [amount, setAmount] = useState<string>("");
-  const [concept, setConcept] = useState("");
-  const [methodId, setMethodId] = useState<string>("");
+type Props = {
+  reservation: Reservation;
+  onClose: () => void;
+  onSuccess: () => void;
+};
+
+export default function PaymentModal({ reservation, onClose, onSuccess }: Props) {
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [selectedMethodId, setSelectedMethodId] = useState<string>("");
+  const [isMethodModalOpen, setIsMethodModalOpen] = useState(false);
+  
+  const initialAmount = reservation.pending_amount || reservation.total_amount || 0;
+  const [amount, setAmount] = useState(initialAmount.toString());
   const [loading, setLoading] = useState(false);
-  const [loadingMethods, setLoadingMethods] = useState(true);
+  
+  // Inicializamos check_number en "0" para que no falle la validación si está oculto
+  const [details, setDetails] = useState<Record<string, string>>({
+    check_number: "0" 
+  });
 
-  const [showCreateMethod, setShowCreateMethod] = useState(false);
+  useEffect(() => { loadMethods(); }, []);
 
-  useEffect(() => {
-    if (reservation.balance) {
-      setAmount(reservation.balance.toString());
-    }
-  }, [reservation]);
-
-  useEffect(() => {
-    fetchMethods();
-  }, []);
-
-  const fetchMethods = async () => {
-    setLoadingMethods(true);
-    try {
-      const res = await api.get("/payment-methods");
-      setMethods(res.data.data || res.data);
-    } catch (err) {
-      console.error("Error cargando métodos", err);
-    } finally {
-      setLoadingMethods(false);
-    }
+  const loadMethods = () => {
+    api.get("/payment-methods").then((res) => {
+        setMethods(res.data.data || res.data);
+    });
   };
 
-  const handleMethodCreated = (newMethod: any) => {
-    setMethods((prev) => [...prev, newMethod]);
-    setMethodId(newMethod.id.toString());
-    setShowCreateMethod(false);
+  const selectedMethod = methods.find((m) => m.id.toString() === selectedMethodId);
+
+  // === RENDERIZADO MANUAL DE CAMPOS ===
+  const renderFields = () => {
+    if (!selectedMethod) return null;
+
+    switch (selectedMethod.type) {
+        case 'check': 
+            return (
+                <div className="vstack" style={{ gap: 12, padding: 12, background: "rgba(0,0,0,0.02)", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-primary)", display:'flex', justifyContent:'space-between' }}>
+                        <span>🎫 Datos del Cheque</span>
+                        <span style={{fontSize:'0.7rem', color:'green'}}>Personalizado</span>
+                    </div>
+                    
+                    {/* Fila 1: Fechas */}
+                    <div className="hstack" style={{ gap: 10 }}>
+                         <div style={{flex:1}}>
+                            <Input 
+                                label="Fecha de Entrega" 
+                                type="date" 
+                                value={details.delivery_date || ''} 
+                                onChange={e => setDetails({...details, delivery_date: e.target.value})} 
+                            />
+                        </div>
+                        <div style={{flex:1}}>
+                            <Input 
+                                label="Fecha de Cobro *" 
+                                type="date" 
+                                value={details.payment_date || ''} 
+                                onChange={e => setDetails({...details, payment_date: e.target.value})} 
+                                required 
+                            />
+                        </div>
+                    </div>
+
+                    {/* Fila 2: Banco y Titular */}
+                    <div className="hstack" style={{ gap: 10 }}>
+                        <div style={{flex:1}}>
+                            <Input 
+                                label="Banco *" 
+                                placeholder="Ej: Galicia" 
+                                value={details.bank_name || ''} 
+                                onChange={e => setDetails({...details, bank_name: e.target.value})} 
+                                required 
+                            />
+                        </div>
+                        <div style={{flex:1}}>
+                            <Input 
+                                label="Titular / CUIT *" 
+                                placeholder="Nombre o CUIT" 
+                                value={details.owner || ''} 
+                                onChange={e => setDetails({...details, owner: e.target.value})} 
+                                required 
+                            />
+                        </div>
+                    </div>
+
+                    {/* Fila 3: Número de Cheque (Oculto o Visible) */}
+                    {/* Si lo ponés hidden, recordá que ya lo inicializamos en "0" arriba */}
+                    <Input 
+                        type="number" // Lo dejo visible por si querés cambiarlo, o poné hidden
+                        label="N° Cheque" 
+                        value={details.check_number} 
+                        onChange={e => setDetails({...details, check_number: e.target.value})} 
+                    />
+                </div>
+            );
+
+        case 'bank':
+        case 'credit_bank':
+            return (
+                <div className="vstack" style={{ gap: 12, padding: 12, background: "var(--hover-bg)", borderRadius: 8 }}>
+                     <Input label="Comprobante / ID" value={details.transaction_id || ''} onChange={e => setDetails({...details, transaction_id: e.target.value})} />
+                </div>
+            );
+        
+        case 'card':
+             return (
+                <div className="vstack" style={{ gap: 12, padding: 12, background: "var(--hover-bg)", borderRadius: 8 }}>
+                    <div className="hstack" style={{gap:10}}>
+                        <Input label="Últimos 4 núm." maxLength={4} value={details.card_last4 || ''} onChange={e => setDetails({...details, card_last4: e.target.value})} style={{width:100}} />
+                        <Input label="Cód. Autorización" value={details.auth_code || ''} onChange={e => setDetails({...details, auth_code: e.target.value})} style={{flex:1}} />
+                    </div>
+                    <Input label="Cantidad de Cuotas" type="number" value={details.installments || ''} onChange={e => setDetails({...details, installments: e.target.value})} />
+                </div>
+             );
+
+        default: return null;
+    }
   };
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount);
-
-    if (!numAmount || numAmount <= 0) return alert("Ingresa un monto válido");
-    if (!methodId) return alert("Selecciona un medio de pago");
+    if (!selectedMethodId) return alert("Seleccioná un método");
+    
+    // Validación manual para Cheques
+    if (selectedMethod?.type === 'check') {
+        if (!details.payment_date) return alert("La fecha de cobro es obligatoria");
+        if (!details.bank_name) return alert("El banco es obligatorio");
+        if (!details.owner) return alert("El titular es obligatorio");
+        if (!details.check_number) details.check_number = "0"; 
+    }
 
     setLoading(true);
-
     try {
-      // SOLO REGISTRO, SIN PDF AUTOMÁTICO
-      await api.post("/reservation-payments", {
-        reservation_id: reservation.id, 
-        amount: numAmount,
-        notes: concept || "Pago a cuenta", 
-        payment_method_id: methodId,
-      });
+      const payload = {
+        reservation_id: reservation.id,
+        amount: parseFloat(amount),
+        
+        // CORRECCIÓN AQUÍ: Antes decía method_id, ahora payment_method_id
+        payment_method_id: selectedMethodId, 
 
-      onSuccess(); // Cierra y refresca
+        details: { 
+            ...details, 
+            method_type: selectedMethod?.type, 
+            method_name: selectedMethod?.name 
+        }
+      };
+
+      console.log("Enviando pago:", payload); 
+
+      await api.post("/reservation-payments", payload);
+      onSuccess();
+      onClose();
     } catch (error: any) {
       console.error(error);
-      const msg = error?.response?.data?.message || "Error al registrar el pago.";
-      alert(`❌ ${msg}`);
+      const msg = error?.response?.data?.message || "Error al procesar el pago.";
+      const validation = error?.response?.data?.errors;
+      // Mostramos el error de validación de forma más legible si existe
+      const validationMsg = validation ? "\n" + Object.values(validation).flat().join("\n") : "";
+      alert(msg + validationMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onEsc);
-    return () => document.removeEventListener("keydown", onEsc);
-  }, [onClose]);
-
   return (
     <>
-      <style>{`
-        .adaptive-select option {
-          background-color: var(--color-card);
-          color: var(--color-text);
-          padding: 8px;
-        }
-      `}</style>
-
-      <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
-        <div
-          className="modal-card vstack"
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: 450,
-            maxWidth: "95%",
-            maxHeight: "90vh",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            backgroundColor: "var(--color-card)",
-            color: "var(--color-text)",
-            border: "1px solid var(--color-border)",
-          }}
-        >
-          {/* HEADER */}
-          <div className="hstack" style={{ justifyContent: "space-between", marginBottom: 16, flexShrink: 0 }}>
-            <div>
-              <h3 style={{ margin: 0, color: "var(--color-text)" }}>Registrar Cobro</h3>
-              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "0.9rem" }}>
-                Reserva #{reservation.id}
-              </p>
+        <div className="modal-overlay" onClick={onClose} style={styles.overlay}>
+        <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ ...styles.card, backgroundColor: "var(--color-card)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}>
+            <div className="hstack" style={{ justifyContent: "space-between", marginBottom: 20 }}>
+                <h3 style={{ margin: 0 }}>Registrar Pago</h3>
+                <button onClick={onClose} style={styles.closeBtn}>✕</button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--color-text)" }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
 
-          {/* BODY */}
-          <div style={{ overflowY: "auto", flex: 1, paddingRight: 4, display: "flex", flexDirection: "column", gap: 16 }}>
-            <form id="payment-form" onSubmit={handlePayment} className="vstack" style={{ gap: 16 }}>
-              <Input
-                label="Monto a cobrar ($)"
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.currentTarget.value)}
-                placeholder="Ej: 50000"
-                required
-                autoFocus
-              />
+            <form onSubmit={handlePayment} className="vstack" style={{ gap: 16 }}>
+            <Input label="Monto a Cobrar" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required style={{fontSize:'1.1rem', fontWeight:'bold'}} />
 
-              {/* SELECTOR MEDIO DE PAGO */}
-              <div className="vstack" style={{ gap: 6 }}>
-                <div className="hstack" style={{ justifyContent: "space-between" }}>
-                  <label style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-muted)" }}>
-                    Medio de Pago *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateMethod(true)}
-                    style={{ background: "none", border: "none", color: "var(--color-primary)", fontSize: "0.85rem", cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}
-                  >
-                    + Nuevo método
-                  </button>
+            <div className="vstack" style={{ gap: 6 }}>
+                <label style={{ fontSize: "0.9rem", color: "var(--color-muted)" }}>Método de Pago</label>
+                <div className="hstack" style={{ gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                        <select 
+                            value={selectedMethodId} 
+                            onChange={(e) => { 
+                                setSelectedMethodId(e.target.value); 
+                                setDetails({ check_number: "0" }); 
+                            }} 
+                            style={styles.select} 
+                            required
+                        >
+                            <option value="">Seleccionar...</option>
+                            {methods.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                    </div>
+                    <Button type="button" onClick={() => setIsMethodModalOpen(true)} style={{ height: 42, width: 42, padding: 0, display: 'flex', alignItems:'center', justifyContent:'center', fontSize: '1.2rem' }}>⚙️</Button>
                 </div>
+            </div>
 
-                <div style={{ position: "relative" }}>
-                  <select
-                    value={methodId}
-                    onChange={(e) => setMethodId(e.target.value)}
-                    required
-                    disabled={loadingMethods}
-                    className="adaptive-select"
-                    style={{
-                      width: "100%", padding: "10px 12px", borderRadius: "6px", fontSize: "1rem", appearance: "none", cursor: "pointer",
-                      border: "1px solid var(--color-border)",
-                      background: "var(--input-bg)",
-                      color: "var(--color-text)",
-                    }}
-                  >
-                    <option value="" disabled>{loadingMethods ? "Cargando..." : "Seleccionar método..."}</option>
-                    {methods.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} {m.type === "cash" ? "(Efvo)" : ""}
-                      </option>
-                    ))}
-                  </select>
+            {renderFields()}
 
-                  <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--color-muted)" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
-                  </div>
-                </div>
-              </div>
-
-              <Input
-                label="Concepto / Notas (Opcional)"
-                value={concept}
-                onChange={(e) => setConcept(e.currentTarget.value)}
-                placeholder="Ej: Cuota 2, Cancelación total..."
-              />
-
-              <div style={{ padding: 10, background: "var(--hover-bg)", borderRadius: 6, fontSize: "0.9rem", color: "var(--color-text)" }}>
-                Saldo actual: <strong>${reservation.balance?.toLocaleString("es-AR")}</strong>
-              </div>
+            <div style={{ marginTop: 10 }}>
+                <Button type="submit" loading={loading} style={{ width: "100%" }}>Confirmar Pago</Button>
+            </div>
             </form>
-          </div>
-
-          {/* FOOTER */}
-          <div className="hstack" style={{ justifyContent: "flex-end", gap: 10, marginTop: 16, flexShrink: 0, borderTop: "1px solid var(--color-border)", paddingTop: 16 }}>
-            <Button
-              type="button"
-              onClick={onClose}
-              className="btn-secondary"
-              disabled={loading}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--color-border)",
-                color: "var(--color-text)", 
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" form="payment-form" loading={loading}>
-              {loading ? "Registrando..." : "Registrar Cobro"}
-            </Button>
-          </div>
         </div>
-      </div>
-
-      {showCreateMethod && (
-        <div style={{ position: "relative", zIndex: 1001 }}>
-          <PaymentMethodModal
-            onClose={() => setShowCreateMethod(false)}
-            onCreated={handleMethodCreated}
-          />
         </div>
-      )}
+
+        {isMethodModalOpen && (
+            <PaymentMethodModal 
+                onClose={() => setIsMethodModalOpen(false)}
+                methods={methods} 
+                onSelect={(method) => { setSelectedMethodId(method.id.toString()); setIsMethodModalOpen(false); }}
+                onCreated={(newMethod) => { setMethods(prev => [...prev, newMethod]); }}
+            />
+        )}
     </>
   );
 }
+
+const styles = {
+  overlay: { position: "fixed" as "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 },
+  card: { padding: 24, borderRadius: 12, width: 450, maxWidth: "95%", boxShadow: "0 10px 25px rgba(0,0,0,0.5)", overflowY: 'auto' as 'auto', maxHeight: '90vh' },
+  closeBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--color-muted)", fontSize: '1.2rem' },
+  select: { width: "100%", padding: "10px", borderRadius: "6px", fontSize: "1rem", border: "1px solid var(--color-border)", backgroundColor: "var(--input-bg)", color: "var(--color-text)" },
+};
