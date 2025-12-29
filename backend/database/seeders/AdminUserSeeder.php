@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use App\Models\Role;
+use App\Models\Role; // Asegurate de tener esto si usás roles
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -11,19 +11,18 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Crea o actualiza el usuario admin
+        // Usamos los datos REALES de producción
         $user = User::updateOrCreate(
-            ['email' => 'admin@antonini.local'],
+            ['email' => 'admin@antoniniautomotores.com.ar'], // El email real
             [
                 'name'     => 'Admin Antonini',
-                'password' => Hash::make('secret123'),
+                // Acá ponemos la contraseña real que usás
+                'password' => Hash::make('TuContraseñaSegura123'), 
             ]
         );
 
-        // Busca el rol por name
+        // --- (Acá abajo sigue la lógica de roles que ya tenías) ---
         $adminRole = Role::where('name', 'Admin')->first();
-
-        // Lo crea si no existe
         if (!$adminRole) {
             $adminRole = Role::create([
                 'name'        => 'Admin',
@@ -31,7 +30,6 @@ class AdminUserSeeder extends Seeder
             ]);
         }
 
-        // Vincula el rol al usuario si todavía no lo tiene
         if (!$user->roles()->where('roles.id', $adminRole->id)->exists()) {
             $user->roles()->attach($adminRole->id);
         }
