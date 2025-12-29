@@ -11,28 +11,23 @@ declare global {
 window.Pusher = Pusher;
 
 export const setupEcho = (token: string) => {
+  // Desconectar instancia previa si existe
   if (window.Echo) {
     window.Echo.disconnect();
   }
 
-  console.log("🛠️ Conectando a Reverb...");
-
-  // Usamos el host actual (la web) o el fallback
-  const host = window.location.hostname;
+  console.log("☁️ Conectando a Pusher (Cloud)...");
 
   const echo = new Echo({
-    broadcaster: "reverb",
-    key: "AnoniniAutoReverb",
-    wsHost: host,
+    broadcaster: "pusher",
+    key: "9c7b153b06549e931b1b", // Tu Key Real
+    cluster: "sa1",             // Tu Cluster Real
+    forceTLS: true,             // Importante: Usar HTTPS
 
-    // Puerto estándar para producción (o el que estés usando con SSL)
-    wsPort: 9000,
-    wssPort: 9000,
+    // Al usar Pusher, NO definimos wsHost ni wsPort manualmente,
+    // la librería sabe ir sola a pusher.com
 
-    forceTLS: false, // Probá true si tenés certificados SSL en el socket
-    enabledTransports: ["ws", "wss"],
-
-    // ✅ CORREGIDO: Auth endpoint apunta al servidor real
+    // Endpoint de autenticación (sigue apuntando a tu backend)
     authEndpoint: "https://antoniniautomotores.com.ar/api/broadcasting/auth",
 
     auth: {
