@@ -9,120 +9,34 @@ class VehicleSeeder extends Seeder
 {
     public function run(): void
     {
-        // Vehicle::truncate(); // Descomentar si querés limpiar antes de cargar
-
         $vehicles = [
-            // === 1. TOYOTA HILUX (La joya de la agencia - PROPIO - USD) ===
+            // === 1. TOYOTA HILUX (Disponible - CONSIGNADO) ===
             [
-                'plate'           => 'AE123CD', // Patente Mercosur nueva
+                'plate'           => 'AD234XS',
                 'brand'           => 'Toyota',
-                'model'           => 'Hilux SRX 4x4',
+                'model'           => 'Hilux SRX 2.8 4x4 AT',
                 'year'            => 2021,
-                'vin'             => '8AJFA123456789012',
+                'vin'             => '8AJFX23G800293847',
                 'color'           => 'Blanco Perlado',
                 'km'              => 45000,
-                'fuel_level'      => 80,
-                'ownership'       => 'propio',
-                'customer_id'     => null, 
-                'currency'        => 'USD',
-                'reference_price' => 38000,
-                'price'           => 37500, // Precio venta
-                'status'          => 'disponible',
-                'check_spare'     => true,
-                'check_jack'      => true,
-                'check_docs'      => true,
-                'notes'           => 'Impecable, cubiertas nuevas. Servicios oficiales.',
-            ],
-
-            // === 2. VW GOL TREND (El caballito de batalla - CONSIGNADO - ARS) ===
-            [
-                'plate'           => 'OSP456', // Patente vieja
-                'brand'           => 'Volkswagen',
-                'model'           => 'Gol Trend MSI',
-                'year'            => 2015,
-                'vin'             => '9BWAB05U123456789',
-                'color'           => 'Rojo Flash',
-                'km'              => 110000,
-                'fuel_level'      => 25,
-                'ownership'       => 'consignado',
-                'customer_id'     => 1, // Pertenece a Juan Pérez
-                'currency'        => 'ARS',
-                'reference_price' => 9500000,
-                'price'           => 9200000,
-                'status'          => 'disponible',
-                'check_spare'     => true,
-                'check_jack'      => true,
-                'check_docs'      => false, // Falta algún papel (para probar alertas)
-                'notes'           => 'Detalle en paragolpe trasero. Dueño escucha ofertas.',
-            ],
-
-            // === 3. FORD RANGER (Reservada - PROPIO - USD) ===
-            [
-                'plate'           => 'AD555XX',
-                'brand'           => 'Ford',
-                'model'           => 'Ranger Limited',
-                'year'            => 2020,
-                'vin'             => '8AFDR123456789000',
-                'color'           => 'Azul',
-                'km'              => 60000,
                 'fuel_level'      => 50,
-                'ownership'       => 'propio',
-                'customer_id'     => null,
-                'currency'        => 'USD',
-                'reference_price' => 32000,
-                'price'           => 31000,
-                'status'          => 'reservado', // Ya no se puede vender
-                'check_spare'     => true,
-                'check_jack'      => true,
-                'check_docs'      => true,
-                'notes'           => 'Seña ingresada por el cliente el Martes.',
-            ],
-
-            // === 4. PEUGEOT 208 (Auto moderno - CONSIGNADO - ARS) ===
-            [
-                'plate'           => 'AF999BB',
-                'brand'           => 'Peugeot',
-                'model'           => '208 Feline',
-                'year'            => 2022,
-                'vin'             => '8AD20812345678999',
-                'color'           => 'Gris Aluminium',
-                'km'              => 15000,
-                'fuel_level'      => 90,
+                'fuel_type'       => 'diesel', // ✅ Agregado nuevo campo
                 'ownership'       => 'consignado',
-                'customer_id'     => 2, // Pertenece a María Gómez
-                'currency'        => 'ARS',
-                'reference_price' => 22000000,
-                'price'           => 21500000,
+                'customer_id'     => 2, // Juan Pérez (dueño anterior)
+                'seller_id'       => 1, // Vendedor asignado
+                // 'currency'     => 'USD', ❌ ESTO YA NO VA EN VEHÍCULOS
+                'reference_price' => 38000, // Precios puros
+                'take_price'      => 35000,
+                'price'           => 39500,
                 'status'          => 'disponible',
                 'check_spare'     => true,
                 'check_jack'      => true,
+                'check_tools'     => true,
                 'check_docs'      => true,
-                'notes'           => 'Igual a nuevo. En garantía.',
-            ],
-
-            // === 5. TOYOTA COROLLA (Vendido - Para historial) ===
-            [
-                'plate'           => 'AB123CC',
-                'brand'           => 'Toyota',
-                'model'           => 'Corolla SEG',
-                'year'            => 2017,
-                'vin'             => '8AJCO123456789888',
-                'color'           => 'Negro',
-                'km'              => 85000,
-                'fuel_level'      => 40,
-                'ownership'       => 'propio',
-                'customer_id'     => null,
-                'currency'        => 'USD',
-                'reference_price' => 16000,
-                'price'           => 15500,
-                'status'          => 'vendido',
-                'check_spare'     => true,
-                'check_jack'      => true,
-                'check_docs'      => true,
-                'notes'           => 'Entregado la semana pasada.',
+                'notes'           => 'Impecable estado. Services oficiales.',
             ],
             
-            // === 6. FIAT CRONOS (Económico - PROPIO - ARS) ===
+            // === 2. FIAT CRONOS (Vendido - PROPIO) ===
             [
                 'plate'           => 'AG111ZZ',
                 'brand'           => 'Fiat',
@@ -132,21 +46,24 @@ class VehicleSeeder extends Seeder
                 'color'           => 'Rojo Montecarlo',
                 'km'              => 5000,
                 'fuel_level'      => 100,
+                'fuel_type'       => 'nafta',
                 'ownership'       => 'propio',
                 'customer_id'     => null,
-                'currency'        => 'ARS',
+                'seller_id'       => 1,
+                // 'currency'     => 'ARS', ❌ CHAU
                 'reference_price' => 18500000,
-                'price'           => 18000000,
-                'status'          => 'disponible',
+                'take_price'      => 17000000,
+                'price'           => 19000000,
+                'status'          => 'vendido', // Ojo, esto requeriría sold_at
+                'sold_at'         => now(),     // ✅ Agregamos fecha de venta
                 'check_spare'     => true,
                 'check_jack'      => true,
-                'check_docs'      => true,
-                'notes'           => 'Unidad de test drive, igual a 0km.',
-            ]
+                'notes'           => 'Unidad de flota propia.',
+            ],
         ];
 
-        foreach ($vehicles as $v) {
-            Vehicle::create($v);
+        foreach ($vehicles as $data) {
+            Vehicle::create($data);
         }
     }
 }
