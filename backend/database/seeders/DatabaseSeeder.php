@@ -10,6 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         // Llamamos solo a los seeders de datos reales para la demo
         $this->call([
+            AdminUserSeeder::class,
             CustomerSeeder::class,       // 1. Clientes (necesario para asignar dueños)
             VehicleSeeder::class,        // 2. Vehículos (Hilux, Gol, etc.)
             VehicleExpenseSeeder::class, // 3. Gastos asociados a esos vehículos

@@ -10,7 +10,7 @@ return new class extends Migration {
         Schema::create('payment_methods', function (Blueprint $table) {
             $table->id();
             $table->string('name', 100);
-            $table->enum('type', ['cash', 'bank', 'check', 'card', 'credit_bank'])->default('cash');
+            $table->enum('type', ['cash', 'bank', 'check', 'card', 'credit_bank', 'app'])->default('cash');
             $table->boolean('requires_details')->default(false);
             $table->timestamps();
         });

@@ -11,6 +11,10 @@ return new class extends Migration {
             $t->foreignId('vehicle_id')->constrained()->cascadeOnDelete();
             $t->string('description');
             $t->decimal('amount', 12, 2);
+
+            // 👇 AGREGADO: El campo status que estaba en el parche
+            $t->enum('status', ['no_pagado', 'pagado'])->default('no_pagado');
+
             $t->date('date');
             $t->timestamps();
         });
