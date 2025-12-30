@@ -11,15 +11,15 @@ class ReservationPayment extends Model
 
     protected $fillable = [
         'reservation_id',
-        'payment_method_id', // ✅ Esto es clave que esté aquí
+        'payment_method_id',
         'amount',
-        'details', // Para guardar JSON de cheques, bancos, etc.
+        'details',
         'notes'
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'details' => 'array', // ✅ Para que Laravel convierta el JSON a array solo
+        'details' => 'array',
     ];
 
     public function reservation()
@@ -27,7 +27,6 @@ class ReservationPayment extends Model
         return $this->belongsTo(Reservation::class);
     }
 
-    // ✅ ESTA ES LA FUNCIÓN QUE FALTABA Y CAUSABA EL ERROR
     public function method()
     {
         return $this->belongsTo(PaymentMethod::class, 'payment_method_id');
