@@ -1,0 +1,38 @@
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: antonini-app
+        container_name: antonini-app
+        volumes:
+            - .:/var/www
+        networks:
+            - antonini-network
+
+    web:
+        image: nginx:alpine
+        container_name: antonini-web
+        ports:
+            - "8080:80"
+        volumes:
+            - .:/var/www
+            - ./.docker/nginx/conf.d:/etc/nginx/conf.d
+        networks:
+            - antonini-network
+
+    db:
+        image: mysql:8.0
+        container_name: antonini-db
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: antonini_beta
+            MYSQL_ROOT_PASSWORD: secret_password
+        ports:
+            - "3307:3306"
+        networks:
+            - antonini-network
+
+networks:
+    antonini-network:
+        driver: bridge
