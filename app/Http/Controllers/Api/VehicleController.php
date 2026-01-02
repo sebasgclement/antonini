@@ -13,7 +13,7 @@ class VehicleController extends Controller
     // ======================= INDEX =======================
     public function index(Request $req)
     {
-        $q = Vehicle::query()->with('customer');
+        $q = Vehicle::query()->with('customer', 'expenses');
 
         if ($search = $req->get('search')) {
             $q->where(function ($sub) use ($search) {

@@ -9,25 +9,36 @@ class CustomerEvent extends Model
     protected $fillable = [
         'customer_id', 
         'user_id',
+        'parent_id',
         'type', 
         'description', 
-        'date'
+        'date',
+        'is_schedule'
     ];
     
-    protected $casts = [
-        'date' => 'datetime',
+    protected $attributes = [
+        'parent_id' => null,
     ];
 
-    // Relación con el Usuario (Vendedor)
-    public function user()
-    {
+    protected $casts = [
+        'date' => 'datetime',
+        'is_schedule' => 'boolean',
+        'parent_id' => 'integer',
+    ];
+
+    public function user() {
         return $this->belongsTo(User::class);
     }
 
-    // 👇 ESTA ES LA QUE FALTABA
-    // Relación con el Cliente (Para saber de quién es el evento)
-    public function customer()
-    {
+    public function customer() {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function parent() {
+        return $this->belongsTo(CustomerEvent::class, 'parent_id');
+    }
+
+    public function children() {
+        return $this->hasMany(CustomerEvent::class, 'parent_id');
     }
 }
