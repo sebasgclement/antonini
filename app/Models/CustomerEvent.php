@@ -13,7 +13,8 @@ class CustomerEvent extends Model
         'type', 
         'description', 
         'date',
-        'is_schedule'
+        'is_schedule',
+        'completed'
     ];
     
     protected $attributes = [
@@ -23,6 +24,7 @@ class CustomerEvent extends Model
     protected $casts = [
         'date' => 'datetime',
         'is_schedule' => 'boolean',
+        'completed' => 'boolean',
         'parent_id' => 'integer',
     ];
 

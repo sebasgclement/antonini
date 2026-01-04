@@ -9,7 +9,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\VehicleBrandController;
 use App\Http\Controllers\AdminUserController;
-use App\Http\Controllers\RoleController; // Added RoleController import
+use App\Http\Controllers\RoleController; 
 
 // Controladores API (Namespace Api)
 use App\Http\Controllers\Api\VehicleController;
@@ -40,22 +40,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 
     // ✅ NOTIFICACIONES (Contador para el Sidebar)
-    // Usamos closure directo para rapidez, como tenías en local
     Route::get('/reservas/pendientes/count', function () {
         $count = Reservation::where('status', 'pendiente')->count();
         return response()->json(['count' => $count]);
     });
 
-    // ✅ CONTADOR AGENDA (Solo eventos de HOY para el usuario actual)
-    Route::get('/my-agenda/count', function () {
-        $count = \App\Models\CustomerEvent::where('user_id', auth()->id())
-            ->whereDate('date', \Carbon\Carbon::today())
-            ->count();
-        return response()->json(['count' => $count]);
-    });
+    // ✅ CONTADOR AGENDA 
+    // Corregido: Ahora usa el controlador para respetar el filtro de 'completed'
+    Route::get('/my-agenda/count', [CustomerController::class, 'myAgendaCount']);
 
     // ✅ AGENDA USERS
     Route::get('/my-agenda', [CustomerController::class, 'myAgenda']);
+    // Nueva ruta para marcar/desmarcar tarea
+    Route::post('/events/{id}/toggle', [CustomerController::class, 'toggleEvent']);
 
     // ✅ CLIENTES
     Route::apiResource('customers', CustomerController::class);
@@ -82,12 +79,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('reservations', ReservationController::class);
 
     // ✅ PAGOS DE RESERVAS
-    Route::get   ('/reservation-payments',              [ReservationPaymentController::class, 'index']);
-    Route::post  ('/reservation-payments',              [ReservationPaymentController::class, 'store']);
-    Route::put   ('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'update']);
-    Route::delete('/reservation-payments/{payment}',    [ReservationPaymentController::class, 'destroy']);
+    Route::get   ('/reservation-payments',               [ReservationPaymentController::class, 'index']);
+    Route::post  ('/reservation-payments',               [ReservationPaymentController::class, 'store']);
+    Route::put   ('/reservation-payments/{payment}',     [ReservationPaymentController::class, 'update']);
+    Route::delete('/reservation-payments/{payment}',     [ReservationPaymentController::class, 'destroy']);
     
-    // ✅ DASHBOARD STATS (Agregado para que no de error el Home)
+    // ✅ DASHBOARD STATS
     Route::get('/dashboard/stats', [DashboardController::class, 'index']);
 
 }); 
