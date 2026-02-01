@@ -60,4 +60,10 @@ class Customer extends Model
     {
         return $this->dni_back ? asset('storage/' . $this->dni_back) : null;
     }
+
+    public function vehicles()
+{
+    // Un cliente tiene muchos vehículos
+    return $this->hasMany(Vehicle::class, 'customer_id');
+}
 }

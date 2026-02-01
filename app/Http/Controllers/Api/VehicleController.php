@@ -11,21 +11,44 @@ use Illuminate\Support\Facades\Storage;
 class VehicleController extends Controller
 {
     // ======================= INDEX =======================
-    public function index(Request $req)
+    public function index(Request $request)
     {
-        $q = Vehicle::query()->with('customer', 'expenses');
+        $search = trim($request->input('search'));
+        
+        // 1. Iniciamos la consulta cargando la relación del cliente (dueño)
+        $query = Vehicle::with(['customer']); 
 
-        if ($search = $req->get('search')) {
-            $q->where(function ($sub) use ($search) {
-                $sub->where('brand', 'like', "%$search%")
-                    ->orWhere('model', 'like', "%$search%")
-                    ->orWhere('plate', 'like', "%$search%")
-                    ->orWhere('vin', 'like', "%$search%");
+        // 2. 🛡️ FILTRO HISTÓRICOS:
+        // Si NO estoy pidiendo explícitamente ver "historial" o "vendidos",
+        // entonces ocultamos los vendidos para no saturar la lista.
+        if ($request->input('status') !== 'vendido' && !$request->has('show_history')) {
+            $query->where('status', '!=', 'vendido');
+        }
+
+        // 3. Lógica del Buscador
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                // A. Busca por datos del auto
+                $q->where('plate', 'like', "%$search%")
+                  ->orWhere('brand', 'like', "%$search%")
+                  ->orWhere('model', 'like', "%$search%")
+                  ->orWhere('vin', 'like', "%$search%")
+                  
+                  // B. 🔥 MAGIA: Busca dentro de la tabla relacionada 'customers' (Dueño)
+                  ->orWhereHas('customer', function($qCustomer) use ($search) {
+                      $qCustomer->where('first_name', 'like', "%$search%")
+                                ->orWhere('last_name', 'like', "%$search%")
+                                ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
+                  });
             });
         }
 
-        $vehicles = $q->latest()->paginate(10);
-        return response()->json(['ok' => true, 'data' => $vehicles]);
+        // Ordenamos: primero los disponibles, luego los más nuevos
+        $vehicles = $query->orderByRaw("FIELD(status, 'disponible', 'reservado', 'ofrecido', 'vendido')")
+                          ->latest()
+                          ->paginate(20);
+
+        return response()->json($vehicles);
     }
 
     // ======================= SHOW =======================

@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'infoauto' => [
+        'username' => env('INFOAUTO_USER'),
+        'password' => env('INFOAUTO_PASS'),
+    ],
+
 ];

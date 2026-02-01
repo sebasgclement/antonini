@@ -12,38 +12,41 @@ use App\Http\Requests\CustomerUpdateRequest;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class CustomerController extends Controller
 {
-    // GET /api/customers
     public function index(Request $request)
     {
+        // 1. Si buscan por DNI exacto (para validaciones rápidas)
         if ($request->filled('dni')) {
             $dni = trim($request->query('dni'));
             $customer = Customer::with(['user', 'seller'])->where('doc_number', $dni)->first();
-
             return response()->json([
                 'ok' => true,
                 'data' => $customer ? [$customer] : []
             ]);
         }
 
-        $term = (string) $request->query('search', '');
+        // 2. Búsqueda General (La que usa la lista)
+        $term = trim($request->query('search', ''));
 
         $rows = Customer::query()
             ->with(['user', 'seller'])
+            // Filtro inteligente
             ->when($term, function ($q) use ($term) {
                 $q->where(function ($qq) use ($term) {
                     $qq->where('first_name', 'like', "%$term%")
-                        ->orWhere('last_name', 'like', "%$term%")
-                        ->orWhere('email', 'like', "%$term%")
-                        ->orWhere('doc_number', 'like', "%$term%")
-                        ->orWhere('cuit', 'like', "%$term%")
-                        ->orWhere('phone', 'like', "%$term%");
+                       ->orWhere('last_name', 'like', "%$term%")
+                       ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$term%"])
+                       ->orWhere('email', 'like', "%$term%")
+                       ->orWhere('doc_number', 'like', "%$term%")
+                       ->orWhere('cuit', 'like', "%$term%")
+                       ->orWhere('phone', 'like', "%$term%");
                 });
             })
             ->latest()
-            ->paginate(10);
+            ->paginate(20); // Paginamos de a 20 para que sea ágil
 
         return response()->json(['ok' => true, 'data' => $rows]);
     }
@@ -71,14 +74,23 @@ class CustomerController extends Controller
     }
 
     // GET /api/customers/{id}
-    public function show(Customer $customer)
-    {
-        $customer->load(['user', 'seller']);
-        $customer->dni_front_url = $customer->dni_front ? asset('storage/' . $customer->dni_front) : null;
-        $customer->dni_back_url  = $customer->dni_back  ? asset('storage/' . $customer->dni_back)  : null;
+   public function show($id)
+{
+    // Usamos la ruta completa del modelo para que no falle por falta de "use"
+    $customer = \App\Models\Customer::with(['vehicles', 'seller'])->find($id);
 
-        return response()->json(['ok' => true, 'data' => $customer]);
+    if (!$customer) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Cliente ID ' . $id . ' no existe'
+        ], 404);
     }
+
+    return response()->json([
+        'ok' => true,
+        'data' => $customer
+    ]);
+}
 
     // PUT /api/customers/{id}
     public function update(CustomerUpdateRequest $req, Customer $customer)

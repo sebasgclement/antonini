@@ -9,7 +9,8 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\VehicleBrandController;
 use App\Http\Controllers\AdminUserController;
-use App\Http\Controllers\RoleController; 
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\InfoAutoController; 
 
 // Controladores API (Namespace Api)
 use App\Http\Controllers\Api\VehicleController;
@@ -20,52 +21,51 @@ use App\Http\Controllers\Api\ReservationPaymentController;
 use App\Http\Controllers\Api\DashboardController;
 
 // Modelos
-use App\Models\Reservation; 
+use App\Models\Reservation;
 
 // ================== RUTAS PÚBLICAS ==================
 Route::post('/auth/login',  [AuthController::class, 'login']);
 Route::get('/ping', fn () => response()->json(['pong' => true]));
 
-
 // ================== ZONA AUTENTICADA (Vendedores + Admin) ==================
 Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ AUTH
-    Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::get ('/auth/me',     [AuthController::class, 'me']);
+    Route::post('/auth/logout',          [AuthController::class, 'logout']);
+    Route::get ('/auth/me',              [AuthController::class, 'me']);
     Route::post('/user/change-password', [AuthController::class, 'changePassword']);
 
+    // ✅ INFO AUTO (Catálogo Oficial)
+    Route::get('/infoauto/brands', [InfoAutoController::class, 'getBrands']);
+    // Nota: groupId aquí será el ID "compuesto" (ej: 5000001)
+    Route::get('/infoauto/brands/{brandId}/groups/{groupId}/models', [InfoAutoController::class, 'getModels']);
+
     // ✅ DASHBOARD / GRAL
-    Route::get('/dolar', [DashboardController::class, 'getDolar']); 
+    Route::get('/dolar',           [DashboardController::class, 'getDolar']); 
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 
-    // ✅ NOTIFICACIONES (Contador para el Sidebar)
+    // ✅ NOTIFICACIONES
     Route::get('/reservas/pendientes/count', function () {
-        $count = Reservation::where('status', 'pendiente')->count();
-        return response()->json(['count' => $count]);
+        return response()->json(['count' => Reservation::where('status', 'pendiente')->count()]);
     });
 
-    // ✅ CONTADOR AGENDA 
-    // Corregido: Ahora usa el controlador para respetar el filtro de 'completed'
-    Route::get('/my-agenda/count', [CustomerController::class, 'myAgendaCount']);
-
-    // ✅ AGENDA USERS
-    Route::get('/my-agenda', [CustomerController::class, 'myAgenda']);
-    // Nueva ruta para marcar/desmarcar tarea
+    // ✅ AGENDA
+    Route::get('/my-agenda/count',     [CustomerController::class, 'myAgendaCount']);
+    Route::get('/my-agenda',           [CustomerController::class, 'myAgenda']);
     Route::post('/events/{id}/toggle', [CustomerController::class, 'toggleEvent']);
 
     // ✅ CLIENTES
     Route::apiResource('customers', CustomerController::class);
     Route::post('/customers/{id}/events', [CustomerController::class, 'storeEvent']);
-    Route::get('/customers/{id}/events', [CustomerController::class, 'getEvents']);
+    Route::get('/customers/{id}/events',  [CustomerController::class, 'getEvents']);
 
-    // ✅ VEHÍCULOS
+    // ✅ VEHÍCULOS (Inventario Local)
     Route::apiResource('vehicles', VehicleController::class);
     
-    // ✅ MARCAS
-    Route::get('/brands', [VehicleBrandController::class, 'index']);
-    Route::post('/brands', [VehicleBrandController::class, 'store']);
-    Route::put('/brands/{brand}', [VehicleBrandController::class, 'update']);
+    // ✅ MARCAS (Gestión manual si hiciera falta)
+    Route::get('/brands',          [VehicleBrandController::class, 'index']);
+    Route::post('/brands',         [VehicleBrandController::class, 'store']);
+    Route::put('/brands/{brand}',  [VehicleBrandController::class, 'update']);
     Route::delete('/brands/{brand}', [VehicleBrandController::class, 'destroy']);
 
     // ✅ GASTOS
@@ -74,9 +74,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/vehicles/{vehicle}/expenses/{expense}', [VehicleExpenseController::class, 'destroy']);
 
     // ✅ RESERVAS
-    Route::get('/reservations/create', [ReservationController::class, 'create']);
+    Route::get('/reservations/create',       [ReservationController::class, 'create']);
     Route::post('/reservations/{id}/cancel', [ReservationController::class, 'cancel']);
-    Route::apiResource('reservations', ReservationController::class);
+    Route::apiResource('reservations',       ReservationController::class);
 
     // ✅ PAGOS DE RESERVAS
     Route::get   ('/reservation-payments',               [ReservationPaymentController::class, 'index']);
@@ -88,7 +88,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'index']);
 
 }); 
-
 
 // ================== ZONA ADMIN (Solo Rol Admin) ==================
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
@@ -112,7 +111,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     });
     Route::get('/admin/roles-list', [AdminUserController::class, 'roles']);
 
-    // ✅ CONFIGURACIÓN (Payment Methods CRUD)
+    // ✅ CONFIGURACIÓN
     Route::apiResource('payment-methods', PaymentMethodController::class)->except(['index']);
 
     // ✅ REPORTES
@@ -123,5 +122,4 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
         Route::get('/expenses/monthly', [ReportController::class, 'expensesMonthly']);
         Route::get('/sales/export',     [ReportController::class, 'exportSalesReport'])->name('reports.sales.export');
     });
-
 });
