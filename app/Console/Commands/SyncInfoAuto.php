@@ -3,124 +3,97 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\InfoAutoService;
-use App\Models\InfoAutoBrand;
-use App\Models\InfoAutoGroup;
 use App\Models\InfoAutoModel;
 use Illuminate\Support\Facades\Http;
 
 class SyncInfoAuto extends Command
 {
-    protected $signature = 'infoauto:sync'; 
-    protected $description = 'Sincroniza con Camuflaje TOTAL (Headers + UserAgent)';
+    protected $signature = 'infoauto:sync';
+    protected $description = 'Reparación FINAL: Credenciales correctas y Un solo Token';
 
-    public function handle(InfoAutoService $service)
+    public function handle()
     {
         ini_set('memory_limit', '-1');
         set_time_limit(0);
 
-        $this->info('🚀 Sincronizando (INTENTO FINAL CON HEADERS)...');
-
-        // --- FASE 1: CATALOGO ---
-        try {
-            $data = $service->downloadCatalog();
-            foreach ($data as $brandData) {
-                if (!isset($brandData['id'])) continue;
-                $brand = InfoAutoBrand::updateOrCreate(['id' => $brandData['id']], ['name' => $brandData['name'] ?? 'Sin Nombre']);
-                
-                if (isset($brandData['groups']) && is_array($brandData['groups'])) {
-                    foreach ($brandData['groups'] as $groupData) {
-                        $uniqueGroupId = ($brand->id * 1000000) + $groupData['id'];
-                        InfoAutoGroup::updateOrCreate(['id' => $uniqueGroupId], ['brand_id' => $brand->id, 'name' => $groupData['name'] ?? 'General']);
-                    }
-                }
-            }
-            $this->info("✅ Marcas OK.");
-        } catch (\Exception $e) {
-            $this->error("Error catalogo: " . $e->getMessage());
-            return;
-        }
+        // 1. OBTENER TOKEN ÚNICO (Como dice la documentación)
+        $this->info("🔑 Iniciando sesión con credenciales de PRODUCCIÓN...");
         
-        // --- FASE 2: PRECIOS ---
-        $this->info('📥 Bajando Precios (Simulando navegación real)...');
-        $token = $service->getAccessToken();
-        $groups = InfoAutoGroup::all();
-        $bar = $this->output->createProgressBar($groups->count());
+        // Credenciales OFICIALES provistas en el chat
+        $user = 'aptassoni@gmail.com';
+        $pass = 'oPOeKOtj2s2BRFRR';
         
-        // CABECERAS COMPLETAS DE NAVEGADOR
-        $headers = [
-            'Referer' => 'https://www.infoauto.com.ar/',
-            'Origin' => 'https://www.infoauto.com.ar',
-            'Accept' => 'application/json, text/plain, */*',
-            'Accept-Language' => 'es-419,es;q=0.9,en;q=0.8',
-            'Connection' => 'keep-alive',
-            'Sec-Fetch-Dest' => 'empty',
-            'Sec-Fetch-Mode' => 'cors',
-            'Sec-Fetch-Site' => 'same-site',
-        ];
-
+        // Mantenemos el User-Agent para que no nos desconozcan
         $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-        foreach ($groups as $group) {
+        try {
+            // URL OFICIAL: https://api.infoauto.com.ar/cars/auth/login
+            $response = Http::withUserAgent($userAgent)
+                ->withoutVerifying()
+                ->post('https://api.infoauto.com.ar/cars/auth/login', [
+                    'username' => $user,
+                    'password' => $pass
+                ]);
+
+            if ($response->failed()) {
+                $this->error("❌ ERROR CRÍTICO DE LOGIN: " . $response->body());
+                return;
+            }
+
+            $token = $response->json()['access_token'];
+            $this->info("✅ Token obtenido con éxito. Duración: 1 hora.");
+
+        } catch (\Exception $e) {
+            $this->error("❌ Excepción al loguear: " . $e->getMessage());
+            return;
+        }
+
+        // 2. BUSCAR AUTOS ROTOS
+        // Buscamos los que tienen precio vacío []
+        $autos = InfoAutoModel::where('prices', '[]')->orWhereNull('prices')->get();
+        $count = $autos->count();
+
+        if ($count === 0) {
+            $this->info("✨ ¡La base de datos ya está completa! No hay nada que reparar.");
+            return;
+        }
+
+        $this->info("🔧 Reparando $count autos usando el token único...");
+        $bar = $this->output->createProgressBar($count);
+        $bar->start();
+
+        foreach ($autos as $auto) {
             try {
-                $originalGroupId = $group->id % 1000000;
-                
-                // Pedido de lista de modelos
+                // Pausa de 0.4s para no saturar (Rate Limit)
+                usleep(400000); 
+
                 $res = Http::withToken($token)
-                    ->withHeaders($headers) // 👈 Agregamos Headers
                     ->withUserAgent($userAgent)
                     ->withoutVerifying()
-                    ->timeout(15)
-                    ->get("https://api.infoauto.com.ar/cars/pub/brands/{$group->brand_id}/groups/{$originalGroupId}/models/");
+                    ->timeout(10)
+                    ->get("https://api.infoauto.com.ar/cars/pub/models/{$auto->codia}/prices/");
 
-                if ($res->failed()) { $bar->advance(); continue; }
-
-                $list = $res->json()['data'] ?? $res->json();
-
-                if (is_array($list)) {
-                    foreach ($list as $item) {
-                        if (!isset($item['codia'])) continue;
-                        $pricesPayload = [];
-
-                        if (isset($item['prices']) && $item['prices'] === true) {
-                            try {
-                                usleep(500000); // 0.5 segundos de pausa (Más lento = Más seguro)
-                                
-                                $resP = Http::withToken($token)
-                                    ->withHeaders($headers) // 👈 Agregamos Headers aquí también
-                                    ->withUserAgent($userAgent)
-                                    ->withoutVerifying()
-                                    ->timeout(10)
-                                    ->get("https://api.infoauto.com.ar/cars/pub/models/{$item['codia']}/prices/");
-                                
-                                if ($resP->successful()) {
-                                    $pricesPayload = $resP->json();
-                                } else {
-                                    // Si falla, mostramos el código pero seguimos intentando
-                                    // $this->error("E{$resP->status()}"); 
-                                }
-                            } catch (\Exception $e) {}
-                        }
-
-                        InfoAutoModel::updateOrCreate(
-                            ['codia' => $item['codia']],
-                            [
-                                'group_id' => $group->id,
-                                'brand_id' => $group->brand_id,
-                                'description' => $item['description'] ?? 'Desc',
-                                'photo_url' => $item['photo_url'] ?? null,
-                                'list_price' => $item['list_price'] ?? false,
-                                'features' => $item['features'] ?? [],
-                                'prices' => $pricesPayload
-                            ]
-                        );
-                    }
+                if ($res->successful()) {
+                    $precios = $res->json();
+                    // Guardamos
+                    $auto->update(['prices' => $precios]);
+                } elseif ($res->status() == 401) {
+                    $this->error("\n❌ El token venció (pasó 1 hora). Ejecutá el script de nuevo.");
+                    break; 
+                } elseif ($res->status() == 403) {
+                    // Si da 403, es bloqueo de IP, pero con credenciales correctas es menos probable
+                    $this->error("\n⚠️ 403 en auto {$auto->codia}. Esperando 5s...");
+                    sleep(5);
                 }
-            } catch (\Exception $e) {}
+
+            } catch (\Exception $e) {
+                // Ignorar error individual
+            }
             $bar->advance();
         }
+
         $bar->finish();
         $this->newLine();
-        $this->info("🏁 FIN.");
+        $this->info("🏁 PROCESO FINALIZADO.");
     }
 }
