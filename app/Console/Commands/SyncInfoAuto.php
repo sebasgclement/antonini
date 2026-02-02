@@ -9,20 +9,20 @@ use Illuminate\Support\Facades\Http;
 class SyncInfoAuto extends Command
 {
     protected $signature = 'infoauto:sync';
-    protected $description = 'Sincronización FINAL: Login Nuevo + URL Local (/pub)';
+    protected $description = 'Sincronización por Lotes (Batch) - Anti Bloqueo';
 
     public function handle()
     {
         ini_set('memory_limit', '-1');
         set_time_limit(0);
 
-        $this->info("🔄 Iniciando sincronización con lógica LOCAL...");
+        $this->info("📦 Iniciando Sincronización por Lotes (BATCH)...");
 
-        // 1. LOGIN (Usamos el que confirmamos que anda: Basic Auth)
+        // 1. LOGIN (Basic Auth) - Confirmado que funciona
         $user = 'aptassoni@gmail.com';
         $pass = 'oPOeKOtj2s2BRFRR';
         
-        $this->info("🔑 Logueando...");
+        $this->info("🔑 Autenticando...");
         $response = Http::withBasicAuth($user, $pass)
             ->withoutVerifying()
             ->post('https://api.infoauto.com.ar/cars/auth/login');
@@ -30,52 +30,86 @@ class SyncInfoAuto extends Command
         $token = $response->json()['access_token'] ?? null;
 
         if (!$token) {
-            $this->error("❌ Error de Login: " . $response->body());
+            $this->error("❌ Error de Login. Esperá a que se desbloquee la IP.");
             return;
         }
 
-        // 2. BUSCAR AUTOS SIN PRECIO
-        $autos = InfoAutoModel::where('prices', '[]')->orWhereNull('prices')->get();
-        $count = $autos->count();
-        $this->info("🚀 Procesando $count autos con URL LEGACY (/cars/pub/models)...");
+        // 2. PREPARAR LOTES
+        // Obtenemos todos los CODIA de la base de datos que necesitamos actualizar
+        // (O podés filtrar solo los que tienen prices null si preferís)
+        $codias = InfoAutoModel::pluck('codia')->unique();
+        $total = $codias->count();
+        
+        $this->info("🚗 Total de vehículos a procesar: $total");
+        $this->info("🔄 Se enviarán en paquetes de 100 (Total aprox: " . ceil($total/100) . " peticiones)");
 
-        $bar = $this->output->createProgressBar($count);
+        $bar = $this->output->createProgressBar($total);
         $bar->start();
 
-        foreach ($autos as $auto) {
-            try {
-                usleep(150000); // Pausa leve
+        // 3. PROCESAR POR LOTES (Chunks de 100 según documentación)
+        $codias->chunk(100)->each(function ($chunk) use ($token, $bar) {
+            
+            // Preparamos el cuerpo del mensaje: { "batch": [123, 456, ...] }
+            // array_values es importante para que sea una lista JSON [1,2] y no objeto {"0":1, "1":2}
+            $payload = [
+                'batch' => array_values($chunk->toArray())
+            ];
 
-                // ⚠️ ESTA ES LA URL DE TU SCRIPT LOCAL QUE FUNCIONABA
-                // https://api.infoauto.com.ar/cars/pub/models/{codia}/prices/
-                $url = "https://api.infoauto.com.ar/cars/pub/models/{$auto->codia}/prices/";
+            try {
+                // Endpoint Batch. 
+                // NOTA: Asumimos que está bajo /cars/batch/ o /batch/. 
+                // Dado que el login es /cars/auth, probamos primero /cars/batch/
+                $url = 'https://api.infoauto.com.ar/cars/batch/';
 
                 $res = Http::withToken($token)
+                    ->withHeaders([
+                        'Accept-Encoding' => 'gzip', // OBLIGATORIO según tu doc
+                        'Content-Type'    => 'application/json'
+                    ])
                     ->withoutVerifying()
-                    ->timeout(8)
-                    ->get($url);
+                    ->timeout(20)
+                    ->post($url, $payload);
+
+                // Si falla por 404, intentamos la URL sin /cars/
+                if ($res->status() == 404) {
+                    $url = 'https://api.infoauto.com.ar/batch/';
+                    $res = Http::withToken($token)
+                        ->withHeaders(['Accept-Encoding' => 'gzip'])
+                        ->withoutVerifying()
+                        ->post($url, $payload);
+                }
 
                 if ($res->successful()) {
-                    $prices = $res->json();
-                    
-                    // Solo guardamos si NO está vacío
-                    if (!empty($prices)) {
-                        $auto->prices = $prices;
-                        $auto->save();
+                    $autosRecibidos = $res->json();
+
+                    // 4. ACTUALIZAR BASE DE DATOS
+                    foreach ($autosRecibidos as $datoAuto) {
+                        // Buscamos el auto en nuestra BD por codia y actualizamos precios
+                        // Usamos update sutil para no sobrecargar
+                        if (isset($datoAuto['codia']) && isset($datoAuto['prices'])) {
+                            InfoAutoModel::where('codia', $datoAuto['codia'])
+                                ->update(['prices' => json_encode($datoAuto['prices'])]);
+                        }
                     }
-                } elseif ($res->status() == 401) {
-                    $this->error("❌ Token vencido.");
-                    break;
+                } elseif ($res->status() == 403) {
+                    $this->error("\n⚠️ Aún bloqueado (403). Intente más tarde.");
+                    return false; // Cortar el loop
+                } else {
+                    $this->error("\n❌ Error en lote: " . $res->status());
                 }
 
             } catch (\Exception $e) {
-                // Silencio
+                $this->error("\n❌ Excepción: " . $e->getMessage());
             }
-            $bar->advance();
-        }
+
+            // Pausa de seguridad entre lotes (2 segundos)
+            // 60 lotes * 2 seg = 2 minutos total. Muy seguro.
+            sleep(2);
+            $bar->advance($chunk->count());
+        });
 
         $bar->finish();
         $this->newLine();
-        $this->info("🏁 FIN. Si esto no carga precios, el problema es de InfoAuto.");
+        $this->info("🏁 PROCESO FINALIZADO CORRECTAMENTE.");
     }
 }
