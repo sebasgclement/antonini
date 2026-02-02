@@ -87,9 +87,9 @@ class SyncInfoAuto extends Command
                 // URL para obtener la lista de modelos del grupo
                 $url = "https://api.infoauto.com.ar/cars/pub/brands/{$group->brand_id}/groups/{$originalGroupId}/models/";
                 
-                // Pausa muy breve para el listado general
+                // Pausa y withoutVerifying para evitar errores de SSL en servidor
                 usleep(50000); 
-                $res = Http::withToken($token)->timeout(10)->get($url);
+                $res = Http::withoutVerifying()->withToken($token)->timeout(10)->get($url);
 
                 if ($res->failed()) {
                      $barModels->advance();
@@ -106,24 +106,21 @@ class SyncInfoAuto extends Command
                         $pricesPayload = [];
 
                         // --- LÓGICA DE PRECIOS ---
-                        // Si la API dice que tiene precios, los buscamos individualmente
                         if (isset($item['prices']) && $item['prices'] === true) {
                             try {
-                                // Pausa de 0.1s para respetar rate limits de InfoAuto
-                                usleep(100000); 
+                                usleep(100000); // Pausa para no saturar
 
                                 $codia = $item['codia'];
                                 $urlPrecios = "https://api.infoauto.com.ar/cars/pub/models/{$codia}/prices/";
                                 
-                                $resPrice = Http::withToken($token)->timeout(5)->get($urlPrecios);
+                                // withoutVerifying aquí también
+                                $resPrice = Http::withoutVerifying()->withToken($token)->timeout(5)->get($urlPrecios);
                                 
                                 if ($resPrice->successful()) {
-                                    // Obtenemos el array real: [{year:2010, price:500}, ...]
                                     $pricesPayload = $resPrice->json();
                                 }
                             } catch (\Exception $e) {
-                                // Si falla el precio, seguimos igual, guardamos el auto sin precio
-                                // para no detener todo el proceso.
+                                // Error silencioso en precio individual para no frenar todo
                             }
                         }
 
@@ -136,10 +133,10 @@ class SyncInfoAuto extends Command
                                 'description' => $item['description'] ?? 'Sin descripción',
                                 'photo_url'   => $item['photo_url'] ?? null,
                                 'list_price'  => $item['list_price'] ?? false,
-                                'features'    => json_encode($item['features'] ?? []),
                                 
-                                // AQUI guardamos los precios reales que acabamos de bajar
-                                'prices'      => json_encode($pricesPayload) 
+                                // 👇 AQUÍ ESTÁ LA CORRECCIÓN: SIN json_encode
+                                'features'    => $item['features'] ?? [],
+                                'prices'      => $pricesPayload 
                             ]
                         );
                         $savedModels++;
@@ -154,6 +151,5 @@ class SyncInfoAuto extends Command
         $barModels->finish();
         $this->newLine(2);
         $this->info("🏁 FIN. Modelos procesados: {$savedModels}. Errores de grupo: {$errores}");
-        $this->comment("Si ves modelos sin precio, volvé a correr el comando; actualizará los faltantes.");
     }
 }
