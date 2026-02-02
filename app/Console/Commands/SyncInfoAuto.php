@@ -12,135 +12,115 @@ use Illuminate\Support\Facades\Http;
 class SyncInfoAuto extends Command
 {
     protected $signature = 'infoauto:sync'; 
-    protected $description = 'Sincroniza Marcas, Grupos, MODELOS y sus PRECIOS reales';
+    protected $description = 'Sincroniza con Camuflaje TOTAL (Headers + UserAgent)';
 
     public function handle(InfoAutoService $service)
     {
-        // Configuraciones para scripts largos
         ini_set('memory_limit', '-1');
         set_time_limit(0);
 
-        $this->info('🚀 Iniciando sincronización (MODO CAMUFLAJE)...');
+        $this->info('🚀 Sincronizando (INTENTO FINAL CON HEADERS)...');
 
-        // FASE 1: MARCAS Y GRUPOS
-        $this->info('📥 [1/2] Bajando Marcas y Grupos...');
+        // --- FASE 1: CATALOGO ---
         try {
             $data = $service->downloadCatalog();
-        } catch (\Exception $e) {
-            $this->error("💥 Error fatal: " . $e->getMessage());
-            return;
-        }
-
-        // Procesamos Marcas y Grupos rápido
-        foreach ($data as $brandData) {
-            if (!isset($brandData['id'])) continue;
-            $brand = InfoAutoBrand::updateOrCreate(
-                ['id' => $brandData['id']],
-                ['name' => $brandData['name'] ?? 'Sin Nombre']
-            );
-            if (isset($brandData['groups']) && is_array($brandData['groups'])) {
-                foreach ($brandData['groups'] as $groupData) {
-                    $uniqueGroupId = ($brand->id * 1000000) + $groupData['id'];
-                    InfoAutoGroup::updateOrCreate(
-                        ['id' => $uniqueGroupId],
-                        ['brand_id' => $brand->id, 'name' => $groupData['name'] ?? 'General']
-                    );
+            foreach ($data as $brandData) {
+                if (!isset($brandData['id'])) continue;
+                $brand = InfoAutoBrand::updateOrCreate(['id' => $brandData['id']], ['name' => $brandData['name'] ?? 'Sin Nombre']);
+                
+                if (isset($brandData['groups']) && is_array($brandData['groups'])) {
+                    foreach ($brandData['groups'] as $groupData) {
+                        $uniqueGroupId = ($brand->id * 1000000) + $groupData['id'];
+                        InfoAutoGroup::updateOrCreate(['id' => $uniqueGroupId], ['brand_id' => $brand->id, 'name' => $groupData['name'] ?? 'General']);
+                    }
                 }
             }
+            $this->info("✅ Marcas OK.");
+        } catch (\Exception $e) {
+            $this->error("Error catalogo: " . $e->getMessage());
+            return;
         }
-        $this->info("✅ Estructura base actualizada.");
         
-        // FASE 2: MODELOS Y PRECIOS
-        $this->info('📥 [2/2] Bajando Modelos y Precios...');
-
+        // --- FASE 2: PRECIOS ---
+        $this->info('📥 Bajando Precios (Simulando navegación real)...');
         $token = $service->getAccessToken();
         $groups = InfoAutoGroup::all();
+        $bar = $this->output->createProgressBar($groups->count());
         
-        $barModels = $this->output->createProgressBar($groups->count());
-        $barModels->start();
-        
-        // Browser falso para evitar bloqueos
+        // CABECERAS COMPLETAS DE NAVEGADOR
+        $headers = [
+            'Referer' => 'https://www.infoauto.com.ar/',
+            'Origin' => 'https://www.infoauto.com.ar',
+            'Accept' => 'application/json, text/plain, */*',
+            'Accept-Language' => 'es-419,es;q=0.9,en;q=0.8',
+            'Connection' => 'keep-alive',
+            'Sec-Fetch-Dest' => 'empty',
+            'Sec-Fetch-Mode' => 'cors',
+            'Sec-Fetch-Site' => 'same-site',
+        ];
+
         $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
         foreach ($groups as $group) {
             try {
                 $originalGroupId = $group->id % 1000000;
-                $url = "https://api.infoauto.com.ar/cars/pub/brands/{$group->brand_id}/groups/{$originalGroupId}/models/";
                 
-                // Pausa anti-bloqueo
-                usleep(100000); 
-
+                // Pedido de lista de modelos
                 $res = Http::withToken($token)
-                    ->withUserAgent($userAgent) // 👈 CLAVE: Nos disfrazamos de Chrome
+                    ->withHeaders($headers) // 👈 Agregamos Headers
+                    ->withUserAgent($userAgent)
                     ->withoutVerifying()
                     ->timeout(15)
-                    ->get($url);
+                    ->get("https://api.infoauto.com.ar/cars/pub/brands/{$group->brand_id}/groups/{$originalGroupId}/models/");
 
-                if ($res->failed()) {
-                     $barModels->advance();
-                     continue; 
-                }
+                if ($res->failed()) { $bar->advance(); continue; }
 
                 $list = $res->json()['data'] ?? $res->json();
 
                 if (is_array($list)) {
                     foreach ($list as $item) {
                         if (!isset($item['codia'])) continue;
-
                         $pricesPayload = [];
 
-                        // Solo buscamos precio si la API dice que tiene
                         if (isset($item['prices']) && $item['prices'] === true) {
                             try {
-                                usleep(200000); // Pausa de 0.2s entre autos (Vital para que no baneen)
-
-                                $codia = $item['codia'];
-                                $urlPrecios = "https://api.infoauto.com.ar/cars/pub/models/{$codia}/prices/";
+                                usleep(500000); // 0.5 segundos de pausa (Más lento = Más seguro)
                                 
-                                $resPrice = Http::withToken($token)
-                                    ->withUserAgent($userAgent) // 👈 CLAVE AQUÍ TAMBIÉN
+                                $resP = Http::withToken($token)
+                                    ->withHeaders($headers) // 👈 Agregamos Headers aquí también
+                                    ->withUserAgent($userAgent)
                                     ->withoutVerifying()
                                     ->timeout(10)
-                                    ->get($urlPrecios);
+                                    ->get("https://api.infoauto.com.ar/cars/pub/models/{$item['codia']}/prices/");
                                 
-                                if ($resPrice->successful()) {
-                                    $pricesPayload = $resPrice->json();
+                                if ($resP->successful()) {
+                                    $pricesPayload = $resP->json();
                                 } else {
-                                    // SI FALLA, TE AVISA POR QUÉ
-                                    $this->newLine();
-                                    $this->error("⚠️ Error {$resPrice->status()} al bajar precio del auto $codia");
-                                    if ($resPrice->status() == 403 || $resPrice->status() == 429) {
-                                        $this->error("⛔ EL SERVIDOR NOS ESTÁ BLOQUEANDO. Esperando 5 segundos...");
-                                        sleep(5);
-                                    }
+                                    // Si falla, mostramos el código pero seguimos intentando
+                                    // $this->error("E{$resP->status()}"); 
                                 }
-                            } catch (\Exception $e) {
-                                // Error silencioso para seguir
-                            }
+                            } catch (\Exception $e) {}
                         }
 
                         InfoAutoModel::updateOrCreate(
                             ['codia' => $item['codia']],
                             [
-                                'group_id'    => $group->id,
-                                'brand_id'    => $group->brand_id,
-                                'description' => $item['description'] ?? 'Sin descripción',
-                                'photo_url'   => $item['photo_url'] ?? null,
-                                'list_price'  => $item['list_price'] ?? false,
-                                'features'    => $item['features'] ?? [],
-                                'prices'      => $pricesPayload // Array limpio
+                                'group_id' => $group->id,
+                                'brand_id' => $group->brand_id,
+                                'description' => $item['description'] ?? 'Desc',
+                                'photo_url' => $item['photo_url'] ?? null,
+                                'list_price' => $item['list_price'] ?? false,
+                                'features' => $item['features'] ?? [],
+                                'prices' => $pricesPayload
                             ]
                         );
                     }
                 }
-            } catch (\Exception $e) {
-                // Error de grupo
-            }
-            $barModels->advance();
+            } catch (\Exception $e) {}
+            $bar->advance();
         }
-
-        $barModels->finish();
+        $bar->finish();
         $this->newLine();
-        $this->info("🏁 FIN DEL PROCESO.");
+        $this->info("🏁 FIN.");
     }
 }
