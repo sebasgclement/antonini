@@ -8,6 +8,7 @@ use App\Models\InfoAutoModel;
 use App\Services\InfoAutoService; // Importamos el servicio nuevo
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 
 class InfoAutoController extends Controller
 {
@@ -38,17 +39,55 @@ class InfoAutoController extends Controller
     // 2. MODELOS (Esto sigue igual, lee de TU base de datos)
     // ---------------------------------------------------------
     public function getModels($brandId, $groupId)
-    {
-        Log::info("Consulta local DB: Brand {$brandId}, Group {$groupId}");
-        
-        // No gasta cupo API. Lee de tu tabla local.
-        $models = InfoAutoModel::where('brand_id', $brandId)
-                    ->where('group_id', $groupId)
-                    ->orderBy('description', 'asc')
-                    ->get();
-        
+{
+    // 1. Primero buscamos en NUESTRA base de datos local
+    $models = InfoAutoModel::where('brand_id', $brandId)
+                           ->where('group_id', $groupId)
+                           ->orderBy('description', 'asc')
+                           ->get();
+
+    // ✅ SI YA TENEMOS DATOS, LOS DEVOLVEMOS (Rápido y GRATIS)
+    if ($models->count() > 0) {
         return response()->json($models);
     }
+
+    // 🛑 SI ESTÁ VACÍO, VAMOS A BUSCARLOS A LA API (Solo esta vez)
+    // Esto cumple con InfoAuto: "Consultas puntuales a demanda del usuario"
+    
+    // Necesitamos el token (podés usar tu servicio o lógica directa acá)
+    $token = $this->infoAutoService->getToken();
+    
+    // OJO: InfoAuto usa IDs numéricos, asegurate que brandId y groupId sean los de la API
+    $url = "https://api.infoauto.com.ar/cars/pub/brands/{$brandId}/groups/{$groupId}/models/";
+
+    try {
+        $response = Http::withToken($token)->withoutVerifying()->get($url);
+        
+        if ($response->successful()) {
+            $datosApi = $response->json();
+            $nuevosModelos = [];
+
+            foreach ($datosApi as $m) {
+                // Guardamos en local para la próxima
+                $nuevo = InfoAutoModel::create([
+                    'codia'       => $m['codia'],
+                    'description' => $m['description'],
+                    'brand_id'    => $brandId,
+                    'group_id'    => $groupId,
+                    'prices'      => null, // Empieza sin precio
+                    'features'    => json_encode($m['features'] ?? [])
+                ]);
+                $nuevosModelos[] = $nuevo;
+            }
+
+            return response()->json($nuevosModelos);
+        }
+    } catch (\Exception $e) {
+        \Log::error("Error bajando modelos on-demand: " . $e->getMessage());
+    }
+
+    return response()->json([], 500);
+}
 
     // ---------------------------------------------------------
     // 3. PRECIO (¡NUEVO! Este es el que conecta con la API)

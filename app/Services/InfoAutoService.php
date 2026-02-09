@@ -10,7 +10,7 @@ class InfoAutoService
 {
     protected $baseUrl = 'https://api.infoauto.com.ar/cars';
     protected $user = 'aptassoni@gmail.com';
-    protected $pass = ''; // <--- ACORDATE DE PONER LA CONTRASEÑA NUEVA ACÁ
+    protected $pass = 'oPOeKOtj2s2BRFRR';
 
     // Headers para simular ser un navegador
     protected $headers = [
