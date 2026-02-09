@@ -32,3 +32,20 @@ Route::get('/debug-infoauto', function (InfoAutoService $service) {
     // 3. Imprimimos la respuesta CRUDA para ver la estructura
     return $response->json();
 });
+
+Route::get('/prueba-infoauto', function (InfoAutoService $service) {
+    try {
+        // Probamos con el Fiat Palio (1056)
+        $resultado = $service->getModelPrices(1056);
+        
+        return response()->json([
+            'estado' => 'EXITO',
+            'datos' => $resultado
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'estado' => 'ERROR',
+            'mensaje' => $e->getMessage()
+        ], 500);
+    }
+});

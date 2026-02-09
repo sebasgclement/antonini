@@ -9,71 +9,88 @@ use Illuminate\Support\Facades\Log;
 class InfoAutoService
 {
     protected $baseUrl = 'https://api.infoauto.com.ar/cars';
-    protected $user = 'aptassoni@gmail.com'; 
-    protected $pass = 'oPOeKOtj2s2BRFRR';
+    protected $user = 'aptassoni@gmail.com';
+    protected $pass = ''; // <--- ACORDATE DE PONER LA CONTRASEÑA NUEVA ACÁ
 
-    /**
-     * Obtiene el Token de acceso (Cacheado por 50 min)
-     */
-    public function getAccessToken()
+    // Headers para simular ser un navegador
+    protected $headers = [
+        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept' => 'application/json',
+    ];
+
+    public function getToken()
     {
-        return Cache::remember('infoauto_access_token', 3000, function () {
-            $response = Http::withBasicAuth($this->user, $this->pass)
+        // Cacheamos el token un poco menos de 1 hora (50 min)
+        if (Cache::has('infoauto_token')) {
+            return Cache::get('infoauto_token');
+        }
+        return $this->login();
+    }
+
+    protected function login()
+    {
+        try {
+            $response = Http::withHeaders($this->headers)
+                ->withBasicAuth($this->user, $this->pass)
+                ->withoutVerifying()
                 ->post("{$this->baseUrl}/auth/login");
 
-            if ($response->failed()) {
-                Log::error("InfoAuto Login Falló: " . $response->body());
-                throw new \Exception("No se pudo loguear en InfoAuto");
+            if ($response->successful()) {
+                $token = $response->json()['access_token'];
+                Cache::put('infoauto_token', $token, now()->addMinutes(50));
+                return $token;
             }
-
-            return $response->json()['access_token'];
-        });
-    }
-
-    /**
-     * ESTE ES EL MÉTODO QUE TE FALTABA
-     * Descarga la estructura completa de Marcas y Grupos
-     */
-    public function downloadCatalog()
-    {
-        $token = $this->getAccessToken();
-
-        // La documentación pide explícitamente gzip
-        $response = Http::withToken($token)
-            ->withHeaders(['Accept-Encoding' => 'gzip'])
-            ->get("{$this->baseUrl}/pub/brands/download/");
-
-        if ($response->failed()) {
-            Log::error("Fallo descarga catálogo: " . $response->body());
-            throw new \Exception("Error al descargar catálogo: " . $response->status());
+        } catch (\Exception $e) {
+            Log::error("InfoAuto Login Error: " . $e->getMessage());
+            return null;
         }
 
-        $json = $response->json();
-        
-        // A veces viene directo el array, a veces dentro de 'data'
-        return $json['data'] ?? $json;
+        return null;
     }
 
-    /**
-     * Busca modelos individuales (usado por el comando para bajar detalle)
-     */
-    public function getModels($brandId, $groupId)
+    // Le cambié el nombre a "getPrecioEnVivo" para que sepas que este va directo a la API
+    public function getPrecioEnVivo($codia)
     {
-        $token = $this->getAccessToken();
-        $url = "{$this->baseUrl}/pub/brands/{$brandId}/groups/{$groupId}/models/";
+        $token = $this->getToken();
+
+        if (!$token) {
+            return null; // Si no hay token (login falló), devolvemos null sin romper nada
+        }
+
+        $url = "{$this->baseUrl}/pub/models/{$codia}/prices/";
 
         try {
-            $response = Http::withToken($token)->timeout(10)->get($url);
-            
-            if ($response->failed()) {
-                return [];
+            $response = Http::withHeaders($this->headers)
+                ->withToken($token)
+                ->withoutVerifying()
+                ->get($url);
+
+            // Si el token venció (401), reintentamos una vez más
+            if ($response->status() === 401) {
+                Cache::forget('infoauto_token');
+                $token = $this->login();
+                
+                if ($token) {
+                    $response = Http::withHeaders($this->headers)
+                        ->withToken($token)
+                        ->withoutVerifying()
+                        ->get($url);
+                }
             }
 
-            $data = $response->json();
-            return $data['data'] ?? $data;
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            // ACÁ ESTÁ EL CAMBIO CLAVE:
+            // Si da 403 (Cupo Agotado) o 404 (No existe), devolvemos NULL.
+            // No tiramos Exception para no romper la vista del usuario.
+            return null;
 
         } catch (\Exception $e) {
-            return [];
+            // Si falla la conexión (internet, dns, etc), logueamos y devolvemos null
+            Log::error("InfoAuto Conexión Error: " . $e->getMessage());
+            return null;
         }
     }
 }
