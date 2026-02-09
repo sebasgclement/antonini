@@ -51,11 +51,32 @@ class InfoAutoService
     // Le cambié el nombre a "getPrecioEnVivo" para que sepas que este va directo a la API
     public function getPrecioEnVivo($codia)
     {
+        // =================================================================
+        // 🛡️ CAPA 1: CACHÉ DE PRECIOS (AHORRO DE DINERO)
+        // =================================================================
+        // Si ya pedimos este precio hoy, no lo volvemos a pedir.
+        // La clave es única por código de auto (ej: 'price_01523').
+        $cacheKey = "infoauto_price_{$codia}";
+
+        if (Cache::has($cacheKey)) {
+            // Logueamos en 'debug' para saber que se usó la memoria (GRATIS)
+            Log::debug("💰 AHORRO: Usando precio en memoria para: {$codia}");
+            return Cache::get($cacheKey);
+        }
+
+        // =================================================================
+        // 🚦 SI LLEGAMOS ACÁ, VAMOS A GASTAR CRÉDITO
+        // =================================================================
+        
         $token = $this->getToken();
 
         if (!$token) {
-            return null; // Si no hay token (login falló), devolvemos null sin romper nada
+            return null; 
         }
+
+        // 🚨 ALARMA DE GASTO 🚨
+        // Esto escribirá en tu log cada vez que InfoAuto te cobre
+        Log::alert("💸 PAGANDO: Saliendo a InfoAuto API por el auto: {$codia}");
 
         $url = "{$this->baseUrl}/pub/models/{$codia}/prices/";
 
@@ -65,12 +86,12 @@ class InfoAutoService
                 ->withoutVerifying()
                 ->get($url);
 
-            // Si el token venció (401), reintentamos una vez más
+            // Reintento por token vencido
             if ($response->status() === 401) {
                 Cache::forget('infoauto_token');
                 $token = $this->login();
-                
                 if ($token) {
+                    Log::alert("💸 PAGANDO (Reintento): Saliendo a InfoAuto API por el auto: {$codia}");
                     $response = Http::withHeaders($this->headers)
                         ->withToken($token)
                         ->withoutVerifying()
@@ -79,16 +100,23 @@ class InfoAutoService
             }
 
             if ($response->successful()) {
-                return $response->json();
+                $datos = $response->json();
+
+                // =============================================================
+                // 💾 GUARDAMOS EN CACHÉ POR 24 HORAS
+                // =============================================================
+                // Si el usuario vuelve a consultar este auto mañana, pagamos de nuevo.
+                // Pero si lo consulta hoy 50 veces, pagamos solo 1.
+                Cache::put($cacheKey, $datos, now()->addHours(24));
+
+                return $datos;
             }
 
-            // ACÁ ESTÁ EL CAMBIO CLAVE:
-            // Si da 403 (Cupo Agotado) o 404 (No existe), devolvemos NULL.
-            // No tiramos Exception para no romper la vista del usuario.
+            // Errores de cliente (404, 403, etc)
+            Log::warning("InfoAuto falló para {$codia}: Status " . $response->status());
             return null;
 
         } catch (\Exception $e) {
-            // Si falla la conexión (internet, dns, etc), logueamos y devolvemos null
             Log::error("InfoAuto Conexión Error: " . $e->getMessage());
             return null;
         }
