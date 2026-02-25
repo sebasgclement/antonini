@@ -37,7 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ INFO AUTO (Catálogo Oficial)
     Route::get('/infoauto/brands', [InfoAutoController::class, 'getBrands']);
-    // Nota: groupId aquí será el ID "compuesto" (ej: 5000001)
+    Route::get('/infoauto/brands/{brandId}/groups', [InfoAutoController::class, 'getGroups']);
     Route::get('/infoauto/brands/{brandId}/groups/{groupId}/models', [InfoAutoController::class, 'getModels']);
     Route::get('/infoauto/price/{codia}', [InfoAutoController::class, 'getPrice']);
     // ✅ DASHBOARD / GRAL
