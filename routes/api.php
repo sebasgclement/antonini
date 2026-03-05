@@ -10,9 +10,10 @@ use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\VehicleBrandController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\RoleController;
-use App\Http\Controllers\InfoAutoController; 
+use App\Http\Controllers\InfoAutoController;
+use App\Http\Controllers\Accounting\EntryController; // ✅ Importado correctamente
 
-// Controladores API (Namespace Api)
+// Controladores API
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleExpenseController;
 use App\Http\Controllers\Api\ReportController;
@@ -22,12 +23,13 @@ use App\Http\Controllers\Api\DashboardController;
 
 // Modelos
 use App\Models\Reservation;
+use App\Models\AccountingAccount;
 
-// ================== RUTAS PÚBLICAS ==================
-Route::post('/auth/login',  [AuthController::class, 'login']);
+// ================== 1. RUTAS PÚBLICAS ==================
+Route::post('/auth/login', [AuthController::class, 'login']);
 Route::get('/ping', fn () => response()->json(['pong' => true]));
 
-// ================== ZONA AUTENTICADA (Vendedores + Admin) ==================
+// ================== 2. ZONA AUTENTICADA GENERAL (Vendedores, Admin, Contables) ==================
 Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ AUTH
@@ -35,91 +37,70 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get ('/auth/me',              [AuthController::class, 'me']);
     Route::post('/user/change-password', [AuthController::class, 'changePassword']);
 
-    // ✅ INFO AUTO (Catálogo Oficial)
+    // ✅ INFO AUTO
     Route::get('/infoauto/brands', [InfoAutoController::class, 'getBrands']);
     Route::get('/infoauto/brands/{brandId}/groups', [InfoAutoController::class, 'getGroups']);
     Route::get('/infoauto/brands/{brandId}/groups/{groupId}/models', [InfoAutoController::class, 'getModels']);
     Route::get('/infoauto/price/{codia}', [InfoAutoController::class, 'getPrice']);
+
     // ✅ DASHBOARD / GRAL
     Route::get('/dolar',           [DashboardController::class, 'getDolar']); 
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
-
-    // ✅ NOTIFICACIONES
-    Route::get('/reservas/pendientes/count', function () {
-        return response()->json(['count' => Reservation::where('status', 'pendiente')->count()]);
-    });
-
-    // ✅ AGENDA
-    Route::get('/my-agenda/count',     [CustomerController::class, 'myAgendaCount']);
-    Route::get('/my-agenda',           [CustomerController::class, 'myAgenda']);
-    Route::post('/events/{id}/toggle', [CustomerController::class, 'toggleEvent']);
 
     // ✅ CLIENTES
     Route::apiResource('customers', CustomerController::class);
     Route::post('/customers/{id}/events', [CustomerController::class, 'storeEvent']);
     Route::get('/customers/{id}/events',  [CustomerController::class, 'getEvents']);
 
-    // ✅ VEHÍCULOS (Inventario Local)
+    // ✅ VEHÍCULOS e INVENTARIO
     Route::apiResource('vehicles', VehicleController::class);
-    
-    // ✅ MARCAS (Gestión manual si hiciera falta)
     Route::get('/brands',          [VehicleBrandController::class, 'index']);
-    Route::post('/brands',         [VehicleBrandController::class, 'store']);
-    Route::put('/brands/{brand}',  [VehicleBrandController::class, 'update']);
-    Route::delete('/brands/{brand}', [VehicleBrandController::class, 'destroy']);
-
+    
     // ✅ GASTOS
     Route::get   ('/vehicles/{vehicle}/expenses',           [VehicleExpenseController::class, 'index']);
     Route::post  ('/vehicles/{vehicle}/expenses',           [VehicleExpenseController::class, 'store']);
     Route::delete('/vehicles/{vehicle}/expenses/{expense}', [VehicleExpenseController::class, 'destroy']);
 
-    // ✅ RESERVAS
-    Route::get('/reservations/create',       [ReservationController::class, 'create']);
+    // ✅ RESERVAS Y PAGOS
+    Route::apiResource('reservations', ReservationController::class);
     Route::post('/reservations/{id}/cancel', [ReservationController::class, 'cancel']);
-    Route::apiResource('reservations',       ReservationController::class);
+    Route::apiResource('reservation-payments', ReservationPaymentController::class);
 
-    // ✅ PAGOS DE RESERVAS
-    Route::get   ('/reservation-payments',               [ReservationPaymentController::class, 'index']);
-    Route::post  ('/reservation-payments',               [ReservationPaymentController::class, 'store']);
-    Route::put   ('/reservation-payments/{payment}',     [ReservationPaymentController::class, 'update']);
-    Route::delete('/reservation-payments/{payment}',     [ReservationPaymentController::class, 'destroy']);
-    
-    // ✅ DASHBOARD STATS
     Route::get('/dashboard/stats', [DashboardController::class, 'index']);
-
 }); 
 
-// ================== ZONA ADMIN (Solo Rol Admin) ==================
-Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+// ================== 3. ZONA EXCLUSIVA ADMIN (Solo Rol: admin) ==================
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
 
-    // ✅ USUARIOS
-    Route::prefix('admin/users')->group(function () {
-        Route::get   ('/',        [AdminUserController::class, 'index']);
-        Route::post  ('/',        [AdminUserController::class, 'store']);
-        Route::get   ('/{user}',  [AdminUserController::class, 'show']);
-        Route::put   ('/{user}',  [AdminUserController::class, 'update']);
-        Route::delete('/{user}',  [AdminUserController::class, 'destroy']);
-    });
-
-    // ✅ ROLES
-    Route::prefix('admin/roles')->group(function () {
-        Route::get   ('/',          [RoleController::class, 'index']);
-        Route::post  ('/',          [RoleController::class, 'store']);
-        Route::get   ('/{role}',    [RoleController::class, 'show']);
-        Route::put   ('/{role}',    [RoleController::class, 'update']);
-        Route::delete('/{role}',    [RoleController::class, 'destroy']);
-    });
-    Route::get('/admin/roles-list', [AdminUserController::class, 'roles']);
-
-    // ✅ CONFIGURACIÓN
-    Route::apiResource('payment-methods', PaymentMethodController::class)->except(['index']);
+    // ✅ USUARIOS Y ROLES
+    Route::apiResource('users', AdminUserController::class);
+    Route::apiResource('roles', RoleController::class);
+    Route::get('/roles-list', [AdminUserController::class, 'roles']);
 
     // ✅ REPORTES
     Route::prefix('reports')->group(function () {
         Route::get('/sales/monthly',    [ReportController::class, 'salesMonthly']);
         Route::get('/sales/by-seller',  [ReportController::class, 'salesBySeller']);
-        Route::get('/sales/by-payment', [ReportController::class, 'salesByPayment']);
         Route::get('/expenses/monthly', [ReportController::class, 'expensesMonthly']);
         Route::get('/sales/export',     [ReportController::class, 'exportSalesReport'])->name('reports.sales.export');
+    });
+
+    // ✅ CONFIGURACIÓN EXTRA
+    Route::apiResource('payment-methods', PaymentMethodController::class)->except(['index']);
+});
+
+// ================== 4. ZONA CONTABLE (Solo Rol: admin_contable) ==================
+Route::middleware(['auth:sanctum'])->prefix('accounting')->group(function () {
+    
+    // ✅ CREAR ASIENTO
+    // URL: POST /api/accounting/entries
+    Route::post('/entries', [EntryController::class, 'store']);
+
+    // ✅ OBTENER PLAN DE CUENTAS (Para el select de React)
+    // URL: GET /api/accounting/accounts
+    Route::get('/accounts', function() {
+        return AccountingAccount::where('is_selectable', true)
+            ->orderBy('code', 'asc')
+            ->get();
     });
 });

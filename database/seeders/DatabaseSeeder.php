@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             VehicleSeeder::class,        // 2. Vehículos (Hilux, Gol, etc.)
             VehicleExpenseSeeder::class, // 3. Gastos asociados a esos vehículos
             PaymentMethodSeeder::class,  // 4. Métodos de pago actualizados
+            AccountingAccountSeeder::class,
         ]);
     }
 }
