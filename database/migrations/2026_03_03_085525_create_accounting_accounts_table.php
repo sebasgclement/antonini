@@ -23,6 +23,7 @@ return new class extends Migration
     $table->timestamps();
 
     $table->foreign('parent_id')->references('id')->on('accounting_accounts');
+    $table->softDeletes();
 });
     }
 

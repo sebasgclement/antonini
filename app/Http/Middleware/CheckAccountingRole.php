@@ -12,9 +12,10 @@ class CheckAccountingRole
     {
         // Verificamos si el usuario está logueado y si su rol es 'admin_contable'
         // Esto usa la columna 'role' que vimos que ya tenés en tu tabla 'users'
-        if (auth()->check() && auth()->user()->role === 'admin_contable') {
-            return $next($request);
-        }
+        if (auth()->check() && auth()->user()->can('manage-accounting')) {
+    return $next($request);
+}
+
 
         // Si no es contable, le rebotamos la petición con un 403 (Prohibido)
         return response()->json([

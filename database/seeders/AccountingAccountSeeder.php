@@ -4,53 +4,62 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\AccountingAccount;
+use Illuminate\Support\Facades\Schema;
 
 class AccountingAccountSeeder extends Seeder
 {
     public function run()
     {
-        // 1. Definimos el Plan de Cuentas extraído de tu PDF
-        $plan = [
-            // NIVEL 1 
-            ['code' => '1.0.0.00.000', 'name' => 'ACTIVO'],
-            ['code' => '2.0.0.00.000', 'name' => 'PASIVO'],
-            ['code' => '3.0.0.00.000', 'name' => 'PATRIMONIO NETO'],
-            ['code' => '4.0.0.00.000', 'name' => 'RESULTADOS'],
+        Schema::disableForeignKeyConstraints();
+        AccountingAccount::query()->delete();
+        Schema::enableForeignKeyConstraints();
 
-            // NIVEL 2 - ACTIVO 
-            ['code' => '1.1.0.00.000', 'name' => 'ACTIVO CORRIENTE'],
-            ['code' => '1.2.0.00.000', 'name' => 'ACTIVO NO CORRIENTE'],
+        // --- 1. ACTIVO ---
+        $activo = AccountingAccount::create(['code' => '1.0.0.00.000', 'name' => 'ACTIVO', 'level' => 1, 'is_selectable' => false]);
+        $activoC = AccountingAccount::create(['code' => '1.1.0.00.000', 'name' => 'ACTIVO CORRIENTE', 'level' => 2, 'parent_id' => $activo->id, 'is_selectable' => false]);
+        
+        $cajaYBancos = AccountingAccount::create(['code' => '1.1.1.00.000', 'name' => 'CAJA Y BANCOS', 'level' => 3, 'parent_id' => $activoC->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '1.1.1.01.000', 'name' => 'Caja', 'level' => 4, 'parent_id' => $cajaYBancos->id, 'is_selectable' => true]);
+        $bancos = AccountingAccount::create(['code' => '1.1.1.02.000', 'name' => 'Bancos', 'level' => 4, 'parent_id' => $cajaYBancos->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '1.1.1.02.001', 'name' => 'Banco Credicoop Cta.Cte.', 'level' => 5, 'parent_id' => $bancos->id, 'is_selectable' => true]);
+        AccountingAccount::create(['code' => '1.1.1.02.002', 'name' => 'Nuevo Banco de Santa Fe Cta.Cte.', 'level' => 5, 'parent_id' => $bancos->id, 'is_selectable' => true]);
 
-            // NIVEL 3 - DISPONIBILIDADES 
-            ['code' => '1.1.1.00.000', 'name' => 'CAJA Y BANCOS'],
-            
-            // NIVEL 4 
-            ['code' => '1.1.1.01.000', 'name' => 'Caja'],
-            ['code' => '1.1.1.02.000', 'name' => 'Bancos'],
+        // --- 2. PASIVO ---
+        $pasivo = AccountingAccount::create(['code' => '2.0.0.00.000', 'name' => 'PASIVO', 'level' => 1, 'is_selectable' => false]);
+        $pasivoC = AccountingAccount::create(['code' => '2.1.0.00.000', 'name' => 'PASIVO CORRIENTE', 'level' => 2, 'parent_id' => $pasivo->id, 'is_selectable' => false]);
+        $deudasCom = AccountingAccount::create(['code' => '2.1.1.00.000', 'name' => 'CUENTAS POR PAGAR', 'level' => 3, 'parent_id' => $pasivoC->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '2.1.1.01.000', 'name' => 'Proveedores', 'level' => 4, 'parent_id' => $deudasCom->id, 'is_selectable' => true]);
 
-            // NIVEL 5 - CUENTAS IMPUTABLES (Donde se carga el dinero) 
-            ['code' => '1.1.1.02.001', 'name' => 'Banco Credicoop Cta.Cte.'],
-            ['code' => '1.1.1.02.002', 'name' => 'Nuevo Banco de Santa Fe Cta.Cte.'],
-            
-            // PASIVO [cite: 5]
-            ['code' => '2.1.0.00.000', 'name' => 'PASIVOS CORRIENTES'],
-            ['code' => '2.1.1.00.000', 'name' => 'DEUDAS COMERCIALES'],
-            ['code' => '2.1.1.01.000', 'name' => 'Proveedores'],
-        ];
+        // --- 3. PATRIMONIO NETO ---
+        $pn = AccountingAccount::create(['code' => '3.0.0.00.000', 'name' => 'PATRIMONIO NETO', 'level' => 1, 'is_selectable' => false]);
+        $cap = AccountingAccount::create(['code' => '3.1.0.00.000', 'name' => 'CAPITAL SUSCRIPTO', 'level' => 2, 'parent_id' => $pn->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '3.1.1.00.000', 'name' => 'Capital Social', 'level' => 3, 'parent_id' => $cap->id, 'is_selectable' => true]);
+        $res = AccountingAccount::create(['code' => '3.2.0.00.000', 'name' => 'RESULTADOS', 'level' => 2, 'parent_id' => $pn->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '3.2.1.00.000', 'name' => 'Resultados del Ejercicio', 'level' => 3, 'parent_id' => $res->id, 'is_selectable' => true]);
 
-        foreach ($plan as $item) {
-            $level = $this->calculateLevel($item['code']);
-            $parentId = $this->findParentId($item['code']);
+        // --- 4. RESULTADOS (INGRESOS Y GASTOS) ---
+        $resultados = AccountingAccount::create(['code' => '4.0.0.00.000', 'name' => 'RESULTADOS', 'level' => 1, 'is_selectable' => false]);
+        
+        // INGRESOS
+        $ingresos = AccountingAccount::create(['code' => '4.1.0.00.000', 'name' => 'INGRESOS', 'level' => 2, 'parent_id' => $resultados->id, 'is_selectable' => false]);
+        $ventas = AccountingAccount::create(['code' => '4.1.1.00.000', 'name' => 'VENTAS', 'level' => 3, 'parent_id' => $ingresos->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '4.1.1.01.000', 'name' => 'Ventas de Mercaderías', 'level' => 4, 'parent_id' => $ventas->id, 'is_selectable' => true]);
 
-            AccountingAccount::create([
-                'code'          => $item['code'],
-                'name'          => $item['name'],
-                'parent_id'     => $parentId,
-                'level'         => $level,
-                'is_selectable' => ($level === 5), // Solo el último nivel es seleccionable para asientos
-            ]);
-        }
+        // GASTOS
+        $gastos = AccountingAccount::create(['code' => '4.2.0.00.000', 'name' => 'GASTOS', 'level' => 2, 'parent_id' => $resultados->id, 'is_selectable' => false]);
+        $costos = AccountingAccount::create(['code' => '4.2.1.00.000', 'name' => 'COSTO DE VENTAS', 'level' => 3, 'parent_id' => $gastos->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '4.2.1.01.000', 'name' => 'Costo de Mercaderías Vendidas', 'level' => 4, 'parent_id' => $costos->id, 'is_selectable' => true]);
+        
+        $gastosCom = AccountingAccount::create(['code' => '4.2.2.00.000', 'name' => 'GASTOS DE COMERCIALIZACION', 'level' => 3, 'parent_id' => $gastos->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '4.2.2.05.000', 'name' => 'Energía Eléctrica', 'level' => 4, 'parent_id' => $gastosCom->id, 'is_selectable' => true]);
+        AccountingAccount::create(['code' => '4.2.2.06.000', 'name' => 'Alquileres', 'level' => 4, 'parent_id' => $gastosCom->id, 'is_selectable' => true]);
+        AccountingAccount::create(['code' => '4.2.2.11.000', 'name' => 'Gastos Posnet', 'level' => 4, 'parent_id' => $gastosCom->id, 'is_selectable' => true]);
+
+        // --- 5. CUENTAS DE ORDEN ---
+        $orden = AccountingAccount::create(['code' => '5.0.0.00.000', 'name' => 'CUENTAS DE ORDEN', 'level' => 1, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '5.1.0.00.000', 'name' => 'Valores Recibidos en Caución', 'level' => 2, 'parent_id' => $orden->id, 'is_selectable' => true]);
     }
+
 
     // Determina el nivel basado en los puntos (ej: 1.1.1.01.000)
     private function calculateLevel($code) {
@@ -63,16 +72,6 @@ class AccountingAccountSeeder extends Seeder
 
     // Lógica para encontrar al padre según la numeración
     private function findParentId($code) {
-        // Ejemplo: Si entra 1.1.1.02.001, busca al que sea 1.1.1.02.000
-        // Si es 1.0.0.00.000, no tiene padre (null)
-        $parts = explode('.', $code);
-        
-        // Aquí podrías implementar una lógica de búsqueda por string 
-        // o simplemente dejarlo manual si el plan no es gigante.
-        // Por ahora, para tu MVP, te recomiendo cargarlos en orden 
-        // y buscar el registro previo que coincida con el prefijo.
-        
-        // Búsqueda simplificada:
         return AccountingAccount::where('code', '!=', $code)
             ->where('code', 'LIKE', substr($code, 0, 3) . '%')
             ->orderBy('level', 'desc')

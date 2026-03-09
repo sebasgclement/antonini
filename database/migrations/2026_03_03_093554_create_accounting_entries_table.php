@@ -28,6 +28,7 @@ return new class extends Migration
         $table->decimal('debit', 15, 2)->default(0);
         $table->decimal('credit', 15, 2)->default(0);
         $table->timestamps();
+        $table->softDeletes();
     });
 }
 

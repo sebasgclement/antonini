@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 
 class AccountingAccount extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     // 1. Definimos los campos que se pueden cargar masivamente (Fillable)
     protected $fillable = [

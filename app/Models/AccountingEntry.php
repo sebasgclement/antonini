@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AccountingEntry extends Model
 {
+    use SoftDeletes;
+    
     protected $fillable = ['entry_date', 'description', 'reference', 'user_id'];
 
     // Relación: Un asiento tiene muchos ítems (Debe/Haber)
