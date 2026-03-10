@@ -9,7 +9,7 @@ class AccountingEntry extends Model
 {
     use SoftDeletes;
     
-    protected $fillable = ['entry_date', 'description', 'reference', 'user_id'];
+    protected $fillable = ['entry_date', 'description', 'reference', 'user_id', 'business_unit_id'];
 
     // Relación: Un asiento tiene muchos ítems (Debe/Haber)
     public function items()

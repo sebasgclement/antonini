@@ -15,6 +15,7 @@ class EntryController extends Controller
         $request->validate([
             'entry_date' => 'required|date',
             'description' => 'required|string',
+            'business_unit_id' => 'required|exists:business_units,id',
             'items' => 'required|array|min:2', // Al menos dos movimientos
             'items.*.accounting_account_id' => 'required|exists:accounting_accounts,id',
         ]);
@@ -25,7 +26,8 @@ class EntryController extends Controller
                 'entry_date' => $request->entry_date,
                 'description' => $request->description,
                 'reference' => $request->reference,
-                'user_id' => auth()->id(),
+                'business_unit_id' => $request->business_unit_id,
+                'user_id' => auth()->id() ?? 1,
             ]);
 
             // 3. Crear los ítems
