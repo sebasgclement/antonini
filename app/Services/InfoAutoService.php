@@ -91,69 +91,43 @@ class InfoAutoService
 
     public function getPrecioEnVivo($codia)
     {
-        $cacheKey = "infoauto_price_{$codia}";
-
-        if (Cache::has($cacheKey)) {
-            Log::debug("AHORRO: Usando precio cacheado para CODIA {$codia}");
-            return Cache::get($cacheKey);
-        }
-
         $token = $this->getToken();
-        if (!$token) {
-            return null;
+        if (!$token) return null;
+
+        $codia = trim($codia);
+        $resultado = [
+            'usados' => [],
+            'cero_km' => null
+        ];
+
+        // 1. Usados: LA URL EXACTA DE TU POSTMAN (Con la barra al final)
+        $urlUsados = "https://api.infoauto.com.ar/cars/pub/models/{$codia}/prices/"; 
+        
+        $respUsados = \Illuminate\Support\Facades\Http::withHeaders($this->headers)
+            ->withToken($token)
+            ->withoutVerifying()
+            ->get($urlUsados);
+
+        if ($respUsados->successful()) {
+            $dataUsados = $respUsados->json();
+            $resultado['usados'] = isset($dataUsados['data']) ? $dataUsados['data'] : (is_array($dataUsados) ? $dataUsados : []);
+        } else {
+            \Illuminate\Support\Facades\Log::error("InfoAuto 404 en Usados CODIA {$codia}");
         }
 
-        Log::info("Consulta puntual a InfoAuto API por CODIA {$codia}");
+        // 2. 0KM: Estructura idéntica (Con la barra al final)
+        $urlCeroKm = "https://api.infoauto.com.ar/cars/pub/models/{$codia}/list_price/";
+        
+        $respCeroKm = \Illuminate\Support\Facades\Http::withHeaders($this->headers)
+            ->withToken($token)
+            ->withoutVerifying()
+            ->get($urlCeroKm);
 
-        $url = "{$this->baseUrl}/pub/models/{$codia}/prices/";
-
-        try {
-            $response = Http::withHeaders($this->headers)
-                ->withToken($token)
-                ->withoutVerifying()
-                ->get($url);
-
-            if ($response->status() === 401) {
-                Cache::forget('infoauto_access_token');
-                Cache::forget('infoauto_refresh_token');
-                $token = $this->getToken();
-
-                if ($token) {
-                    $response = Http::withHeaders($this->headers)
-                        ->withToken($token)
-                        ->withoutVerifying()
-                        ->get($url);
-                }
-            }
-
-            if ($response->successful()) {
-    $json = $response->json();
-
-    // Si la respuesta es un array de precios, lo usamos directamente
-    if (isset($json[0]['year']) && isset($json[0]['price'])) {
-        $precioData = [
-            'list_price' => null,
-            'prices'     => $json
-        ];
-    } else {
-        // Caso alternativo: estructura con data
-        $datos = $json['data'] ?? $json;
-        $precioData = [
-            'list_price' => $datos['list_price'] ?? null,
-            'prices'     => $datos['prices'] ?? []
-        ];
-    }
-
-    Cache::put($cacheKey, $precioData, now()->addHours(1));
-    return $precioData;
-}
-
-
-            Log::warning("InfoAuto Precio falló para CODIA {$codia}: Status " . $response->status());
-        } catch (\Exception $e) {
-            Log::error("InfoAuto Conexión Error: " . $e->getMessage());
+        if ($respCeroKm->successful()) {
+            $dataCeroKm = $respCeroKm->json();
+            $resultado['cero_km'] = isset($dataCeroKm['data']) ? $dataCeroKm['data'] : $dataCeroKm;
         }
 
-        return null;
+        return $resultado;
     }
 }

@@ -19,41 +19,24 @@ class InfoAutoController extends Controller
         $this->infoAutoService = $infoAutoService;
     }
 
-    // 1. Marcas (desde DB sincronizada)
+    // 1. Marcas: Usamos InfoAutoBrand (la que tenés vinculada)
     public function getBrands()
     {
-        $brands = InfoAutoBrand::orderBy('name', 'asc')->get();
-        return response()->json($brands);
+        return InfoAutoBrand::with('groups')->orderBy('name', 'asc')->get();
     }
 
-    // 2. Grupos (desde DB sincronizada)
-    public function getGroups($brandId)
-    {
-        $groups = InfoAutoGroup::where('brand_id', $brandId)
-            ->orderBy('name', 'asc')
-            ->get();
-
-        return response()->json($groups);
-    }
-
-    // 3. Modelos (consulta puntual en vivo por grupo)
+    // 2. Modelos: Aquí estaba el fallo. 
+    // Usamos el 'infoauto_id' del grupo para pegarle a la API [cite: 19, 20]
     public function getModels($brandId, $groupId)
     {
         $token = $this->infoAutoService->getToken();
-        if (!$token) {
-            Log::error("No se pudo obtener el token de InfoAuto para Models");
-            return response()->json([]);
-        }
+        if (!$token) return response()->json([]);
 
-        // Buscar el grupo en tu BD para obtener el infoauto_id
-        $group = InfoAutoGroup::where('id', $groupId)
-                              ->where('brand_id', $brandId)
-                              ->first();
+        // Buscamos el grupo en TU base local para sacar el ID real de InfoAuto
+        $group = InfoAutoGroup::where('id', $groupId)->first();
+        if (!$group) return response()->json([]);
 
-        if (!$group) {
-            return response()->json([]);
-        }
-
+        // URL estructurada según manual: Marca -> Grupo -> Modelos [cite: 12, 64]
         $url = "https://api.infoauto.com.ar/cars/pub/brands/{$brandId}/groups/{$group->infoauto_id}/models/?page_size=100";
 
         $response = Http::withToken($token)
@@ -63,22 +46,66 @@ class InfoAutoController extends Controller
 
         if ($response->successful()) {
             $json = $response->json();
-            $models = $json['data'] ?? $json; // soporta respuesta con 'data'
-            return response()->json($models);
+            // Retornamos 'data' que es donde vienen los modelos con su CODIA [cite: 26, 32]
+            return response()->json($json['data'] ?? $json);
         }
 
-        Log::error("Error InfoAuto getModels: " . $response->body());
         return response()->json([]);
     }
 
-    // 4. Precio (consulta puntual obligatoria por usuario)
+    // 3. Precios: Unificamos Usados y 0km para que no se corte en 2018
     public function getPrice($codia)
     {
-        $precioData = Cache::remember("precio_live_{$codia}", 3600, function () use ($codia) {
-            Log::info("Consulta puntual a API InfoAuto por precio: CODIA {$codia}");
-            return $this->infoAutoService->getPrecioEnVivo($codia);
-        });
+        try {
+            $data = $this->infoAutoService->getPrecioEnVivo($codia);
+            
+            if (!$data) {
+                return response()->json(['precios' => [], 'error' => 'No hay data']);
+            }
 
-        return response()->json(['precios' => $precioData]);
+            $preciosFormateados = [];
+
+            // A. Usados
+            if (isset($data['usados']) && is_array($data['usados'])) {
+                foreach ($data['usados'] as $item) {
+                    if (isset($item['year']) && isset($item['price'])) {
+                        $preciosFormateados[] = [
+                            'year' => (int)$item['year'],
+                            'price' => (float)$item['price']
+                        ];
+                    }
+                }
+            }
+
+            // B. 0KM
+            if (!empty($data['cero_km'])) {
+                $precioCeroKm = is_array($data['cero_km']) && isset($data['cero_km']['list_price']) 
+                                ? $data['cero_km']['list_price'] 
+                                : (is_numeric($data['cero_km']) ? $data['cero_km'] : 0);
+
+                if ($precioCeroKm > 0) {
+                    $preciosFormateados[] = [
+                        'year' => (int)date('Y'),
+                        'price' => (float)$precioCeroKm
+                    ];
+                }
+            }
+
+            usort($preciosFormateados, function($a, $b) {
+                return $b['year'] <=> $a['year'];
+            });
+
+            // ENVIAMOS EL SECRETO AL FRONTEND
+            return response()->json([
+                'precios' => $preciosFormateados,
+                'debug' => $data['debug_info'] ?? 'sin_datos_de_debug'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'precios' => [],
+                'debug' => 'Fallo crítico: ' . $e->getMessage()
+            ]);
+        }
     }
 }
