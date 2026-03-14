@@ -17,6 +17,19 @@ class AccountingEntry extends Model
         return $this->hasMany(AccountingEntryItem::class);
     }
 
+    // 👇 ¡ACÁ ESTÁ LA MAGIA QUE FALTABA! 👇
+    // Relación: Un asiento pertenece a una Unidad de Negocio
+    public function businessUnit()
+    {
+        return $this->belongsTo(BusinessUnit::class);
+    }
+
+    // Relación: Un asiento fue creado por un Usuario (opcional pero muy recomendado)
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     // Método de validación: ¿Suma cero?
     public function isBalanced()
     {

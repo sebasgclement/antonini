@@ -80,14 +80,16 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
 
 // ================== 4. ZONA CONTABLE (Accounting) ==================
 // Acceso: /api/accounting/...
-Route::middleware(['auth:sanctum'])->prefix('accounting')->group(function () {
+// ACÁ AGREGAMOS EL 'role:admin' PARA PROTEGER TODA LA CONTABILIDAD
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('accounting')->group(function () {
     
     // ✅ PLAN DE CUENTAS
     Route::get('/accounts', [AccountingAccountController::class, 'index']);
     Route::post('/accounts', [AccountingAccountController::class, 'store']);
     Route::put('/accounts/{id}', [AccountingAccountController::class, 'update']);
 
-    // ✅ ASIENTOS
+    // ✅ ASIENTOS (Acá corregimos el error del 405 Method Not Allowed)
+    Route::get('/entries', [EntryController::class, 'index']); 
     Route::post('/entries', [EntryController::class, 'store']);
 
     // ✅ UNIDADES DE NEGOCIO

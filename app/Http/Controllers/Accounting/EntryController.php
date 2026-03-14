@@ -9,6 +9,42 @@ use Illuminate\Support\Facades\DB;
 
 class EntryController extends Controller
 {
+    // 👇 ESTA ES LA FUNCIÓN QUE FALTABA PARA EL LISTADO 👇
+    public function index(Request $request)
+    {
+        $query = AccountingEntry::with(['businessUnit', 'items.accountingAccount']);
+
+        // 1. Filtro por Fecha Desde
+        if ($request->filled('date_from')) {
+            $query->whereDate('entry_date', '>=', $request->date_from);
+        }
+
+        // 2. Filtro por Fecha Hasta
+        if ($request->filled('date_to')) {
+            $query->whereDate('entry_date', '<=', $request->date_to);
+        }
+
+        // 3. Filtro por Unidad de Negocio
+        if ($request->filled('business_unit_id')) {
+            $query->where('business_unit_id', $request->business_unit_id);
+        }
+
+        // 4. Filtro por Cuenta Contable (Busca dentro de los ítems del asiento)
+        if ($request->filled('account_id')) {
+            $query->whereHas('items', function ($q) use ($request) {
+                $q->where('accounting_account_id', $request->account_id);
+            });
+        }
+
+        // Paginamos de a 20 registros
+        $entries = $query->orderBy('entry_date', 'desc')
+                         ->orderBy('id', 'desc')
+                         ->paginate(20);
+
+        return response()->json($entries);
+    }
+
+    // Tu función store original sigue intacta acá abajo
     public function store(Request $request)
     {
         // 1. Validación básica de campos
