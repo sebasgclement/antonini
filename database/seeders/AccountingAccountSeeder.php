@@ -24,6 +24,11 @@ class AccountingAccountSeeder extends Seeder
         AccountingAccount::create(['code' => '1.1.1.02.001', 'name' => 'Banco Credicoop Cta.Cte.', 'level' => 5, 'parent_id' => $bancos->id, 'is_selectable' => true]);
         AccountingAccount::create(['code' => '1.1.1.02.002', 'name' => 'Nuevo Banco de Santa Fe Cta.Cte.', 'level' => 5, 'parent_id' => $bancos->id, 'is_selectable' => true]);
 
+        // 👈 NUEVO: BIENES DE CAMBIO (Mercaderías)
+        $bienesCambio = AccountingAccount::create(['code' => '1.1.2.00.000', 'name' => 'BIENES DE CAMBIO', 'level' => 3, 'parent_id' => $activoC->id, 'is_selectable' => false]);
+        AccountingAccount::create(['code' => '1.1.2.01.000', 'name' => 'Mercaderías', 'level' => 4, 'parent_id' => $bienesCambio->id, 'is_selectable' => true]);
+        AccountingAccount::create(['code' => '1.1.2.02.000', 'name' => 'Insumos y Repuestos', 'level' => 4, 'parent_id' => $bienesCambio->id, 'is_selectable' => true]);
+
         // --- 2. PASIVO ---
         $pasivo = AccountingAccount::create(['code' => '2.0.0.00.000', 'name' => 'PASIVO', 'level' => 1, 'is_selectable' => false]);
         $pasivoC = AccountingAccount::create(['code' => '2.1.0.00.000', 'name' => 'PASIVO CORRIENTE', 'level' => 2, 'parent_id' => $pasivo->id, 'is_selectable' => false]);
@@ -44,6 +49,7 @@ class AccountingAccountSeeder extends Seeder
         $ingresos = AccountingAccount::create(['code' => '4.1.0.00.000', 'name' => 'INGRESOS', 'level' => 2, 'parent_id' => $resultados->id, 'is_selectable' => false]);
         $ventas = AccountingAccount::create(['code' => '4.1.1.00.000', 'name' => 'VENTAS', 'level' => 3, 'parent_id' => $ingresos->id, 'is_selectable' => false]);
         AccountingAccount::create(['code' => '4.1.1.01.000', 'name' => 'Ventas de Mercaderías', 'level' => 4, 'parent_id' => $ventas->id, 'is_selectable' => true]);
+        AccountingAccount::create(['code' => '4.1.1.02.000', 'name' => 'Ventas de Servicios', 'level' => 4, 'parent_id' => $ventas->id, 'is_selectable' => true]); // Agregué esta también por si las dudas
 
         // GASTOS
         $gastos = AccountingAccount::create(['code' => '4.2.0.00.000', 'name' => 'GASTOS', 'level' => 2, 'parent_id' => $resultados->id, 'is_selectable' => false]);
@@ -60,8 +66,6 @@ class AccountingAccountSeeder extends Seeder
         AccountingAccount::create(['code' => '5.1.0.00.000', 'name' => 'Valores Recibidos en Caución', 'level' => 2, 'parent_id' => $orden->id, 'is_selectable' => true]);
     }
 
-
-    // Determina el nivel basado en los puntos (ej: 1.1.1.01.000)
     private function calculateLevel($code) {
         if (str_ends_with($code, '.0.0.00.000')) return 1;
         if (str_ends_with($code, '.0.00.000')) return 2;
@@ -70,7 +74,6 @@ class AccountingAccountSeeder extends Seeder
         return 5;
     }
 
-    // Lógica para encontrar al padre según la numeración
     private function findParentId($code) {
         return AccountingAccount::where('code', '!=', $code)
             ->where('code', 'LIKE', substr($code, 0, 3) . '%')

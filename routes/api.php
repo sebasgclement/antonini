@@ -12,18 +12,26 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\InfoAutoController;
 
-// Controladores Contabilidad (Ordenados)
+// Controladores Contabilidad
 use App\Http\Controllers\Accounting\EntryController;
 use App\Http\Controllers\Accounting\AccountingAccountController;
 use App\Http\Controllers\Accounting\BusinessUnitController;
 
-// Controladores API
+// Controladores API Generales
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\VehicleExpenseController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\ReservationPaymentController;
 use App\Http\Controllers\Api\DashboardController;
+
+// Controladores y Modelos de Catálogo (Productos y Proveedores)
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProviderController;
+use App\Models\Province;
+use App\Models\TaxResponsibility;
+use App\Models\Iva;
+
 
 // ================== 1. RUTAS PÚBLICAS ==================
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -79,8 +87,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
 });
 
 // ================== 4. ZONA CONTABLE (Accounting) ==================
-// Acceso: /api/accounting/...
-// ACÁ AGREGAMOS EL 'role:admin' PARA PROTEGER TODA LA CONTABILIDAD
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('accounting')->group(function () {
     
     // ✅ PLAN DE CUENTAS
@@ -88,11 +94,38 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('accounting')->group(f
     Route::post('/accounts', [AccountingAccountController::class, 'store']);
     Route::put('/accounts/{id}', [AccountingAccountController::class, 'update']);
 
-    // ✅ ASIENTOS (Acá corregimos el error del 405 Method Not Allowed)
+    // ✅ ASIENTOS
     Route::get('/entries', [EntryController::class, 'index']); 
     Route::post('/entries', [EntryController::class, 'store']);
 
     // ✅ UNIDADES DE NEGOCIO
     Route::get('/business-units', [BusinessUnitController::class, 'index']);
     Route::post('/business-units', [BusinessUnitController::class, 'store']);
+});
+
+// ================== 5. ZONA CATÁLOGO (Productos y Proveedores) ==================
+
+// 🟢 LECTURA GENERAL (Para que los vendedores puedan ver qué hay en stock para vender)
+Route::middleware('auth:sanctum')->group(function () {
+    
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{id}', [ProductController::class, 'show']);
+    // Rutas auxiliares para los selectores (Dropdowns del Frontend)
+    Route::get('/provinces', fn () => response()->json(Province::all()));
+    Route::get('/tax-responsibilities', fn () => response()->json(TaxResponsibility::all()));
+    Route::get('/ivas', fn () => response()->json(Iva::all()));
+});
+
+// 🔴 ADMINISTRACIÓN ESTRICTA (Creación de catálogos y acceso a proveedores)
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    
+    // Creación, edición y archivado de productos
+    Route::post('/products', [ProductController::class, 'store']); 
+    Route::put('/products/{id}', [ProductController::class, 'update']);
+    Route::delete('/products/{id}', [ProductController::class, 'destroy']); // 👈 ¡ESTA ES LA LÍNEA NUEVA!
+
+    // Proveedores completos (solo admin)
+    Route::get('/providers', [ProviderController::class, 'index']);
+    Route::post('/providers', [ProviderController::class, 'store']);
+    
 });
