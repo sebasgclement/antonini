@@ -32,6 +32,9 @@ use App\Models\Province;
 use App\Models\TaxResponsibility;
 use App\Models\Iva;
 
+//Controladores de facturación
+use App\Http\Controllers\Api\InvoiceController;
+
 
 // ================== 1. RUTAS PÚBLICAS ==================
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -68,7 +71,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('reservation-payments', ReservationPaymentController::class);
 
     Route::get('/dashboard/stats', [DashboardController::class, 'index']);
+
+    Route::post('/invoices', [InvoiceController::class, 'store']);
+    Route::get('/customers/{id}/current-account', [CurrentAccountController::class, 'index']);
+    Route::post('/customers/{id}/current-account/pay', [CurrentAccountController::class, 'storePayment']);
 }); 
+
 
 // ================== 3. ZONA EXCLUSIVA ADMIN ==================
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
@@ -105,24 +113,24 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('accounting')->group(f
 
 // ================== 5. ZONA CATÁLOGO (Productos y Proveedores) ==================
 
-// 🟢 LECTURA GENERAL (Para que los vendedores puedan ver qué hay en stock para vender)
+// 🟢 LECTURA GENERAL
 Route::middleware('auth:sanctum')->group(function () {
     
     Route::get('/products', [ProductController::class, 'index']);
     Route::get('/products/{id}', [ProductController::class, 'show']);
-    // Rutas auxiliares para los selectores (Dropdowns del Frontend)
+    Route::get('/business-units', [BusinessUnitController::class, 'index']);
     Route::get('/provinces', fn () => response()->json(Province::all()));
     Route::get('/tax-responsibilities', fn () => response()->json(TaxResponsibility::all()));
     Route::get('/ivas', fn () => response()->json(Iva::all()));
 });
 
-// 🔴 ADMINISTRACIÓN ESTRICTA (Creación de catálogos y acceso a proveedores)
+// 🔴 ADMINISTRACIÓN ESTRICTA
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     
     // Creación, edición y archivado de productos
     Route::post('/products', [ProductController::class, 'store']); 
     Route::put('/products/{id}', [ProductController::class, 'update']);
-    Route::delete('/products/{id}', [ProductController::class, 'destroy']); // 👈 ¡ESTA ES LA LÍNEA NUEVA!
+    Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 
     // Proveedores completos (solo admin)
     Route::get('/providers', [ProviderController::class, 'index']);

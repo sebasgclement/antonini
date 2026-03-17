@@ -46,7 +46,7 @@ class CustomerController extends Controller
                 });
             })
             ->latest()
-            ->paginate(20); // Paginamos de a 20 para que sea ágil
+            ->paginate(20);
 
         return response()->json(['ok' => true, 'data' => $rows]);
     }

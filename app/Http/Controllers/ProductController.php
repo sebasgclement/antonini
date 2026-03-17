@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     // Listar productos (con filtros y paginación)
+    // Listar productos (con filtros y paginación)
     public function index(Request $request)
     {
         $query = Product::with(['businessUnit', 'iva', 'accountingAccount', 'provider']);
@@ -31,6 +32,13 @@ class ProductController extends Controller
             });
         }
 
+        // 🔥 NUEVO: Si piden "all", devolvemos todo sin paginar
+        if ($request->boolean('all')) {
+            $products = $query->orderBy('description', 'asc')->get();
+            return response()->json($products);
+        }
+
+        // Si no piden "all", paginamos de a 20 (como estaba antes)
         $products = $query->orderBy('description', 'asc')->paginate(20);
 
         return response()->json($products);
@@ -64,7 +72,7 @@ class ProductController extends Controller
         ], 201);
     }
 
-    // 👈 NUEVO: Mostrar un producto específico para editarlo
+    
     public function show($id)
     {
         $product = Product::findOrFail($id);
@@ -77,7 +85,7 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
 
-        // Reutilizamos tus mismas reglas de validación
+        
         $validated = $request->validate([
             'type' => 'required|in:product,service',
             'business_unit_id' => 'required|exists:business_units,id',
