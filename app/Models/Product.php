@@ -10,12 +10,11 @@ class Product extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'type', // 'product' o 'service'
+        'type',
         'manufacturer_code', 
         'category', 
         'business_unit_id',
-        'description', 
-        'cost', 
+        'description',
         'multiplier_factor', 
         'sale_price',
         'iva_id', 
@@ -43,5 +42,10 @@ class Product extends Model
     public function provider()
     {
         return $this->belongsTo(Provider::class);
+    }
+
+    public function prices()
+    {
+        return $this->hasMany(ProductPrice::class);
     }
 }

@@ -9,17 +9,21 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up()
+public function up()
 {
     Schema::create('providers', function (Blueprint $table) {
         $table->id();
-        $table->string('cuit')->unique(); // Nro sin guiones - Unique 
-        $table->foreignId('tax_responsibility_id')->constrained('tax_responsibilities'); // Tipo_responsable 
-        $table->string('business_name'); // RazonSocial 
-        $table->string('iibb')->nullable(); // IIBB 
-        $table->foreignId('business_unit_id')->constrained('business_units'); // Unidad de Negocio 
+        $table->string('cuit')->unique(); // Nro sin guiones - Unique [cite: 2]
+        $table->foreignId('tax_responsibility_id')->constrained('tax_responsibilities'); // Tipo_responsable [cite: 2]
+        $table->string('business_name'); // RazonSocial [cite: 2]
+        $table->string('iibb')->nullable(); // IIBB [cite: 2]
+        $table->foreignId('business_unit_id')->constrained('business_units'); // Unidad de Negocio [cite: 2]
+        
+        // --- LO NUEVO PARA EL TALLER ---
+        $table->decimal('temporary_increase', 5, 2)->default(0); // Para clavarle un +6% preventivo hasta que llegue la lista nueva
+        
         $table->timestamps();
-        $table->softDeletes(); // Para no borrar proveedores definitivamente si tienen facturas
+        $table->softDeletes(); // Para no borrar proveedores definitivamente si tienen facturas [cite: 2, 3]
     });
 }
 
