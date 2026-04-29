@@ -8,7 +8,6 @@ use Maatwebsite\Excel\Row;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Schema;
 
 class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReading
 {
@@ -18,7 +17,6 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
     protected $ivaId;
     protected $accountingAccountId;
     protected $category;
-    protected $listCreated = false;
 
     // Variables para el buscador inteligente
     protected $headersFound = false;
@@ -26,7 +24,6 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
     protected $colDesc = null;
     protected $colPrecio = null;
 
-    
     public function __construct($providerId, $priceListId, $businessUnitId, $ivaId, $accountingAccountId, $category = null)
     {
         $this->providerId = $providerId;
@@ -49,25 +46,15 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
 
     public function onRow(Row $row)
     {
-        // 1. Aseguramos la existencia de la lista de precios (Salvavidas por si no existe en la DB)
-        if (!$this->listCreated) {
-            Schema::disableForeignKeyConstraints();
-            PriceList::updateOrCreate(
-                ['id' => $this->priceListId],
-                ['name' => 'Lista de Precios ' . $this->priceListId]
-            );
-            $this->listCreated = true;
-        }
-
         $rowData = $row->toArray();
 
-        // 2. Si todavía no encontramos las cabeceras, escaneamos esta fila
+        // 1. Escaneamos cabeceras
         if (!$this->headersFound) {
             $this->escanearCabeceras($rowData);
             return;
         }
 
-        // 3. Procesamiento de datos seguro
+        // 2. Procesamiento seguro
         if ($this->colCodigo === null || $this->colPrecio === null) {
             return;
         }
@@ -86,30 +73,45 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
 
         if ($precioFinal <= 0) return;
 
-        // 4. PREPARAMOS LOS DATOS BASE DEL PRODUCTO
+        // 3. PREPARAMOS DATOS BASE (Configuración por lote del formulario)
         $updateData = [
             'description' => $descripcion ?: 'Producto importado',
-            'type' => 'product', 
+            'type' => 'product',
             'business_unit_id' => $this->businessUnitId,
             'iva_id' => $this->ivaId,
             'accounting_account_id' => $this->accountingAccountId,
             'category' => $this->category,
         ];
 
-        // REGLA DE ORO: Solo pisamos el precio principal de venta general si es la Lista 1
-        if ($this->priceListId == 1) {
-            $updateData['sale_price'] = $precioFinal;
-            $updateData['last_price_update'] = Carbon::now();
+        // 4. LÓGICA INTELIGENTE DE PRECIOS
+        // Buscamos si el producto ya existe
+        $productoExistente = Product::where('manufacturer_code', $codigo)
+                                    ->where('provider_id', $this->providerId)
+                                    ->first();
+
+        if (!$productoExistente) {
+            // Si es un producto NUEVO y estamos importando la Lista 1, le ponemos el precio base.
+            // Si es la Lista 2 (Federación), el precio base general queda en 0 (porque no lo conocemos)
+            // pero se guardará correctamente en la tabla de listas.
+            $updateData['sale_price'] = ($this->priceListId == 1) ? $precioFinal : 0;
+            if ($this->priceListId == 1) {
+                $updateData['last_price_update'] = Carbon::now();
+            }
+        } else {
+            // Si el producto YA EXISTE, SOLO pisamos su precio principal si es la Lista 1
+            if ($this->priceListId == 1) {
+                $updateData['sale_price'] = $precioFinal;
+                $updateData['last_price_update'] = Carbon::now();
+            }
         }
 
-        // Guardamos o actualizamos el producto
+        // Guardamos el producto principal
         $product = Product::updateOrCreate(
             ['manufacturer_code' => $codigo, 'provider_id' => $this->providerId],
             $updateData
         );
 
-        // 5. GUARDAMOS EL PRECIO MULTILISTA
-        // Esto siempre se ejecuta y asocia el precio a la lista correspondiente (1, 2, 3, etc.)
+        // Guardamos el precio en la tabla Multilistas (Esto funciona siempre, sea la lista 1, 2, 3 o 100)
         ProductPrice::updateOrCreate(
             ['product_id' => $product->id, 'price_list_id' => $this->priceListId],
             ['price' => $precioFinal]
@@ -117,7 +119,7 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
     }
 
     /**
-     * Función que actúa como "humano" buscando las columnas
+     * Buscador de columnas
      */
     private function escanearCabeceras(array $row)
     {
@@ -128,7 +130,6 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
         foreach ($row as $index => $cell) {
             if (empty($cell)) continue;
 
-            // Limpiamos la celda: pasamos a minúsculas y quitamos tildes para no fallar
             $texto = strtolower(trim((string)$cell));
             $texto = str_replace(
                 ['á', 'é', 'í', 'ó', 'ú', 'ä', 'ë', 'ï', 'ö', 'ü'], 
@@ -136,7 +137,6 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
                 $texto
             );
 
-            // Buscamos sinónimos
             if ($tempCodigo === null && (str_contains($texto, 'codigo') || str_contains($texto, 'cod') || str_contains($texto, 'articulo'))) {
                 $tempCodigo = $index;
             } 
@@ -148,7 +148,6 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
             }
         }
 
-        // Si encontró "código" y "precio", asume que ES la cabecera
         if ($tempCodigo !== null && $tempPrecio !== null) {
             $this->colCodigo = $tempCodigo;
             $this->colPrecio = $tempPrecio;

@@ -36,7 +36,7 @@ class ProductController extends Controller
         if ($request->filled('price_list_id')) {
             $priceListId = $request->price_list_id;
 
-            // 1. Obligamos a que SOLO traiga productos que existan en esta lista de precios
+            // Obligamos a que SOLO traiga productos de esta lista
             $query->whereExists(function ($q) use ($priceListId) {
                 $q->select(DB::raw(1))
                   ->from('product_prices')
@@ -44,14 +44,25 @@ class ProductController extends Controller
                   ->where('product_prices.price_list_id', $priceListId);
             });
 
-            // 2. Creamos una columna "virtual" llamada custom_price con el precio de esa lista
+            // Traemos ese precio en específico
             $query->addSelect([
                 'custom_price' => ProductPrice::select('price')
                     ->whereColumn('product_id', 'products.id')
                     ->where('price_list_id', $priceListId)
                     ->take(1)
             ]);
+        } else {
+            // NUEVO: Si no se filtró por lista, traemos por defecto el precio 
+            // de la lista más antigua (que generalmente es el Precio Base de la Lista 1)
+            // para evitar que el catálogo muestre $0.
+            $query->addSelect([
+                'custom_price' => ProductPrice::select('price')
+                    ->whereColumn('product_id', 'products.id')
+                    ->orderBy('price_list_id', 'asc') 
+                    ->take(1)
+            ]);
         }
+        // ------------------------------------------
         // ------------------------------------------
 
         // Búsqueda por descripción o código

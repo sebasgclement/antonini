@@ -31,7 +31,7 @@ class ImportController extends Controller
             $businessUnitId = $request->input('business_unit_id');
             $ivaId = $request->input('iva_id');
             $accountingAccountId = $request->input('accounting_account_id');
-            $category = $request->input('category'); // Puede venir vacío
+            $category = $request->input('category');
 
             
             Excel::import(
