@@ -7,6 +7,7 @@ services:
         container_name: antonini-app
         volumes:
             - .:/var/www
+            - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini 
         networks:
             - antonini-network
 
@@ -18,8 +19,11 @@ services:
         volumes:
             - .:/var/www
             - ./.docker/nginx/conf.d:/etc/nginx/conf.d
+            # EL NGINX CONF PARA EL ERROR 413
+            - ./nginx-custom.conf:/etc/nginx/conf.d/custom.conf 
         networks:
             - antonini-network
+    # ... resto igual (db, networks)
 
     db:
         image: mysql:8.0

@@ -3,15 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductPrice; // <-- IMPORTANTE: Agregamos esto
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
     // Listar productos (con filtros y paginación)
-    // Listar productos (con filtros y paginación)
     public function index(Request $request)
     {
-        $query = Product::with(['businessUnit', 'iva', 'accountingAccount', 'provider']);
+        // IMPORTANTE: Le decimos select('products.*') para que no pierda las columnas base 
+        // cuando le inyectemos el precio personalizado más abajo.
+        $query = Product::with(['businessUnit', 'iva', 'accountingAccount', 'provider'])
+                        ->select('products.*');
 
         // Filtro por tipo (producto o servicio)
         if ($request->filled('type')) {
@@ -23,22 +27,51 @@ class ProductController extends Controller
             $query->where('business_unit_id', $request->business_unit_id);
         }
 
+        // Filtro por proveedor
+        if ($request->filled('provider_id')) {
+            $query->where('provider_id', $request->provider_id);
+        }
+
+        // --- MAGIA: FILTRO POR LISTA DE PRECIOS ---
+        if ($request->filled('price_list_id')) {
+            $priceListId = $request->price_list_id;
+
+            // 1. Obligamos a que SOLO traiga productos que existan en esta lista de precios
+            $query->whereExists(function ($q) use ($priceListId) {
+                $q->select(DB::raw(1))
+                  ->from('product_prices')
+                  ->whereColumn('product_prices.product_id', 'products.id')
+                  ->where('product_prices.price_list_id', $priceListId);
+            });
+
+            // 2. Creamos una columna "virtual" llamada custom_price con el precio de esa lista
+            $query->addSelect([
+                'custom_price' => ProductPrice::select('price')
+                    ->whereColumn('product_id', 'products.id')
+                    ->where('price_list_id', $priceListId)
+                    ->take(1)
+            ]);
+        }
+        // ------------------------------------------
+
         // Búsqueda por descripción o código
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('description', 'LIKE', "%{$search}%")
-                  ->orWhere('manufacturer_code', 'LIKE', "%{$search}%");
+                  ->orWhere('manufacturer_code', 'LIKE', "%{$search}%")
+                  ->orWhere('eurocode', 'LIKE', "%{$search}%")
+                  ->orWhere('nags', 'LIKE', "%{$search}%");
             });
         }
 
-        // 🔥 NUEVO: Si piden "all", devolvemos todo sin paginar
+        // Si piden "all", devolvemos todo sin paginar
         if ($request->boolean('all')) {
             $products = $query->orderBy('description', 'asc')->get();
             return response()->json($products);
         }
 
-        // Si no piden "all", paginamos de a 20 (como estaba antes)
+        // Paginación
         $products = $query->orderBy('description', 'asc')->paginate(20);
 
         return response()->json($products);
@@ -72,7 +105,6 @@ class ProductController extends Controller
         ], 201);
     }
 
-    
     public function show($id)
     {
         $product = Product::findOrFail($id);
@@ -80,12 +112,10 @@ class ProductController extends Controller
         return response()->json($product);
     }
 
-    // 👈 NUEVO: Actualizar un producto existente
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
 
-        
         $validated = $request->validate([
             'type' => 'required|in:product,service',
             'business_unit_id' => 'required|exists:business_units,id',

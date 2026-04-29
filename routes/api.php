@@ -16,6 +16,7 @@ use App\Http\Controllers\InfoAutoController;
 use App\Http\Controllers\Accounting\EntryController;
 use App\Http\Controllers\Accounting\AccountingAccountController;
 use App\Http\Controllers\Accounting\BusinessUnitController;
+use App\Http\Controllers\ImportController;
 
 // Controladores API Generales
 use App\Http\Controllers\Api\VehicleController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\Api\DashboardController;
 // Controladores y Modelos de Catálogo (Productos y Proveedores)
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProviderController;
+use App\Http\Controllers\PriceListController;
 use App\Models\Province;
 use App\Models\TaxResponsibility;
 use App\Models\Iva;
@@ -135,5 +137,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // Proveedores completos (solo admin)
     Route::get('/providers', [ProviderController::class, 'index']);
     Route::post('/providers', [ProviderController::class, 'store']);
+
+    //Carga de lista de precios
+    Route::post('/importar-lista', [ImportController::class, 'import']);
+    Route::get('/price-lists', [PriceListController::class, 'index']);
+    Route::post('/price-lists', [PriceListController::class, 'store']);
     
 });

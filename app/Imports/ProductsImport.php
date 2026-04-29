@@ -2,102 +2,159 @@
 
 namespace App\Imports;
 
-use App\Models\Product;
-use App\Models\ProductPrice;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\ToCollection;
+use App\Models\{Product, ProductPrice, PriceList};
+use Maatwebsite\Excel\Concerns\OnEachRow;
+use Maatwebsite\Excel\Row;
+use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Schema;
 
-class ProductsImport implements ToCollection
+class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReading
 {
     protected $providerId;
-    protected $businessUnitId;
     protected $priceListId;
+    protected $businessUnitId;
+    protected $ivaId;
+    protected $accountingAccountId;
+    protected $category;
+    protected $listCreated = false;
 
-    public function __construct($providerId, $priceListId, $businessUnitId = 1)
+    // Variables para el buscador inteligente
+    protected $headersFound = false;
+    protected $colCodigo = null;
+    protected $colDesc = null;
+    protected $colPrecio = null;
+
+    
+    public function __construct($providerId, $priceListId, $businessUnitId, $ivaId, $accountingAccountId, $category = null)
     {
         $this->providerId = $providerId;
         $this->priceListId = $priceListId;
         $this->businessUnitId = $businessUnitId;
+        $this->ivaId = $ivaId;
+        $this->accountingAccountId = $accountingAccountId;
+        $this->category = $category;
     }
 
-    public function collection(Collection $rows)
+    public function getCsvSettings(): array
     {
-        $indexes = [
-            'codigo' => null, 'descripcion' => null, 'eurocode' => null, 'nags' => null, 'precio' => null,
+        return ['delimiter' => ';'];
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
+    }
+
+    public function onRow(Row $row)
+    {
+        // 1. Aseguramos la existencia de la lista de precios (Salvavidas por si no existe en la DB)
+        if (!$this->listCreated) {
+            Schema::disableForeignKeyConstraints();
+            PriceList::updateOrCreate(
+                ['id' => $this->priceListId],
+                ['name' => 'Lista de Precios ' . $this->priceListId]
+            );
+            $this->listCreated = true;
+        }
+
+        $rowData = $row->toArray();
+
+        // 2. Si todavía no encontramos las cabeceras, escaneamos esta fila
+        if (!$this->headersFound) {
+            $this->escanearCabeceras($rowData);
+            return;
+        }
+
+        // 3. Procesamiento de datos seguro
+        if ($this->colCodigo === null || $this->colPrecio === null) {
+            return;
+        }
+
+        $codigo      = trim((string)($rowData[$this->colCodigo] ?? ''));
+        $descripcion = trim((string)($rowData[$this->colDesc] ?? ''));
+        $precioRaw   = trim((string)($rowData[$this->colPrecio] ?? '0'));
+
+        if (empty($codigo)) {
+            return;
+        }
+
+        // LIMPIEZA DE PRECIO
+        $limpio = preg_replace('/[^\d,]/', '', $precioRaw);
+        $precioFinal = floatval(str_replace(',', '.', $limpio));
+
+        if ($precioFinal <= 0) return;
+
+        // 4. PREPARAMOS LOS DATOS BASE DEL PRODUCTO
+        $updateData = [
+            'description' => $descripcion ?: 'Producto importado',
+            'type' => 'product', 
+            'business_unit_id' => $this->businessUnitId,
+            'iva_id' => $this->ivaId,
+            'accounting_account_id' => $this->accountingAccountId,
+            'category' => $this->category,
         ];
-        
-        $readingProducts = false;
 
-        foreach ($rows as $row) {
-            $rowValues = $row->toArray();
-            $rowString = strtolower(implode(' ', array_filter($rowValues)));
-            
-            // RADAR de Columnas (Busca coincidencias para activar la lectura)
-            if (!$readingProducts && 
-                (strpos($rowString, 'cod') !== false || strpos($rowString, 'material') !== false) && 
-                (strpos($rowString, 'prec') !== false || strpos($rowString, 'neto') !== false)) {
-                
-                foreach ($rowValues as $index => $value) {
-                    if (!$value) continue;
-                    $val = strtolower(trim($value));
-                    
-                    if (strpos($val, 'cod') !== false || strpos($val, 'mat') !== false) $indexes['codigo'] = $index;
-                    if (strpos($val, 'descrip') !== false) $indexes['descripcion'] = $index;
-                    if (strpos($val, 'euro') !== false) $indexes['eurocode'] = $index;
-                    if (strpos($val, 'nags') !== false) $indexes['nags'] = $index;
-                    if (strpos($val, 'prec') !== false || strpos($val, 'neto') !== false) $indexes['precio'] = $index;
-                }
-                $readingProducts = true;
-                continue;
+        // REGLA DE ORO: Solo pisamos el precio principal de venta general si es la Lista 1
+        if ($this->priceListId == 1) {
+            $updateData['sale_price'] = $precioFinal;
+            $updateData['last_price_update'] = Carbon::now();
+        }
+
+        // Guardamos o actualizamos el producto
+        $product = Product::updateOrCreate(
+            ['manufacturer_code' => $codigo, 'provider_id' => $this->providerId],
+            $updateData
+        );
+
+        // 5. GUARDAMOS EL PRECIO MULTILISTA
+        // Esto siempre se ejecuta y asocia el precio a la lista correspondiente (1, 2, 3, etc.)
+        ProductPrice::updateOrCreate(
+            ['product_id' => $product->id, 'price_list_id' => $this->priceListId],
+            ['price' => $precioFinal]
+        );
+    }
+
+    /**
+     * Función que actúa como "humano" buscando las columnas
+     */
+    private function escanearCabeceras(array $row)
+    {
+        $tempCodigo = null;
+        $tempDesc   = null;
+        $tempPrecio = null;
+
+        foreach ($row as $index => $cell) {
+            if (empty($cell)) continue;
+
+            // Limpiamos la celda: pasamos a minúsculas y quitamos tildes para no fallar
+            $texto = strtolower(trim((string)$cell));
+            $texto = str_replace(
+                ['á', 'é', 'í', 'ó', 'ú', 'ä', 'ë', 'ï', 'ö', 'ü'], 
+                ['a', 'e', 'i', 'o', 'u', 'a', 'e', 'i', 'o', 'u'], 
+                $texto
+            );
+
+            // Buscamos sinónimos
+            if ($tempCodigo === null && (str_contains($texto, 'codigo') || str_contains($texto, 'cod') || str_contains($texto, 'articulo'))) {
+                $tempCodigo = $index;
+            } 
+            elseif ($tempDesc === null && (str_contains($texto, 'descrip') || str_contains($texto, 'detalle') || str_contains($texto, 'producto'))) {
+                $tempDesc = $index;
+            } 
+            elseif ($tempPrecio === null && (str_contains($texto, 'precio') || str_contains($texto, 'importe') || str_contains($texto, 'venta') || str_contains($texto, 'neto'))) {
+                $tempPrecio = $index;
             }
+        }
 
-            // Si no encontró las columnas o la fila está vacía, sigue de largo
-            if (!$readingProducts || $indexes['codigo'] === null || $indexes['precio'] === null) continue;
-
-            $codigo = isset($row[$indexes['codigo']]) ? trim($row[$indexes['codigo']]) : null;
-            $precioRaw = isset($row[$indexes['precio']]) ? $row[$indexes['precio']] : null;
-
-            // Limpieza básica de fila
-            if (!$codigo || strtolower($codigo) === 'codigo' || strtolower($codigo) === 'código') continue;
+        // Si encontró "código" y "precio", asume que ES la cabecera
+        if ($tempCodigo !== null && $tempPrecio !== null) {
+            $this->colCodigo = $tempCodigo;
+            $this->colPrecio = $tempPrecio;
+            $this->colDesc   = $tempDesc !== null ? $tempDesc : $tempCodigo;
             
-            // Convertimos el precio a número puro
-            $precioLimpio = floatval(preg_replace('/[^0-9.]/', '', str_replace(',', '.', (string)$precioRaw)));
-
-            if ($precioLimpio <= 0) continue;
-
-            $eurocode = ($indexes['eurocode'] !== null && isset($row[$indexes['eurocode']])) ? trim($row[$indexes['eurocode']]) : null;
-            $nags = ($indexes['nags'] !== null && isset($row[$indexes['nags']])) ? trim($row[$indexes['nags']]) : null;
-            $descripcion = isset($row[$indexes['descripcion']]) ? trim($row[$indexes['descripcion']]) : 'Sin descripción';
-
-            // 1. Guardamos o actualizamos el producto
-            $product = Product::updateOrCreate(
-                [
-                    'manufacturer_code' => $codigo,
-                    'provider_id' => $this->providerId,
-                ],
-                [
-                    'description' => $descripcion,
-                    'eurocode' => $eurocode,
-                    'nags' => $nags,
-                    'type' => 'product',
-                    'business_unit_id' => $this->businessUnitId,
-                    'iva_id' => 1, 
-                    'accounting_account_id' => 1, 
-                    'last_price_update' => Carbon::now(),
-                ]
-            );
-
-            // 2. Guardamos o actualizamos el precio en la lista específica
-            ProductPrice::updateOrCreate(
-                [
-                    'product_id' => $product->id,
-                    'price_list_id' => $this->priceListId,
-                ],
-                [
-                    'price' => $precioLimpio,
-                ]
-            );
+            $this->headersFound = true; 
         }
     }
 }

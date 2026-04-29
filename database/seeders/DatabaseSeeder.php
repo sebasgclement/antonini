@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
             VehicleExpenseSeeder::class, // 3. Gastos asociados a esos vehículos
             PaymentMethodSeeder::class,  // 4. Métodos de pago actualizados
             AccountingAccountSeeder::class,
+            TaxAndIvaSeeder::class,
+
         ]);
     }
 }
