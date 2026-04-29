@@ -142,5 +142,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/importar-lista', [ImportController::class, 'import']);
     Route::get('/price-lists', [PriceListController::class, 'index']);
     Route::post('/price-lists', [PriceListController::class, 'store']);
+
+    //Orden de servicio
+    Route::apiResource('service-orders', ServiceOrderController::class);
     
 });
