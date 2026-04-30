@@ -11,6 +11,7 @@ use App\Http\Controllers\VehicleBrandController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\InfoAutoController;
+use App\Http\Controllers\ServiceOrderController;
 
 // Controladores Contabilidad
 use App\Http\Controllers\Accounting\EntryController;
@@ -77,6 +78,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/invoices', [InvoiceController::class, 'store']);
     Route::get('/customers/{id}/current-account', [CurrentAccountController::class, 'index']);
     Route::post('/customers/{id}/current-account/pay', [CurrentAccountController::class, 'storePayment']);
+
+    //Orden de servicio
+    Route::apiResource('service-orders', ServiceOrderController::class);
 }); 
 
 
@@ -143,7 +147,5 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/price-lists', [PriceListController::class, 'index']);
     Route::post('/price-lists', [PriceListController::class, 'store']);
 
-    //Orden de servicio
-    Route::apiResource('service-orders', ServiceOrderController::class);
     
 });

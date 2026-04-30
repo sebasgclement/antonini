@@ -17,7 +17,7 @@ class CustomerStoreRequest extends FormRequest
             'seller_id'  => 'nullable|exists:users,id',
 
             'doc_type'   => ['nullable','string','max:20'],
-            'doc_number' => ['required','string','max:20','unique:customers,doc_number'],
+            'doc_number' => ['nullable','string','max:20','unique:customers,doc_number'],
             'cuit'       => ['nullable','string','max:20','unique:customers,cuit'],
             
             'marital_status' => ['nullable','string','max:20'],
