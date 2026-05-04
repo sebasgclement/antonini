@@ -2,7 +2,7 @@
 
 return [
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'broadcasting/*',],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'broadcasting/*', 'login', 'logout'],
 
     'allowed_methods' => ['*'],
 
@@ -11,7 +11,9 @@ return [
         'http://127.0.0.1:5173',
         'http://localhost:5174',
         'http://127.0.0.1:5174',
-        'https://antoniniautomotores.com.ar',      // 👈 PRODUCCIÓN (Fundamental)
+	'http://134.122.7.86',
+	'http://134.122.7.86:8080',
+        'https://antoniniautomotores.com.ar',
         'https://www.antoniniautomotores.com.ar',
     ],
 
