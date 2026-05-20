@@ -18,8 +18,8 @@ class ReportController extends Controller
     {
         try {
             $query = Vehicle::query()
-                ->selectRaw('YEAR(sold_at) as year')
-                ->selectRaw('MONTH(sold_at) as month')
+                ->selectRaw('YEAR(COALESCE(sold_at, updated_at)) as year')
+                ->selectRaw('MONTH(COALESCE(sold_at, updated_at)) as month')
                 ->selectRaw('COUNT(*) as cantidad')
                 ->selectRaw('SUM(price) as total')
                 ->selectRaw('SUM(price - COALESCE(reference_price, 0)) as ganancia')
@@ -31,16 +31,16 @@ class ReportController extends Controller
             }
 
             if ($req->filled('start_date') && $req->filled('end_date')) {
-                $query->whereBetween(DB::raw('DATE(sold_at)'), [$req->start_date, $req->end_date]);
+                $query->whereBetween(DB::raw('DATE(COALESCE(sold_at, updated_at))'), [$req->start_date, $req->end_date]);
             } elseif ($req->filled('year')) {
-                $query->whereYear('sold_at', $req->year);
+                $query->whereYear(DB::raw('COALESCE(sold_at, updated_at)'), $req->year);
             } else {
-                $query->whereYear('sold_at', date('Y'));
+                $query->whereYear(DB::raw('COALESCE(sold_at, updated_at)'), date('Y'));
             }
 
             $ventas = $query
-                ->groupByRaw('YEAR(sold_at), MONTH(sold_at)')
-                ->orderByRaw('YEAR(sold_at) desc, MONTH(sold_at)')
+                ->groupByRaw('YEAR(COALESCE(sold_at, updated_at)), MONTH(COALESCE(sold_at, updated_at))')
+                ->orderByRaw('YEAR(COALESCE(sold_at, updated_at)) desc, MONTH(COALESCE(sold_at, updated_at))')
                 ->get();
 
             return response()->json(['ok' => true, 'data' => $ventas]);
@@ -117,6 +117,20 @@ class ReportController extends Controller
     }
 
     /**
+     * 🚗 Distribución del stock por estado
+     */
+    public function stock()
+    {
+        $counts = Vehicle::query()
+            ->whereNotNull('status')
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return response()->json(['ok' => true, 'data' => $counts]);
+    }
+
+    /**
      * 🧾 Gastos de taller por mes
      */
     public function expensesMonthly(Request $req)
@@ -151,14 +165,14 @@ class ReportController extends Controller
 
         $query = Vehicle::with('customer')
             ->where('status', 'vendido')
-            ->whereYear('sold_at', $year);
+            ->whereYear(DB::raw('COALESCE(sold_at, updated_at)'), $year);
 
         if ($startDate) {
-            $query->whereDate('sold_at', '>=', $startDate);
+            $query->where(DB::raw('DATE(COALESCE(sold_at, updated_at))'), '>=', $startDate);
         }
 
         if ($endDate) {
-            $query->whereDate('sold_at', '<=', $endDate);
+            $query->where(DB::raw('DATE(COALESCE(sold_at, updated_at))'), '<=', $endDate);
         }
 
         $vehiculos = $query->orderBy('sold_at', 'asc')->get();
@@ -172,7 +186,7 @@ class ReportController extends Controller
             'totalVentas' => $totalVentas,
             'totalGanancia' => $totalGanancia,
             'seller' => '—',
-        ])->setPaper('a4', 'portrait');
+        ])->setPaper('a4', 'landscape');
 
         return $pdf->download("reporte_ventas_{$year}.pdf");
     }

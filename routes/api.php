@@ -93,8 +93,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::prefix('reports')->group(function () {
         Route::get('/sales/monthly',    [ReportController::class, 'salesMonthly']);
         Route::get('/sales/by-seller',  [ReportController::class, 'salesBySeller']);
+        Route::get('/sales/by-payment', [ReportController::class, 'salesByPayment']);
         Route::get('/expenses/monthly', [ReportController::class, 'expensesMonthly']);
         Route::get('/sales/export',     [ReportController::class, 'exportSalesReport'])->name('reports.sales.export');
+        Route::get('/stock',            [ReportController::class, 'stock']);
     });
 
     Route::apiResource('payment-methods', PaymentMethodController::class)->except(['index']);

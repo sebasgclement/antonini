@@ -80,7 +80,7 @@
       @forelse($vehiculos as $v)
       <tr>
         <td>{{ $v->id }}</td>
-        <td>{{ $v->updated_at ? date('d/m/Y', strtotime($v->updated_at)) : '-' }}</td>
+        <td>{{ $v->sold_at ? date('d/m/Y', strtotime($v->sold_at)) : ($v->updated_at ? date('d/m/Y', strtotime($v->updated_at)) : '-') }}</td>
         <td>{{ $v->brand }}</td>
         <td>{{ $v->model }}</td>
         <td>{{ $v->year }}</td>
