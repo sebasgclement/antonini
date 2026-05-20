@@ -76,8 +76,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'index']);
 
     Route::post('/invoices', [InvoiceController::class, 'store']);
-    Route::get('/customers/{id}/current-account', [CurrentAccountController::class, 'index']);
-    Route::post('/customers/{id}/current-account/pay', [CurrentAccountController::class, 'storePayment']);
+//     Route::get('/customers/{id}/current-account', [CurrentAccountController::class, 'index']);
+//     Route::post('/customers/{id}/current-account/pay', [CurrentAccountController::class, 'storePayment']);
 
     //Orden de servicio
     Route::apiResource('service-orders', ServiceOrderController::class);
@@ -151,3 +151,4 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
     
 });
+Route::get('/app/login', function() { return response()->json(['error' => 'Unauthenticated', 'message' => 'Por favor, inicia sesión desde el frontend.'], 401); })->name('login');
