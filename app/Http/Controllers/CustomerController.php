@@ -6,6 +6,8 @@ use App\Models\Customer;
 use App\Models\CustomerEvent;
 use App\Models\Reservation;
 use App\Models\Vehicle;
+use App\Models\Invoice;
+use App\Models\CurrentAccount;
 use Illuminate\Http\Request;
 use App\Http\Requests\CustomerStoreRequest;
 use App\Http\Requests\CustomerUpdateRequest;
@@ -132,6 +134,14 @@ class CustomerController extends Controller
     {
         if (Reservation::where('customer_id', $customer->id)->exists() || Vehicle::where('customer_id', $customer->id)->exists()) {
             return response()->json(['ok' => false, 'message' => 'El cliente tiene operaciones o vehículos vinculados.'], 409);
+        }
+
+        if (Invoice::where('customer_id', $customer->id)->exists()) {
+            return response()->json(['ok' => false, 'message' => 'El cliente tiene facturas registradas y no puede eliminarse.'], 409);
+        }
+
+        if (CurrentAccount::where('customer_id', $customer->id)->exists()) {
+            return response()->json(['ok' => false, 'message' => 'El cliente tiene movimientos en cuenta corriente y no puede eliminarse.'], 409);
         }
 
         if ($customer->dni_front) Storage::disk('public')->delete($customer->dni_front);

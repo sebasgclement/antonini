@@ -97,14 +97,13 @@ class ProductController extends Controller
             'description' => 'required|string|max:255',
             'manufacturer_code' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:255',
-            'cost' => 'required|numeric|min:0',
             'multiplier_factor' => 'required|numeric|min:0',
             'sale_price' => 'required|numeric|min:0',
             'iva_id' => 'required|exists:ivas,id',
             'accounting_account_id' => 'required|exists:accounting_accounts,id',
             'provider_id' => 'nullable|exists:providers,id',
-            // Si es producto, pedimos cantidad. Si es servicio, lo dejamos pasar vacio.
-            'quantity' => 'required_if:type,product|nullable|integer|min:0',
+            'stock_official' => 'required_if:type,product|nullable|integer|min:0',
+            'stock_internal' => 'nullable|integer|min:0',
             'reorder_point' => 'required_if:type,product|nullable|integer|min:0',
         ]);
 
@@ -118,9 +117,15 @@ class ProductController extends Controller
 
     public function show($id)
     {
-        $product = Product::findOrFail($id);
-        
+        $product = Product::with(['businessUnit', 'iva', 'accountingAccount', 'provider'])->findOrFail($id);
         return response()->json($product);
+    }
+
+    public function destroy($id)
+    {
+        $product = Product::findOrFail($id);
+        $product->delete();
+        return response()->json(['message' => 'Eliminado correctamente']);
     }
 
     public function update(Request $request, $id)
@@ -133,13 +138,13 @@ class ProductController extends Controller
             'description' => 'required|string|max:255',
             'manufacturer_code' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:255',
-            'cost' => 'required|numeric|min:0',
             'multiplier_factor' => 'required|numeric|min:0',
             'sale_price' => 'required|numeric|min:0',
             'iva_id' => 'required|exists:ivas,id',
             'accounting_account_id' => 'required|exists:accounting_accounts,id',
             'provider_id' => 'nullable|exists:providers,id',
-            'quantity' => 'required_if:type,product|nullable|integer|min:0',
+            'stock_official' => 'required_if:type,product|nullable|integer|min:0',
+            'stock_internal' => 'nullable|integer|min:0',
             'reorder_point' => 'required_if:type,product|nullable|integer|min:0',
         ]);
 

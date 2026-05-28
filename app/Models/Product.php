@@ -11,16 +11,17 @@ class Product extends Model
 
     protected $fillable = [
         'type',
-        'manufacturer_code', 
-        'category', 
+        'manufacturer_code',
+        'category',
         'business_unit_id',
         'description',
-        'multiplier_factor', 
+        'multiplier_factor',
         'sale_price',
-        'iva_id', 
-        'accounting_account_id', 
+        'iva_id',
+        'accounting_account_id',
         'provider_id',
-        'quantity', 
+        'stock_official',
+        'stock_internal',
         'reorder_point'
     ];
 

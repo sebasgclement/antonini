@@ -76,12 +76,10 @@ class ServiceOrderController extends Controller
                     'subtotal'         => $subtotalItem,
                 ]);
 
-                // MAGIA: Si el ítem es un Producto del catálogo, descontamos el stock
                 if (!empty($item['product_id'])) {
                     $product = Product::find($item['product_id']);
-                    if ($product) {
-                        // Descontamos stock (Asegurate de tener una columna stock en tu tabla products)
-                        // $product->decrement('stock', $item['quantity']); 
+                    if ($product && $product->type === 'product') {
+                        $product->decrement('stock_official', $item['quantity']);
                     }
                 }
             }

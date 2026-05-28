@@ -50,9 +50,10 @@ class InvoiceController extends Controller
                         'subtotal'    => $lineTotal,
                     ];
 
-                    // Si es un producto físico, le restamos el stock
+                    // Si es un producto físico, restamos el stock según tipo de comprobante
                     if ($product->type === 'product') {
-                        $product->decrement('quantity', $quantity);
+                        $stockField = ($request->type === 'X') ? 'stock_internal' : 'stock_official';
+                        $product->decrement($stockField, $quantity);
                     }
                 }
 
@@ -61,12 +62,13 @@ class InvoiceController extends Controller
                 $total = $subtotal + $ivaAmount;
 
                 // 4. Creamos la cabecera de la Factura
+                $lastNumber = Invoice::withTrashed()->lockForUpdate()->max('id') ?? 0;
                 $invoice = Invoice::create([
                     'customer_id'      => $request->customer_id,
                     'business_unit_id' => $request->business_unit_id,
-                    'user_id'          => auth()->id(), // El vendedor logueado
+                    'user_id'          => auth()->id(),
                     'type'             => $request->type,
-                    'number'           => '0001-' . str_pad(Invoice::count() + 1, 8, '0', STR_PAD_LEFT), 
+                    'number'           => '0001-' . str_pad($lastNumber + 1, 8, '0', STR_PAD_LEFT),
                     'subtotal'         => $subtotal,
                     'iva_amount'       => $ivaAmount,
                     'total'            => $total,
