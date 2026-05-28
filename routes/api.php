@@ -72,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('reservations', ReservationController::class);
     Route::post('/reservations/{id}/cancel', [ReservationController::class, 'cancel']);
+    Route::get('/reservas/pendientes/count', [ReservationController::class, 'pendingCount']);
     Route::apiResource('reservation-payments', ReservationPaymentController::class);
 
     Route::get('/dashboard/stats', [DashboardController::class, 'index']);

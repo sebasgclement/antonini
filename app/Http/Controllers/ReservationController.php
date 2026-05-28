@@ -43,6 +43,13 @@ class ReservationController extends Controller
         ]);
     }
 
+    // ================= CONTEO DE RESERVAS PENDIENTES =================
+    public function pendingCount()
+    {
+        $count = Reservation::where('status', 'pendiente')->count();
+        return response()->json(['count' => $count]);
+    }
+
     // ================= GUARDAR NUEVA RESERVA (Lógica Financiera Corregida) =================
     public function store(Request $request)
     {
@@ -51,19 +58,23 @@ class ReservationController extends Controller
             'vehicle_id'      => 'required|exists:vehicles,id',
             'customer_id'     => 'required|exists:customers,id',
             'price'           => 'required|numeric|min:0',
-            'deposit'         => 'nullable|numeric|min:0', // <--- AGREGADO: Importante validar esto
-            
+            'deposit'         => 'nullable|numeric|min:0',
+            'currency'        => 'nullable|string|in:ARS,USD',
+            'exchange_rate'   => 'nullable|numeric|min:0',
+            'transfer_cost'   => 'nullable|numeric|min:0',
+            'administrative_cost' => 'nullable|numeric|min:0',
+
             // Validaciones de Permuta
             'used_vehicle_id'        => 'nullable|exists:vehicles,id|different:vehicle_id',
             'used_vehicle_price'     => 'nullable|numeric|min:0',
-            'used_vehicle_checklist' => 'nullable|string', 
-            
+            'used_vehicle_checklist' => 'nullable|string',
+
             // Validaciones de Partners
             'partners'              => 'nullable|array',
             'partners.*.full_name'  => 'required_with:partners|string',
             'partners.*.dni'        => 'nullable|string',
             'partners.*.phone'      => 'nullable|string',
-            'partners.*.photo'      => 'nullable|image|max:5120', 
+            'partners.*.photo'      => 'nullable|image|max:5120',
         ]);
 
         // 2. Validación lógica del 08 (Permuta)
@@ -91,13 +102,24 @@ class ReservationController extends Controller
                 $data['seller_id'] = Auth::id(); 
 
                 // --- C. CÁLCULO FINANCIERO OBLIGATORIO (Backend) ---
-                // No confiamos en lo que mande el front en 'balance'. Lo calculamos acá.
-                $price = floatval($data['price']);
-                $deposit = floatval($data['deposit'] ?? 0);
-                $tradeIn = floatval($data['used_vehicle_price'] ?? 0);
+                $price        = floatval($data['price']);
+                $deposit      = floatval($data['deposit'] ?? 0);
+                $tradeIn      = floatval($data['used_vehicle_price'] ?? 0);
+                $currency     = $data['currency'] ?? 'ARS';
+                $exchangeRate = max(1, floatval($data['exchange_rate'] ?? 1));
 
-                // Fórmula: Precio - Seña - ValorPermuta
-                $calculatedBalance = $price - $deposit - $tradeIn;
+                // Si la operación es en USD, convertir precio y toma a ARS para el balance
+                // El depósito ya viene en ARS desde el frontend
+                if ($currency === 'USD') {
+                    $priceARS  = $price * $exchangeRate;
+                    $tradeARS  = $tradeIn * $exchangeRate;
+                } else {
+                    $priceARS  = $price;
+                    $tradeARS  = $tradeIn;
+                }
+
+                // Fórmula: PrecioARS - SeñaARS - ValorPermutaARS
+                $calculatedBalance = $priceARS - $deposit - $tradeARS;
                 
                 // Guardamos el saldo calculado
                 $data['balance'] = $calculatedBalance;
