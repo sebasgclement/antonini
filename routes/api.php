@@ -61,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('customers', CustomerController::class);
     Route::post('/customers/{id}/events', [CustomerController::class, 'storeEvent']);
     Route::get('/customers/{id}/events',  [CustomerController::class, 'getEvents']);
+    Route::get('/my-agenda/count',        [CustomerController::class, 'myAgendaCount']);
 
     Route::apiResource('vehicles', VehicleController::class);
     Route::get('/brands',          [VehicleBrandController::class, 'index']);
