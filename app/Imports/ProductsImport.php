@@ -2,14 +2,14 @@
 
 namespace App\Imports;
 
-use App\Models\{Product, ProductPrice, PriceList};
-use Maatwebsite\Excel\Concerns\OnEachRow;
-use Maatwebsite\Excel\Row;
-use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
+use App\Models\{Product, ProductPrice};
+use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
+use Illuminate\Support\Collection;
 use Carbon\Carbon;
 
-class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReading
+class ProductsImport implements ToCollection, WithCustomCsvSettings, WithChunkReading
 {
     protected $providerId;
     protected $priceListId;
@@ -18,20 +18,19 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
     protected $accountingAccountId;
     protected $category;
 
-    // Variables para el buscador inteligente
     protected $headersFound = false;
-    protected $colCodigo = null;
-    protected $colDesc = null;
-    protected $colPrecio = null;
+    protected $colCodigo    = null;
+    protected $colDesc      = null;
+    protected $colPrecio    = null;
 
     public function __construct($providerId, $priceListId, $businessUnitId, $ivaId, $accountingAccountId, $category = null)
     {
-        $this->providerId = $providerId;
-        $this->priceListId = $priceListId;
-        $this->businessUnitId = $businessUnitId;
-        $this->ivaId = $ivaId;
-        $this->accountingAccountId = $accountingAccountId;
-        $this->category = $category;
+        $this->providerId           = $providerId;
+        $this->priceListId          = $priceListId;
+        $this->businessUnitId       = $businessUnitId;
+        $this->ivaId                = $ivaId;
+        $this->accountingAccountId  = $accountingAccountId;
+        $this->category             = $category;
     }
 
     public function getCsvSettings(): array
@@ -44,116 +43,139 @@ class ProductsImport implements OnEachRow, WithCustomCsvSettings, WithChunkReadi
         return 500;
     }
 
-    public function onRow(Row $row)
+    public function collection(Collection $rows)
     {
-        $rowData = $row->toArray();
+        $now   = Carbon::now();
+        $batch = [];
 
-        // 1. Escaneamos cabeceras
-        if (!$this->headersFound) {
-            $this->escanearCabeceras($rowData);
-            return;
-        }
+        foreach ($rows as $row) {
+            $rowData = $row->toArray();
 
-        // 2. Procesamiento seguro
-        if ($this->colCodigo === null || $this->colPrecio === null) {
-            return;
-        }
-
-        $codigo      = trim((string)($rowData[$this->colCodigo] ?? ''));
-        $descripcion = trim((string)($rowData[$this->colDesc] ?? ''));
-        $precioRaw   = trim((string)($rowData[$this->colPrecio] ?? '0'));
-
-        if (empty($codigo)) {
-            return;
-        }
-
-        // LIMPIEZA DE PRECIO
-        $limpio = preg_replace('/[^\d,]/', '', $precioRaw);
-        $precioFinal = floatval(str_replace(',', '.', $limpio));
-
-        if ($precioFinal <= 0) return;
-
-        // 3. PREPARAMOS DATOS BASE (Configuración por lote del formulario)
-        $updateData = [
-            'description' => $descripcion ?: 'Producto importado',
-            'type' => 'product',
-            'business_unit_id' => $this->businessUnitId,
-            'iva_id' => $this->ivaId,
-            'accounting_account_id' => $this->accountingAccountId,
-            'category' => $this->category,
-        ];
-
-        // 4. LÓGICA INTELIGENTE DE PRECIOS
-        // Buscamos si el producto ya existe
-        $productoExistente = Product::where('manufacturer_code', $codigo)
-                                    ->where('provider_id', $this->providerId)
-                                    ->first();
-
-        if (!$productoExistente) {
-            // Si es un producto NUEVO y estamos importando la Lista 1, le ponemos el precio base.
-            // Si es la Lista 2 (Federación), el precio base general queda en 0 (porque no lo conocemos)
-            // pero se guardará correctamente en la tabla de listas.
-            $updateData['sale_price'] = ($this->priceListId == 1) ? $precioFinal : 0;
-            if ($this->priceListId == 1) {
-                $updateData['last_price_update'] = Carbon::now();
+            if (!$this->headersFound) {
+                $this->escanearCabeceras($rowData);
+                continue;
             }
-        } else {
-            // Si el producto YA EXISTE, SOLO pisamos su precio principal si es la Lista 1
-            if ($this->priceListId == 1) {
-                $updateData['sale_price'] = $precioFinal;
-                $updateData['last_price_update'] = Carbon::now();
+
+            if ($this->colCodigo === null || $this->colPrecio === null) continue;
+
+            $codigo = trim((string)($rowData[$this->colCodigo] ?? ''));
+            if (empty($codigo)) continue;
+
+            $precioRaw  = trim((string)($rowData[$this->colPrecio] ?? '0'));
+            $limpio     = preg_replace('/[^\d,]/', '', $precioRaw);
+            $precio     = floatval(str_replace(',', '.', $limpio));
+            if ($precio <= 0) continue;
+
+            $batch[$codigo] = [
+                'desc'  => trim((string)($rowData[$this->colDesc] ?? '')) ?: 'Producto importado',
+                'price' => $precio,
+            ];
+        }
+
+        if (empty($batch)) return;
+
+        $codigos = array_keys($batch);
+
+        // 1 sola query para saber qué productos ya existen
+        $existentes = Product::whereIn('manufacturer_code', $codigos)
+            ->where('provider_id', $this->providerId)
+            ->pluck('id', 'manufacturer_code');
+
+        $nuevos    = [];
+        $isList1   = ($this->priceListId == 1);
+
+        foreach ($batch as $codigo => $data) {
+            if ($existentes->has($codigo)) continue;
+
+            $nuevos[] = [
+                'manufacturer_code'    => $codigo,
+                'provider_id'          => $this->providerId,
+                'description'          => $data['desc'],
+                'type'                 => 'product',
+                'sale_price'           => $isList1 ? $data['price'] : 0,
+                'last_price_update'    => $isList1 ? $now : null,
+                'business_unit_id'     => $this->businessUnitId,
+                'iva_id'               => $this->ivaId,
+                'accounting_account_id'=> $this->accountingAccountId,
+                'category'             => $this->category,
+                'stock_official'       => 0,
+                'stock_internal'       => 0,
+                'created_at'           => $now,
+                'updated_at'           => $now,
+            ];
+        }
+
+        // Bulk insert productos nuevos (1 query)
+        if (!empty($nuevos)) {
+            foreach (array_chunk($nuevos, 200) as $chunk) {
+                Product::insert($chunk);
             }
         }
 
-        // Guardamos el producto principal
-        $product = Product::updateOrCreate(
-            ['manufacturer_code' => $codigo, 'provider_id' => $this->providerId],
-            $updateData
-        );
+        // Actualizar productos existentes que necesitan precio (lista 1 únicamente)
+        if ($isList1 && $existentes->isNotEmpty()) {
+            foreach ($existentes as $codigo => $id) {
+                if (!isset($batch[$codigo])) continue;
+                Product::where('id', $id)->update([
+                    'sale_price'        => $batch[$codigo]['price'],
+                    'last_price_update' => $now,
+                    'updated_at'        => $now,
+                ]);
+            }
+        }
 
-        // Guardamos el precio en la tabla Multilistas (Esto funciona siempre, sea la lista 1, 2, 3 o 100)
-        ProductPrice::updateOrCreate(
-            ['product_id' => $product->id, 'price_list_id' => $this->priceListId],
-            ['price' => $precioFinal]
-        );
+        // Obtener IDs definitivos (nuevos + existentes) en 1 query
+        $todosIds = Product::whereIn('manufacturer_code', $codigos)
+            ->where('provider_id', $this->providerId)
+            ->pluck('id', 'manufacturer_code');
+
+        // Bulk upsert precios (1 query)
+        $precios = [];
+        foreach ($batch as $codigo => $data) {
+            if (!$todosIds->has($codigo)) continue;
+            $precios[] = [
+                'product_id'   => $todosIds[$codigo],
+                'price_list_id'=> $this->priceListId,
+                'price'        => $data['price'],
+                'created_at'   => $now,
+                'updated_at'   => $now,
+            ];
+        }
+
+        if (!empty($precios)) {
+            foreach (array_chunk($precios, 200) as $chunk) {
+                ProductPrice::upsert($chunk, ['product_id', 'price_list_id'], ['price', 'updated_at']);
+            }
+        }
     }
 
-    /**
-     * Buscador de columnas
-     */
-    private function escanearCabeceras(array $row)
+    private function escanearCabeceras(array $row): void
     {
-        $tempCodigo = null;
-        $tempDesc   = null;
-        $tempPrecio = null;
+        $tempCodigo = $tempDesc = $tempPrecio = null;
 
         foreach ($row as $index => $cell) {
             if (empty($cell)) continue;
-
             $texto = strtolower(trim((string)$cell));
             $texto = str_replace(
-                ['á', 'é', 'í', 'ó', 'ú', 'ä', 'ë', 'ï', 'ö', 'ü'], 
-                ['a', 'e', 'i', 'o', 'u', 'a', 'e', 'i', 'o', 'u'], 
+                ['á','é','í','ó','ú','ä','ë','ï','ö','ü'],
+                ['a','e','i','o','u','a','e','i','o','u'],
                 $texto
             );
 
             if ($tempCodigo === null && (str_contains($texto, 'codigo') || str_contains($texto, 'cod') || str_contains($texto, 'articulo'))) {
                 $tempCodigo = $index;
-            } 
-            elseif ($tempDesc === null && (str_contains($texto, 'descrip') || str_contains($texto, 'detalle') || str_contains($texto, 'producto'))) {
+            } elseif ($tempDesc === null && (str_contains($texto, 'descrip') || str_contains($texto, 'detalle') || str_contains($texto, 'producto'))) {
                 $tempDesc = $index;
-            } 
-            elseif ($tempPrecio === null && (str_contains($texto, 'precio') || str_contains($texto, 'importe') || str_contains($texto, 'venta') || str_contains($texto, 'neto'))) {
+            } elseif ($tempPrecio === null && (str_contains($texto, 'precio') || str_contains($texto, 'importe') || str_contains($texto, 'venta') || str_contains($texto, 'neto'))) {
                 $tempPrecio = $index;
             }
         }
 
         if ($tempCodigo !== null && $tempPrecio !== null) {
-            $this->colCodigo = $tempCodigo;
-            $this->colPrecio = $tempPrecio;
-            $this->colDesc   = $tempDesc !== null ? $tempDesc : $tempCodigo;
-            
-            $this->headersFound = true; 
+            $this->colCodigo    = $tempCodigo;
+            $this->colPrecio    = $tempPrecio;
+            $this->colDesc      = $tempDesc ?? $tempCodigo;
+            $this->headersFound = true;
         }
     }
 }
