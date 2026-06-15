@@ -37,6 +37,8 @@ use App\Models\Iva;
 
 //Controladores de facturación
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\CurrentAccountController;
+use App\Http\Controllers\Api\MailController;
 
 
 // ================== 1. RUTAS PÚBLICAS ==================
@@ -62,6 +64,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/customers/{id}/events', [CustomerController::class, 'storeEvent']);
     Route::get('/customers/{id}/events',  [CustomerController::class, 'getEvents']);
     Route::get('/my-agenda/count',        [CustomerController::class, 'myAgendaCount']);
+    Route::get('/my-agenda',              [CustomerController::class, 'myAgenda']);
+    Route::post('/events/{id}/toggle',    [CustomerController::class, 'toggleEvent']);
 
     Route::apiResource('vehicles', VehicleController::class);
     Route::get('/brands',          [VehicleBrandController::class, 'index']);
@@ -78,12 +82,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'index']);
 
     Route::post('/invoices', [InvoiceController::class, 'store']);
-//     Route::get('/customers/{id}/current-account', [CurrentAccountController::class, 'index']);
-//     Route::post('/customers/{id}/current-account/pay', [CurrentAccountController::class, 'storePayment']);
+
+    // Cuenta Corriente
+    Route::get('/customers/{id}/current-account', [CurrentAccountController::class, 'index']);
+    Route::post('/customers/{id}/current-account/pay', [CurrentAccountController::class, 'storePayment']);
+    Route::post('/customers/{id}/current-account/charge', [CurrentAccountController::class, 'storeConcept']);
+    Route::delete('/customers/{id}/current-account/{movementId}', [CurrentAccountController::class, 'destroy']);
 
     //Orden de servicio
     Route::apiResource('service-orders', ServiceOrderController::class);
-}); 
+
+    // Correo
+    Route::get   ('/mail/inbox',            [MailController::class, 'inbox']);
+    Route::get   ('/mail/{uid}',            [MailController::class, 'show']);
+    Route::post  ('/mail/send',             [MailController::class, 'send']);
+    Route::put   ('/mail/config',           [MailController::class, 'saveConfig']);
+    Route::delete('/mail/{uid}',            [MailController::class, 'deleteMessage']);
+});
 
 
 // ================== 3. ZONA EXCLUSIVA ADMIN ==================

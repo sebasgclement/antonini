@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\ServiceOrder;
 use App\Models\ServiceOrderItem;
 use App\Models\Product;
+use App\Services\CurrentAccountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class ServiceOrderController extends Controller
 {
+    public function __construct(private CurrentAccountService $ccService) {}
     // Mostrar todas las órdenes (Para el listado principal)
     public function index(Request $request)
     {
@@ -111,5 +113,69 @@ class ServiceOrderController extends Controller
     {
         $order = ServiceOrder::with(['customer', 'vehicle', 'technician', 'items.product'])->findOrFail($id);
         return response()->json($order);
+    }
+
+    public function update(Request $request, ServiceOrder $serviceOrder)
+    {
+        $validated = $request->validate([
+            'status'            => 'sometimes|in:pending,in_progress,completed,delivered,cancelled',
+            'technician_id'     => 'nullable|exists:users,id',
+            'mileage'           => 'nullable|integer',
+            'notes'             => 'nullable|string',
+            'discount'          => 'nullable|numeric|min:0',
+            'insurance_company' => 'nullable|string',
+            'policy_number'     => 'nullable|string',
+            'claim_number'      => 'nullable|string',
+        ]);
+
+        $oldStatus = $serviceOrder->status;
+        $serviceOrder->update($validated);
+
+        if (isset($validated['discount'])) {
+            $serviceOrder->update(['total' => $serviceOrder->subtotal - $serviceOrder->discount]);
+        }
+
+        // Sincronizar CC cuando la orden pasa a completada/entregada
+        $newStatus = $validated['status'] ?? null;
+        if ($newStatus && $newStatus !== $oldStatus
+            && in_array($newStatus, ['completed', 'delivered'])
+            && $serviceOrder->customer_id
+        ) {
+            $serviceOrder->refresh();
+            $this->ccService->onServiceOrderCompleted($serviceOrder);
+        }
+
+        // Si se cancela y tenía un debe en CC, revertirlo
+        if ($newStatus === 'cancelled' && $serviceOrder->customer_id) {
+            $this->ccService->onServiceOrderCancelled($serviceOrder);
+        }
+
+        return response()->json([
+            'message' => 'Orden actualizada',
+            'order'   => $serviceOrder->load('items'),
+        ]);
+    }
+
+    public function destroy(ServiceOrder $serviceOrder)
+    {
+        if (in_array($serviceOrder->status, ['completed', 'delivered'])) {
+            return response()->json(['error' => 'No se puede eliminar una orden completada o entregada.'], 409);
+        }
+
+        // Revertir stock descontado
+        foreach ($serviceOrder->items as $item) {
+            if ($item->product_id && $item->product?->type === 'product') {
+                $item->product->increment('stock_official', $item->quantity);
+            }
+        }
+
+        if ($serviceOrder->customer_id) {
+            $this->ccService->onServiceOrderCancelled($serviceOrder);
+        }
+
+        $serviceOrder->items()->delete();
+        $serviceOrder->delete();
+
+        return response()->json(['message' => 'Orden eliminada']);
     }
 }

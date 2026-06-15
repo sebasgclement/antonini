@@ -40,4 +40,13 @@ return [
         'password' => env('INFOAUTO_PASS'),
     ],
 
+    'imap' => [
+        'host'            => env('IMAP_HOST', ''),
+        'port'            => env('IMAP_PORT', 993),
+        'encryption'      => env('IMAP_ENCRYPTION', 'ssl'),
+        'smtp_host'       => env('SMTP_HOST', ''),
+        'smtp_port'       => env('SMTP_PORT', 587),
+        'smtp_encryption' => env('SMTP_ENCRYPTION', 'tls'),
+    ],
+
 ];

@@ -14,27 +14,26 @@ class Reservation extends Model
         'customer_id',
         'seller_id',
         'used_vehicle_id',
-        'used_vehicle_price', // ✅ Este es el valor de toma específico de esta reserva
+        'used_vehicle_price',
         'date',
-        'price',             // Precio de venta del vehículo
+        'price',
+        'price_ars',           // Precio en ARS congelado al momento de la operación
         'deposit',
         'credit_bank',
         'balance',
         'payment_method',
         'payment_details',
-        'workshop_expenses', // Gastos de taller
+        'workshop_expenses',
         'comments',
         'status',
-
-        // ✅ NUEVOS CAMPOS
-        'transfer_cost',       // Costo real de la transferencia (gestor/registro)
-        'administrative_cost', // Honorarios de la agencia (Ganancia extra)
-        'currency',            // 'ARS' o 'USD'
-        'exchange_rate',       // Cotización
-        'second_buyer_name',   // Nombre cotitular
-        'second_buyer_dni',    // DNI cotitular
-        'second_buyer_phone',  // Tel cotitular
-        'used_vehicle_checklist', // Checklist del usado (JSON)
+        'transfer_cost',
+        'administrative_cost',
+        'currency',
+        'exchange_rate',
+        'second_buyer_name',
+        'second_buyer_dni',
+        'second_buyer_phone',
+        'used_vehicle_checklist',
     ];
 
     protected $casts = [
@@ -46,7 +45,9 @@ class Reservation extends Model
         'transfer_cost'       => 'decimal:2',
         'administrative_cost' => 'decimal:2',
         'exchange_rate'       => 'decimal:2',
-        'used_vehicle_price'  => 'decimal:2', // ✅ AGREGADO: Para asegurar formato numérico
+        'used_vehicle_price'  => 'decimal:2',
+        'price_ars'           => 'decimal:2',
+        'exchange_rate'       => 'decimal:4',
         'used_vehicle_checklist' => 'array',
         'date'                => 'datetime',
     ];
@@ -121,49 +122,23 @@ class Reservation extends Model
 
     public function getPaidAmountAttribute(): float
     {
-        return (float) $this->payments()->sum('amount');
+        // amount_ars es el valor en ARS de cada pago (congelado al tipo de cambio del momento)
+        return (float) $this->payments()->sum('amount_ars');
     }
 
     public function getRemainingAmountAttribute(): float
     {
-        $total = (float) ($this->price ?? 0);
-        return max(0, $total - $this->paid_amount);
+        // price_ars es el precio de venta en ARS congelado al momento de la reserva
+        $priceARS = (float) ($this->price_ars ?? $this->price);
+        $total    = $priceARS
+                  + (float) ($this->transfer_cost ?? 0)
+                  + (float) ($this->administrative_cost ?? 0);
+        $paid     = (float) ($this->deposit ?? 0)
+                  + (float) ($this->used_vehicle_price ?? 0)
+                  + (float) ($this->credit_bank ?? 0)
+                  + (float) $this->payments()->sum('amount_ars');
+        return max(0, $total - $paid);
     }
 
 
-    // ================= EVENTOS AUTOMÁTICOS =================
-
-    protected static function booted()
-    {
-        // Al crear la reserva → marcar vehículo como reservado
-        static::created(function ($reservation) {
-            if ($reservation->vehicle && $reservation->status === 'pendiente') {
-                $reservation->vehicle->update(['status' => 'reservado']);
-            }
-        });
-
-        // Al actualizar la reserva → sincronizar estado del vehículo
-        static::updated(function ($reservation) {
-            if (! $reservation->vehicle) return;
-
-            switch ($reservation->status) {
-                case 'confirmada':
-                    $reservation->vehicle->update(['status' => 'vendido']);
-                    break;
-                case 'anulada':
-                    $reservation->vehicle->update(['status' => 'disponible']);
-                    break;
-                case 'pendiente':
-                    $reservation->vehicle->update(['status' => 'reservado']);
-                    break;
-            }
-        });
-
-        // Al eliminar una reserva pendiente → liberar vehículo
-        static::deleted(function ($reservation) {
-            if ($reservation->vehicle && $reservation->status === 'pendiente') {
-                $reservation->vehicle->update(['status' => 'disponible']);
-            }
-        });
-    }
 }

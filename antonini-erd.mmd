@@ -1,0 +1,432 @@
+erDiagram
+
+    %% ============================================================
+    %% AUTENTICACIÓN & ROLES
+    %% ============================================================
+    users {
+        bigint id PK
+        string name
+        string email UK
+        string password
+    }
+    roles {
+        bigint id PK
+        string name UK
+    }
+    role_user {
+        bigint user_id FK
+        bigint role_id FK
+    }
+    users ||--o{ role_user : "tiene"
+    roles ||--o{ role_user : "asignado"
+
+    %% ============================================================
+    %% CLIENTES & CRM
+    %% ============================================================
+    customers {
+        bigint id PK
+        bigint user_id FK "creador"
+        bigint seller_id FK "vendedor dueño"
+        bigint tax_responsibility_id FK
+        string first_name
+        string last_name
+        string doc_type
+        string doc_number UK
+        string cuit UK
+        string email UK
+        string phone
+        string alt_phone
+        string city
+        string address
+        string status
+        datetime locked_until
+        string dni_front
+        string dni_back
+        text notes
+    }
+    customer_events {
+        bigint id PK
+        bigint customer_id FK
+        bigint user_id FK
+        bigint parent_id FK "self-ref"
+        string type
+        text description
+        datetime date
+        boolean is_schedule
+        boolean completed
+    }
+    users ||--o{ customers : "crea (user_id)"
+    users ||--o{ customers : "asignado (seller_id)"
+    tax_responsibilities ||--o{ customers : "categoría fiscal"
+    customers ||--o{ customer_events : "tiene eventos"
+    users ||--o{ customer_events : "registra"
+    customer_events ||--o{ customer_events : "hijo de (parent_id)"
+
+    %% ============================================================
+    %% CATÁLOGOS FISCALES
+    %% ============================================================
+    tax_responsibilities {
+        bigint id PK
+        string description
+    }
+    ivas {
+        bigint id PK
+        decimal percentage
+    }
+    provinces {
+        bigint id PK
+        string name
+    }
+
+    %% ============================================================
+    %% VEHÍCULOS & FLOTA
+    %% ============================================================
+    vehicles {
+        bigint id PK
+        bigint customer_id FK "dueño consignante"
+        bigint seller_id FK "vendedor"
+        string brand "STRING - sin FK a vehicle_brands ⚠️"
+        string model
+        integer year
+        string plate UK
+        string vin
+        string color
+        integer km
+        string fuel_type
+        enum ownership "propio|consignado"
+        enum status "disponible|reservado|vendido|ofrecido"
+        decimal reference_price
+        decimal take_price
+        decimal price
+        boolean check_spare
+        boolean check_jack
+        boolean check_tools
+        boolean check_docs
+        boolean check_key_copy
+        boolean check_manual
+        string photo_front
+        string photo_back
+        string photo_left
+        string photo_right
+        string photo_interior_front
+        string photo_interior_back
+        string photo_trunk
+        datetime sold_at
+        text notes
+    }
+    vehicle_brands {
+        bigint id PK
+        string name
+        boolean active
+        "⚠️ DESCONECTADO de vehicles"
+    }
+    vehicle_expenses {
+        bigint id PK
+        bigint vehicle_id FK
+        string description
+        decimal amount
+        date date
+        string status "no_pagado|pagado"
+    }
+    customers ||--o{ vehicles : "propietario (customer_id)"
+    users ||--o{ vehicles : "vendedor (seller_id)"
+    vehicles ||--o{ vehicle_expenses : "tiene gastos"
+
+    %% ============================================================
+    %% RESERVAS & PAGOS
+    %% ============================================================
+    reservations {
+        bigint id PK
+        bigint vehicle_id FK "vehículo vendido CASCADE"
+        bigint customer_id FK "comprador CASCADE"
+        bigint seller_id FK "vendedor"
+        bigint used_vehicle_id FK "vehículo en permuta"
+        datetime date
+        string currency "ARS|USD"
+        decimal exchange_rate
+        decimal price
+        decimal deposit
+        decimal credit_bank
+        decimal balance
+        decimal used_vehicle_price
+        json used_vehicle_checklist
+        decimal transfer_cost
+        decimal administrative_cost
+        decimal workshop_expenses
+        string second_buyer_name
+        string second_buyer_dni
+        string second_buyer_phone
+        string payment_method "legacy"
+        text payment_details "legacy"
+        text comments
+        enum status "pendiente|confirmada|anulada|vendido"
+    }
+    reservation_payments {
+        bigint id PK
+        bigint reservation_id FK
+        bigint payment_method_id FK
+        decimal amount
+        json details
+        text notes
+    }
+    reservation_partners {
+        bigint id PK
+        bigint reservation_id FK
+        string full_name
+        string dni
+        string phone
+        string photo
+    }
+    payment_methods {
+        bigint id PK
+        string name
+        string type
+        boolean requires_details
+    }
+    vehicles ||--o{ reservations : "vendido en (vehicle_id)"
+    vehicles ||--o{ reservations : "permuta (used_vehicle_id)"
+    customers ||--o{ reservations : "compra"
+    users ||--o{ reservations : "vende (seller_id)"
+    reservations ||--o{ reservation_payments : "tiene pagos"
+    reservations ||--o{ reservation_partners : "cotitulares"
+    payment_methods ||--o{ reservation_payments : "método"
+
+    %% ============================================================
+    %% FACTURACIÓN & CUENTA CORRIENTE
+    %% ============================================================
+    invoices {
+        bigint id PK
+        bigint customer_id FK
+        bigint business_unit_id FK
+        bigint user_id FK
+        string type "A|B|C|X"
+        string number
+        decimal subtotal
+        decimal iva_amount
+        decimal total
+        text notes
+        softDelete deleted_at
+    }
+    invoice_items {
+        bigint id PK
+        bigint invoice_id FK "CASCADE"
+        bigint product_id FK "nullable"
+        string description "congelado al vender"
+        integer quantity
+        decimal unit_price "congelado al vender"
+        decimal subtotal
+    }
+    current_accounts {
+        bigint id PK
+        bigint customer_id FK
+        bigint invoice_id FK "nullable"
+        string concept
+        decimal debit
+        decimal credit
+        decimal balance
+    }
+    customers ||--o{ invoices : "facturado a"
+    users ||--o{ invoices : "emitida por"
+    invoices ||--o{ invoice_items : "detalle"
+    products ||--o{ invoice_items : "producto (nullable)"
+    customers ||--o{ current_accounts : "movimientos"
+    invoices ||--o{ current_accounts : "origina movimiento"
+
+    %% ============================================================
+    %% ÓRDENES DE SERVICIO
+    %% ============================================================
+    service_orders {
+        bigint id PK
+        string order_number UK
+        bigint customer_id FK
+        bigint vehicle_id FK
+        bigint reservation_id FK "nullable"
+        bigint technician_id FK "nullable → users"
+        enum status "pending|in_progress|completed|delivered|cancelled"
+        enum type "particular|insurance"
+        string insurance_company
+        string policy_number
+        string claim_number
+        integer mileage
+        decimal subtotal
+        decimal discount
+        decimal tax
+        decimal total
+        text notes
+    }
+    service_order_items {
+        bigint id PK
+        bigint service_order_id FK
+        bigint product_id FK "nullable"
+        string description
+        decimal quantity
+        decimal unit_price
+        decimal subtotal
+    }
+    customers ||--o{ service_orders : "cliente"
+    vehicles ||--o{ service_orders : "vehículo"
+    reservations ||--o{ service_orders : "viene de reserva"
+    users ||--o{ service_orders : "técnico"
+    service_orders ||--o{ service_order_items : "ítems"
+    products ||--o{ service_order_items : "producto (nullable)"
+
+    %% ============================================================
+    %% CATÁLOGO DE PRODUCTOS & PROVEEDORES
+    %% ============================================================
+    providers {
+        bigint id PK
+        bigint tax_responsibility_id FK
+        bigint business_unit_id FK
+        string cuit
+        string business_name
+        string iibb
+        softDelete deleted_at
+    }
+    provider_addresses {
+        bigint id PK
+        bigint provider_id FK
+        string street
+        string number
+        string floor
+        string apartment
+        string zip_code
+        bigint province_id FK
+    }
+    provider_contacts {
+        bigint id PK
+        bigint provider_id FK
+        string full_name
+        string phone
+        string email
+        string sector
+        text observations
+    }
+    products {
+        bigint id PK
+        bigint provider_id FK
+        bigint business_unit_id FK
+        bigint iva_id FK
+        bigint accounting_account_id FK
+        string type "product|service"
+        string manufacturer_code
+        string category
+        string description
+        decimal multiplier_factor
+        decimal sale_price
+        integer stock_official
+        integer stock_internal
+        integer reorder_point
+        softDelete deleted_at
+    }
+    price_lists {
+        bigint id PK
+        bigint provider_id FK
+        string name
+        softDelete deleted_at
+    }
+    product_prices {
+        bigint id PK
+        bigint product_id FK
+        bigint price_list_id FK
+        decimal price
+    }
+    tax_responsibilities ||--o{ providers : "condición"
+    providers ||--o{ provider_addresses : "domicilios"
+    providers ||--o{ provider_contacts : "contactos"
+    provinces ||--o{ provider_addresses : "provincia"
+    providers ||--o{ products : "proveedor"
+    providers ||--o{ price_lists : "lista de"
+    ivas ||--o{ products : "alícuota IVA"
+    products ||--o{ product_prices : "precios"
+    price_lists ||--o{ product_prices : "en lista"
+
+    %% ============================================================
+    %% CONTABILIDAD
+    %% ============================================================
+    business_units {
+        bigint id PK
+        string name
+        string reason_social
+        string cuit
+        string iibb
+        string tax_condition
+        string logo "⚠️ duplicado en fillable"
+        string address
+        string zip_code
+        string city
+        string province
+        date start_date
+    }
+    pos_units {
+        bigint id PK
+        bigint business_unit_id FK
+        integer number
+        string description
+        softDelete deleted_at
+    }
+    accounting_accounts {
+        bigint id PK
+        bigint parent_id FK "self-ref árbol 5 niveles"
+        string code
+        string name
+        string type
+        boolean imputable
+        softDelete deleted_at
+    }
+    accounting_entries {
+        bigint id PK
+        bigint business_unit_id FK
+        bigint user_id FK
+        date entry_date
+        string description
+        string reference
+        softDelete deleted_at
+    }
+    accounting_entry_items {
+        bigint id PK
+        bigint accounting_entry_id FK
+        bigint accounting_account_id FK
+        decimal debit
+        decimal credit
+    }
+    business_units ||--o{ pos_units : "puntos de venta"
+    business_units ||--o{ invoices : "emite"
+    business_units ||--o{ providers : "asociado a"
+    business_units ||--o{ products : "catálogo"
+    business_units ||--o{ accounting_entries : "asientos"
+    users ||--o{ accounting_entries : "registrado por"
+    accounting_accounts ||--o{ accounting_accounts : "padre (parent_id)"
+    accounting_entries ||--o{ accounting_entry_items : "líneas"
+    accounting_accounts ||--o{ accounting_entry_items : "cuenta"
+    accounting_accounts ||--o{ products : "cuenta contable"
+
+    %% ============================================================
+    %% INFOAUTO (Integración API Externa)
+    %% ============================================================
+    info_auto_brands {
+        bigint id PK
+        integer codia
+        string label
+    }
+    info_auto_groups {
+        bigint id PK
+        bigint info_auto_brand_id FK
+        integer codia
+        string label
+    }
+    info_auto_models {
+        bigint id PK
+        bigint info_auto_group_id FK
+        integer codia
+        string label
+        json prices
+        json features
+    }
+    info_auto_logs {
+        bigint id PK
+        string endpoint
+        string method
+        integer status_code
+    }
+    info_auto_brands ||--o{ info_auto_groups : "grupos"
+    info_auto_groups ||--o{ info_auto_models : "modelos"

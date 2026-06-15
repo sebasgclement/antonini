@@ -78,8 +78,16 @@ class CustomerController extends Controller
     // GET /api/customers/{id}
    public function show($id)
 {
-    // Usamos la ruta completa del modelo para que no falle por falta de "use"
-    $customer = \App\Models\Customer::with(['vehicles', 'seller'])->find($id);
+    $customer = \App\Models\Customer::with([
+        'vehicles',
+        'seller',
+        'reservations' => function ($q) {
+            $q->with([
+                'vehicle:id,brand,model,plate,year,status',
+                'payments.method:id,name,type',
+            ])->orderByDesc('created_at');
+        },
+    ])->find($id);
 
     if (!$customer) {
         return response()->json([
@@ -99,7 +107,7 @@ class CustomerController extends Controller
     {
         $user = auth()->user();
         $isOwner = (int)$customer->seller_id === (int)$user->id;
-        $isAdmin = $user->role === 'admin' || $user->role_id === 1;
+        $isAdmin = $user->isAdmin();
 
         if ($customer->seller_id && !$isOwner && !$isAdmin && $customer->locked_until && $customer->locked_until > now()) {
              return response()->json(['message' => 'Cliente bloqueado por otro vendedor.'], 403);
@@ -160,7 +168,7 @@ class CustomerController extends Controller
     // Pedimos explícitamente el parent_id para que no haya dudas
     $events = CustomerEvent::with(['user'])
                 ->where('customer_id', $id)
-                ->select('id', 'customer_id', 'user_id', 'parent_id', 'type', 'description', 'date', 'is_schedule')
+                ->select('id', 'customer_id', 'user_id', 'parent_id', 'type', 'description', 'date', 'is_schedule', 'completed')
                 ->orderBy('created_at', 'asc')
                 ->get();
                 

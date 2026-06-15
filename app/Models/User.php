@@ -11,15 +11,16 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    protected $fillable = ['name','email','password'];
+    protected $fillable = ['name', 'email', 'password', 'mail_address', 'imap_password'];
 
-    protected $hidden = ['password','remember_token'];
+    protected $hidden = ['password', 'remember_token', 'imap_password'];
 
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'password'          => 'hashed',
+            'imap_password'     => 'encrypted',
         ];
     }
 
@@ -37,8 +38,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        // Verifica si el rol es 'admin' O si el ID es 1 (Super Admin)
-        return $this->role === 'admin' || $this->id === 1;
+        return $this->id === 1 || $this->roles()->where('name', 'admin')->exists();
     }
 
 }

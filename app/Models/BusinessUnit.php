@@ -11,9 +11,9 @@ class BusinessUnit extends Model
     //use SoftDeletes;
     
     protected $fillable = [
-        'name', 'reason_social', 'logo', 'tax_condition', 
-        'start_date', 'cuit', 'iibb', 'address', 
-        'zip_code', 'city', 'province', 'logo'
+        'name', 'reason_social', 'logo', 'tax_condition',
+        'start_date', 'cuit', 'iibb', 'address',
+        'zip_code', 'city', 'province'
     ];
 
     public function pointsOfSale(): HasMany

@@ -62,8 +62,12 @@ class Customer extends Model
     }
 
     public function vehicles()
-{
-    // Un cliente tiene muchos vehículos
-    return $this->hasMany(Vehicle::class, 'customer_id');
-}
+    {
+        return $this->hasMany(Vehicle::class, 'customer_id');
+    }
+
+    public function reservations()
+    {
+        return $this->hasMany(\App\Models\Reservation::class, 'customer_id');
+    }
 }

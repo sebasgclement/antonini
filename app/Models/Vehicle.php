@@ -4,9 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
-
 class Vehicle extends Model
 {
     use HasFactory;
@@ -70,64 +67,5 @@ public function getHasUnpaidExpensesAttribute(): bool
 }
 
 
-    // ================= EVENTOS AUTOMÁTICOS =================
-    protected static function booted()
-    {
-        static::updated(function (Vehicle $vehicle) {
-            try {
-                $oldStatus = $vehicle->getOriginal('status');
-                $newStatus = $vehicle->status;
-                if ($oldStatus === $newStatus) return;
-
-                // 🟢 Lógica de Venta
-                if ($newStatus === 'vendido') {
-                    $updates = [];
-                    if (empty($vehicle->seller_id)) $updates['seller_id'] = Auth::id() ?? 1;
-                    if (empty($vehicle->sold_at)) $updates['sold_at'] = now();
-                    
-                    if (!empty($updates)) {
-                        $vehicle->fill($updates)->saveQuietly();
-                    }
-
-                    $reservation = $vehicle->reservations()
-                        ->whereIn('status', ['pendiente', 'reservado'])
-                        ->latest('id')->first();
-
-                    if ($reservation) {
-                        $reservation->update(['status' => 'vendido']);
-                    } else {
-                        $vehicle->reservations()->create([
-                            'vehicle_id'        => $vehicle->id,
-                            'customer_id'       => $vehicle->customer_id ?? 1,
-                            'seller_id'         => $vehicle->seller_id ?? (Auth::id() ?? 1),
-                            'price'             => $vehicle->price ?? 0,
-                            'deposit'           => 0,
-                            'payment_method'    => 'contado',
-                            'workshop_expenses' => 0,
-                            'comments'          => 'Venta directa generada automáticamente',
-                            'status'            => 'vendido',
-                            'date'              => now(),
-                        ]);
-                    }
-                }
-
-                // 🔄 Lógica de Retorno a Disponible
-                if ($newStatus === 'disponible' || $newStatus === 'ofrecido') {
-                    if ($vehicle->sold_at !== null) {
-                        $vehicle->forceFill(['sold_at' => null])->saveQuietly();
-                    }
-
-                    $reservation = $vehicle->reservations()
-                        ->where('status', 'vendido')
-                        ->latest('id')->first();
-
-                    if ($reservation) {
-                        $reservation->update(['status' => 'anulada']);
-                    }
-                }
-            } catch (\Throwable $e) {
-                \Log::error('Error en Vehicle::booted: ' . $e->getMessage());
-            }
-        });
-    }
 }
+

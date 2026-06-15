@@ -6,77 +6,123 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CurrentAccount;
 use App\Models\Customer;
+use App\Services\CurrentAccountService;
 use Illuminate\Support\Facades\DB;
 
 class CurrentAccountController extends Controller
 {
-    // 1. TRAER EL HISTORIAL DEL CLIENTE
+    // GET /customers/{id}/current-account
     public function index($customerId)
     {
-        // Validamos que el cliente exista
         $customer = Customer::findOrFail($customerId);
 
-        // Traemos todos sus movimientos, ordenados del más nuevo al más viejo
         $movements = CurrentAccount::where('customer_id', $customerId)
-                                   ->with('invoice') // Traemos la info de la factura por si la necesitamos
-                                   ->orderBy('created_at', 'desc')
-                                   ->get();
+            ->with([
+                'invoice:id,number',
+                'reservation:id,vehicle_id',
+                'reservation.vehicle:id,plate,brand,model',
+                'serviceOrder:id,vehicle_id',
+                'serviceOrder.vehicle:id,plate,brand,model',
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-        // El saldo actual es el balance del último movimiento (el primero en nuestra lista ordenada por desc)
-        $currentBalance = $movements->first() ? $movements->first()->balance : 0;
+        $currentBalance = $movements->first()?->balance ?? 0;
 
         return response()->json([
             'customer_name'   => $customer->first_name . ' ' . $customer->last_name,
             'current_balance' => $currentBalance,
-            'movements'       => $movements
+            'movements'       => $movements,
         ]);
     }
 
-    // 2. REGISTRAR UN PAGO (RECIBO)
+    // POST /customers/{id}/current-account/pay  — registra un HABER (pago recibido)
     public function storePayment(Request $request, $customerId)
     {
         $request->validate([
-            'amount'  => 'required|numeric|min:0.01',
-            'concept' => 'nullable|string|max:255',
+            'amount'       => 'required|numeric|min:0.01',
+            'concept'      => 'nullable|string|max:255',
+            'payment_date' => 'nullable|date',
+            'notes'        => 'nullable|string|max:1000',
         ]);
 
-        $customer = Customer::findOrFail($customerId);
+        Customer::findOrFail($customerId);
 
-        try {
-            return DB::transaction(function () use ($request, $customerId) {
-                
-                // Buscamos el último saldo
-                $lastMovement = CurrentAccount::where('customer_id', $customerId)
-                                              ->orderBy('id', 'desc')
-                                              ->first();
-                
-                $previousBalance = $lastMovement ? $lastMovement->balance : 0;
-                
-                // Como nos están PAGANDO, la deuda BAJA (-)
-                // Ej: Debía $1000. Pagó $600. Nuevo Saldo = $1000 - $600 = $400.
-                $newBalance = $previousBalance - $request->amount;
+        return DB::transaction(function () use ($request, $customerId) {
+            $lastBalance = CurrentAccount::where('customer_id', $customerId)
+                ->orderBy('id', 'desc')
+                ->value('balance') ?? 0;
 
-                // Creamos el movimiento
-                $payment = CurrentAccount::create([
-                    'customer_id' => $customerId,
-                    'invoice_id'  => null, // Es un pago suelto, no una factura
-                    'concept'     => $request->concept ?: 'Pago / Recibo a cuenta',
-                    'debit'       => 0, // No suma deuda
-                    'credit'      => $request->amount, // HABER: Lo que nos pagó
-                    'balance'     => $newBalance,
-                ]);
+            $newBalance = $lastBalance - $request->amount;
 
-                return response()->json([
-                    'message' => '✅ Pago registrado con éxito',
-                    'payment' => $payment
-                ], 201);
-            });
+            $payment = CurrentAccount::create([
+                'customer_id'  => $customerId,
+                'concept'      => $request->concept ?: 'Pago / Recibo a cuenta',
+                'debit'        => 0,
+                'credit'       => $request->amount,
+                'balance'      => $newBalance,
+                'payment_date' => $request->payment_date,
+                'status'       => 'pagado',
+                'notes'        => $request->notes,
+            ]);
 
-        } catch (\Exception $e) {
+            return response()->json(['message' => 'Pago registrado con éxito', 'payment' => $payment], 201);
+        });
+    }
+
+    // POST /customers/{id}/current-account/charge  — registra un DEBE (cargo manual)
+    public function storeConcept(Request $request, $customerId)
+    {
+        $request->validate([
+            'amount'           => 'required|numeric|min:0.01',
+            'concept'          => 'required|string|max:255',
+            'reservation_id'   => 'nullable|exists:reservations,id',
+            'service_order_id' => 'nullable|exists:service_orders,id',
+            'payment_date'     => 'nullable|date',
+            'notes'            => 'nullable|string|max:1000',
+        ]);
+
+        Customer::findOrFail($customerId);
+
+        return DB::transaction(function () use ($request, $customerId) {
+            $lastBalance = CurrentAccount::where('customer_id', $customerId)
+                ->orderBy('id', 'desc')
+                ->value('balance') ?? 0;
+
+            $newBalance = $lastBalance + $request->amount;
+
+            $charge = CurrentAccount::create([
+                'customer_id'      => $customerId,
+                'reservation_id'   => $request->reservation_id,
+                'service_order_id' => $request->service_order_id,
+                'concept'          => $request->concept,
+                'debit'            => $request->amount,
+                'credit'           => 0,
+                'balance'          => $newBalance,
+                'payment_date'     => $request->payment_date,
+                'status'           => 'pendiente',
+                'notes'            => $request->notes,
+            ]);
+
+            return response()->json(['message' => 'Cargo registrado con éxito', 'charge' => $charge], 201);
+        });
+    }
+
+    // DELETE /customers/{id}/current-account/{movementId}
+    public function destroy($customerId, $movementId, CurrentAccountService $ccService)
+    {
+        $movement = CurrentAccount::where('customer_id', $customerId)
+            ->findOrFail($movementId);
+
+        if ($movement->isAutoGenerated()) {
             return response()->json([
-                'message' => '❌ Error al registrar el pago',
-                'error'   => $e->getMessage()
-            ], 500);
+                'message' => 'Este movimiento es generado automáticamente. Para eliminarlo, anulá o eliminá la operación de origen.',
+            ], 422);
         }
+
+        $movement->delete();
+        $ccService->recalculate((int) $customerId);
+
+        return response()->json(['message' => 'Movimiento eliminado']);
     }
 }

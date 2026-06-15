@@ -6,6 +6,8 @@ use App\Models\Reservation;
 use App\Models\Vehicle;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
+use App\Services\CurrentAccountService;
+use App\Services\VehicleStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +15,11 @@ use Illuminate\Support\Facades\Log;
 
 class ReservationController extends Controller
 {
+    public function __construct(
+        private VehicleStatusService $statusService,
+        private CurrentAccountService $ccService,
+    ) {}
+
     // ================= LISTAR TODAS LAS RESERVAS =================
     public function index()
     {
@@ -105,24 +112,25 @@ class ReservationController extends Controller
                 $price        = floatval($data['price']);
                 $deposit      = floatval($data['deposit'] ?? 0);
                 $tradeIn      = floatval($data['used_vehicle_price'] ?? 0);
+                $creditBank   = floatval($data['credit_bank'] ?? 0);
+                $transferCost = floatval($data['transfer_cost'] ?? 0);
+                $adminCost    = floatval($data['administrative_cost'] ?? 0);
                 $currency     = $data['currency'] ?? 'ARS';
                 $exchangeRate = max(1, floatval($data['exchange_rate'] ?? 1));
 
-                // Si la operación es en USD, convertir precio y toma a ARS para el balance
-                // El depósito ya viene en ARS desde el frontend
                 if ($currency === 'USD') {
-                    $priceARS  = $price * $exchangeRate;
-                    $tradeARS  = $tradeIn * $exchangeRate;
+                    $priceARS = $price * $exchangeRate;
+                    $tradeARS = $tradeIn * $exchangeRate;
                 } else {
-                    $priceARS  = $price;
-                    $tradeARS  = $tradeIn;
+                    $priceARS = $price;
+                    $tradeARS = $tradeIn;
                 }
 
-                // Fórmula: PrecioARS - SeñaARS - ValorPermutaARS
-                $calculatedBalance = $priceARS - $deposit - $tradeARS;
-                
-                // Guardamos el saldo calculado
-                $data['balance'] = $calculatedBalance;
+                // Fórmula completa: (Precio + Transferencia + Admin) - Seña - Permuta - Crédito
+                $calculatedBalance = ($priceARS + $transferCost + $adminCost) - $deposit - $tradeARS - $creditBank;
+
+                $data['balance']   = $calculatedBalance;
+                $data['price_ars'] = $priceARS; // Precio congelado en ARS al tipo de cambio del momento
 
                 // Definimos estado inicial basado en la deuda
                 if ($calculatedBalance > 0) {
@@ -135,18 +143,23 @@ class ReservationController extends Controller
                 // --- D. Crear la Reserva ---
                 $reservation = Reservation::create($data);
 
-                // --- E. Guardar Métodos de Pago y Socios ---
-                // Aquí iría tu lógica de payment_methods si la tenés separada
-                // ...
-                
-                if (!empty($partnersData)) {
-                    // Aquí iría tu lógica de creación de socios
-                    $reservation->partners()->createMany($partnersData);
+                // --- D2. Sincronizar Cuenta Corriente ---
+                $reservation->load(['vehicle', 'usedVehicle']);
+                $this->ccService->onReservationCreated($reservation);
+
+                // --- E. Sincronizar estado del vehículo vía servicio ---
+                $vehicle = Vehicle::find($data['vehicle_id']);
+                if ($vehicle) {
+                    match ($reservation->status) {
+                        'pendiente'  => $this->statusService->reserve($vehicle),
+                        'confirmada' => $this->statusService->onConfirmed($vehicle),
+                        default      => null,
+                    };
                 }
 
-                // Si hay vehículo, cambiar estado a 'reservado'
-                if ($reservation->vehicle) {
-                    $reservation->vehicle->update(['status' => 'reservado']);
+                // --- F. Guardar Socios ---
+                if (!empty($partnersData)) {
+                    $reservation->partners()->createMany($partnersData);
                 }
 
                 return response()->json([
@@ -171,26 +184,23 @@ class ReservationController extends Controller
     {
         $reservation->load(['vehicle', 'usedVehicle', 'customer', 'seller', 'payments.method', 'partners']);
         
-        $price   = (float) ($reservation->price ?? 0);
-        $deposit = (float) ($reservation->deposit ?? 0);
-        $credit  = (float) ($reservation->credit_bank ?? 0);
-        $trade   = (float) ($reservation->used_vehicle_price ?? 0);
-        
-        // Sumamos pagos históricos registrados en la tabla payments
-        $paymentsTotal = $reservation->payments->sum('amount');
-        
-        // El total pagado es la Seña inicial (deposit) O la suma de pagos si es mayor
-        // (A veces el depósito se registra como un pago más)
-        $totalPaid = max($deposit, $paymentsTotal);
-        
-        if(isset($reservation->paid_amount) && $reservation->paid_amount > 0) {
-             $totalPaid = $reservation->paid_amount;
-        }
+        $price    = (float) ($reservation->price ?? 0);
+        $transfer = (float) ($reservation->transfer_cost ?? 0);
+        $admin    = (float) ($reservation->administrative_cost ?? 0);
+        $deposit  = (float) ($reservation->deposit ?? 0);
+        $credit   = (float) ($reservation->credit_bank ?? 0);
+        $trade    = (float) ($reservation->used_vehicle_price ?? 0);
 
-        $balance = $price - $totalPaid - $credit - $trade;
+        // Usar price_ars (congelado al tipo de cambio de la operación)
+        $priceARS       = (float) ($reservation->price_ars ?? $price);
+        $totalOperation = $priceARS + $transfer + $admin;
+        $paymentsTotal  = $reservation->payments->sum('amount_ars');
+        $totalPaid      = $deposit + $paymentsTotal;
 
-        // Auto-corrección silenciosa (Excelente práctica que ya tenías)
-        if (empty($reservation->balance) || abs($reservation->balance - $balance) > 100) {
+        $balance = $totalOperation - $totalPaid - $credit - $trade;
+
+        // Siempre sincronizar el balance guardado con el calculado en tiempo real
+        if ((float) $reservation->balance !== $balance) {
             $reservation->updateQuietly(['balance' => $balance]);
         }
 
@@ -206,14 +216,26 @@ class ReservationController extends Controller
     public function update(Request $request, Reservation $reservation)
     {
         $data = $request->validate([
-            'vehicle_id'      => 'sometimes|exists:vehicles,id',
-            'customer_id'     => 'sometimes|exists:customers,id',
-            'price'           => 'sometimes|numeric|min:0',
-            'deposit'         => 'nullable|numeric|min:0',
-            'status'          => 'nullable|string',
+            'vehicle_id'          => 'sometimes|exists:vehicles,id',
+            'customer_id'         => 'sometimes|exists:customers,id',
+            'price'               => 'sometimes|numeric|min:0',
+            'deposit'             => 'nullable|numeric|min:0',
+            'credit_bank'         => 'nullable|numeric|min:0',
+            'transfer_cost'       => 'nullable|numeric|min:0',
+            'administrative_cost' => 'nullable|numeric|min:0',
+            'workshop_expenses'   => 'nullable|numeric|min:0',
+            'payment_method'      => 'nullable|string',
+            'payment_details'     => 'nullable|string',
+            'comments'            => 'nullable|string',
+            'status'              => 'nullable|string|in:pendiente,reservado,confirmada,vendido,anulada',
             'used_vehicle_id'        => 'nullable|exists:vehicles,id',
             'used_vehicle_price'     => 'nullable|numeric|min:0',
             'used_vehicle_checklist' => 'nullable|string',
+            'currency'            => 'nullable|string|in:ARS,USD',
+            'exchange_rate'       => 'nullable|numeric|min:0',
+            'second_buyer_name'   => 'nullable|string',
+            'second_buyer_dni'    => 'nullable|string',
+            'second_buyer_phone'  => 'nullable|string',
         ]);
 
         // 1. Validar conflicto de vehículos
@@ -239,21 +261,50 @@ class ReservationController extends Controller
         }
 
         try {
-            // --- CÁLCULO DE REAJUSTE DE SALDO ---
-            // Si cambian precio, seña o permuta, recalcular saldo
-            if ($request->has('price') || $request->has('deposit') || $request->has('used_vehicle_price')) {
-                $newPrice = $request->has('price') ? floatval($data['price']) : $reservation->price;
-                $newDeposit = $request->has('deposit') ? floatval($data['deposit']) : $reservation->deposit;
-                $newTrade = $request->has('used_vehicle_price') ? floatval($data['used_vehicle_price']) : $reservation->used_vehicle_price;
+            // --- REAJUSTE DE SALDO Y PRECIO EN ARS ---
+            $balanceFields = ['price', 'deposit', 'credit_bank', 'transfer_cost', 'administrative_cost', 'used_vehicle_price', 'currency', 'exchange_rate'];
+            if (collect($balanceFields)->some(fn($f) => $request->has($f))) {
+                $newPrice    = floatval($data['price']               ?? $reservation->price);
+                $newCurrency = $data['currency']                     ?? $reservation->currency ?? 'ARS';
+                $newRate     = max(1, floatval($data['exchange_rate'] ?? $reservation->exchange_rate ?? 1));
+                $newDeposit  = floatval($data['deposit']             ?? $reservation->deposit);
+                $newCredit   = floatval($data['credit_bank']         ?? $reservation->credit_bank);
+                $newTransfer = floatval($data['transfer_cost']       ?? $reservation->transfer_cost);
+                $newAdmin    = floatval($data['administrative_cost'] ?? $reservation->administrative_cost);
+                $newTrade    = floatval($data['used_vehicle_price']  ?? $reservation->used_vehicle_price);
+                $paidSoFar   = floatval($reservation->payments()->sum('amount_ars'));
 
-                $data['balance'] = $newPrice - $newDeposit - $newTrade;
+                $newPriceARS = $newCurrency === 'USD' ? $newPrice * $newRate : $newPrice;
+
+                $data['price_ars'] = $newPriceARS;
+                $data['balance']   = ($newPriceARS + $newTransfer + $newAdmin)
+                                   - $newDeposit - $newTrade - $newCredit - $paidSoFar;
             }
+
+            // Separar status del resto para manejar la transición vía servicio
+            $newStatus = $data['status'] ?? null;
+            $oldStatus = $reservation->status;
+            unset($data['status']);
 
             $reservation->update($data);
 
+            // Sincronizar estado del vehículo si el status cambió
+            if ($newStatus && $newStatus !== $oldStatus) {
+                $reservation->updateQuietly(['status' => $newStatus]);
+                $vehicle = $reservation->vehicle;
+                if ($vehicle) {
+                    match ($newStatus) {
+                        'confirmada', 'vendido' => $this->statusService->onConfirmed($vehicle),
+                        'anulada'               => $this->statusService->onCancelled($vehicle),
+                        'pendiente', 'reservado' => $this->statusService->reserve($vehicle),
+                        default                 => null,
+                    };
+                }
+            }
+
             return response()->json([
                 'message' => 'Reserva actualizada correctamente ✅',
-                'data' => $reservation
+                'data'    => $reservation->fresh()->load(['vehicle', 'customer', 'seller', 'payments.method']),
             ]);
 
         } catch (\Exception $e) {
@@ -265,15 +316,18 @@ class ReservationController extends Controller
     // ================= ELIMINAR RESERVA =================
     public function destroy(Reservation $reservation)
     {
-        return DB::transaction(function() use ($reservation) {
+        return DB::transaction(function () use ($reservation) {
             $vehicle = $reservation->vehicle;
-            
+
+            // Limpiar CC antes de eliminar pagos
+            $this->ccService->onReservationCancelled($reservation);
+
             $reservation->payments()->delete();
-            $reservation->partners()->delete(); 
+            $reservation->partners()->delete();
             $reservation->delete();
 
             if ($vehicle) {
-                $vehicle->update(['status' => 'disponible']);
+                $this->statusService->onCancelled($vehicle);
             }
 
             return response()->json(['message' => 'Reserva eliminada y vehículo liberado ✅']);
@@ -284,23 +338,20 @@ class ReservationController extends Controller
     public function cancel(Request $request, $id)
     {
         $reservation = Reservation::findOrFail($id);
-        $refund = $request->input('refund', false); 
 
-        return DB::transaction(function() use ($reservation, $refund) {
-            
-            if ($refund) {
-                $reservation->payments()->delete(); 
-                $reservation->deposit = 0;
-            } 
-            
-            // Forzar saldo a 0 al anular para que no figure deuda
-            $reservation->balance = 0;
-            $reservation->status = 'anulada';
-            $reservation->save();
+        return DB::transaction(function () use ($reservation, $request) {
+            // Limpiar CC antes de eliminar pagos
+            $this->ccService->onReservationCancelled($reservation);
+
+            if ($request->boolean('refund')) {
+                $reservation->payments()->delete();
+                $reservation->updateQuietly(['deposit' => 0]);
+            }
+
+            $reservation->updateQuietly(['status' => 'anulada', 'balance' => 0]);
 
             if ($reservation->vehicle) {
-                $reservation->vehicle->status = 'disponible';
-                $reservation->vehicle->save();
+                $this->statusService->onCancelled($reservation->vehicle);
             }
 
             return response()->json(['message' => 'Reserva anulada correctamente']);

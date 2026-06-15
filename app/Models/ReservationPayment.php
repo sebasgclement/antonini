@@ -13,13 +13,19 @@ class ReservationPayment extends Model
         'reservation_id',
         'payment_method_id',
         'amount',
+        'currency',
+        'exchange_rate',
+        'amount_ars',
         'details',
-        'notes'
+        'notes',
+        'receipt_path',
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'details' => 'array',
+        'amount'        => 'decimal:2',
+        'exchange_rate' => 'decimal:4',
+        'amount_ars'    => 'decimal:2',
+        'details'       => 'array',
     ];
 
     public function reservation()

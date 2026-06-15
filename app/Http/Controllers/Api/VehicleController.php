@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
-use App\Models\Reservation;
+use App\Services\VehicleStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class VehicleController extends Controller
 {
+    public function __construct(private VehicleStatusService $statusService) {}
+
     // ======================= INDEX =======================
     public function index(Request $request)
     {
@@ -18,10 +20,21 @@ class VehicleController extends Controller
         // 1. Iniciamos la consulta cargando la relación del cliente (dueño)
         $query = Vehicle::with(['customer']); 
 
-        // 2. 🛡️ FILTRO HISTÓRICOS:
-        // Si NO estoy pidiendo explícitamente ver "historial" o "vendidos",
-        // entonces ocultamos los vendidos para no saturar la lista.
-        if ($request->input('status') !== 'vendido' && !$request->has('show_history')) {
+        // 2. Filtro por customer_id (selector de vehículo en órdenes de servicio).
+        // Cuando se pide por cliente mostramos TODOS sus vehículos sin importar el estado,
+        // incluyendo los vendidos (el cliente puede traer su propio auto comprado aquí).
+        // Buscamos tanto por owner (customer_id directo) como por comprador (reserva confirmada).
+        if ($request->filled('customer_id')) {
+            $cid = (int) $request->customer_id;
+            $query->where(function ($q) use ($cid) {
+                $q->where('customer_id', $cid)
+                  ->orWhereHas('reservations', function ($qr) use ($cid) {
+                      $qr->where('customer_id', $cid)
+                         ->whereIn('status', ['confirmada', 'vendido']);
+                  });
+            });
+        } elseif ($request->input('status') !== 'vendido' && !$request->has('show_history')) {
+            // Filtro histórico normal: ocultar vendidos para no saturar la lista
             $query->where('status', '!=', 'vendido');
         }
 
@@ -184,27 +197,30 @@ class VehicleController extends Controller
             }
         }
 
-        // 🔹 Si el vehículo se marca como "disponible", eliminar reserva asociada
-        if (isset($data['status']) && $data['status'] === 'disponible') {
-            Reservation::where('vehicle_id', $vehicle->id)->delete();
+        // Separar status del resto de los campos — se maneja vía servicio
+        $newStatus  = $data['status'] ?? null;
+        $oldStatus  = $vehicle->status;
+        $fieldsOnly = collect($data)->except('status')->toArray();
+
+        // Aplicar cambios de campos normales (precio, fotos, notas, etc.)
+        if (!empty($fieldsOnly)) {
+            $vehicle->update($fieldsOnly);
         }
 
-        // 🚫 Si intentan venderlo mientras tiene una reserva, bloquear
-        if (isset($data['status']) && $data['status'] === 'vendido') {
-            $hasReservation = Reservation::where('vehicle_id', $vehicle->id)->exists();
-            if ($hasReservation) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'No se puede marcar como vendido: el vehículo tiene una reserva activa.',
-                ], 422);
-            }
+        // Aplicar transición de estado vía servicio (única fuente de verdad)
+        if ($newStatus && $newStatus !== $oldStatus) {
+            match ($newStatus) {
+                'vendido'    => $this->statusService->directSale($vehicle),
+                'disponible' => $this->statusService->release($vehicle, 'disponible'),
+                'ofrecido'   => $this->statusService->release($vehicle, 'ofrecido'),
+                'reservado'  => $vehicle->updateQuietly(['status' => 'reservado']),
+                default      => $vehicle->updateQuietly(['status' => $newStatus]),
+            };
         }
-
-        $vehicle->update($data);
 
         return response()->json([
             'ok' => true,
-            'data' => $vehicle->load('customer', 'expenses'),
+            'data' => $vehicle->fresh()->load('customer', 'expenses'),
         ]);
     }
 

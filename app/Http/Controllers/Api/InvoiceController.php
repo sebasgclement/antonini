@@ -62,17 +62,19 @@ class InvoiceController extends Controller
                 $total = $subtotal + $ivaAmount;
 
                 // 4. Creamos la cabecera de la Factura
-                $lastNumber = Invoice::withTrashed()->lockForUpdate()->max('id') ?? 0;
+                // El número usa el ID auto-increment de la BD, que es atómico y sin race condition
                 $invoice = Invoice::create([
                     'customer_id'      => $request->customer_id,
                     'business_unit_id' => $request->business_unit_id,
                     'user_id'          => auth()->id(),
                     'type'             => $request->type,
-                    'number'           => '0001-' . str_pad($lastNumber + 1, 8, '0', STR_PAD_LEFT),
                     'subtotal'         => $subtotal,
                     'iva_amount'       => $ivaAmount,
                     'total'            => $total,
                     'notes'            => $request->notes,
+                ]);
+                $invoice->update([
+                    'number' => '0001-' . str_pad($invoice->id, 8, '0', STR_PAD_LEFT),
                 ]);
 
                 // 5. Guardamos todos los ítems de la factura de un tirón
