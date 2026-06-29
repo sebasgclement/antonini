@@ -15,6 +15,8 @@ class Vehicle extends Model
         'photo_front','photo_back','photo_left','photo_right',
         'photo_interior_front','photo_interior_back','photo_trunk',
         'sold_at',
+        'destino_vehiculo',
+        'published',
     ];
 
     protected $casts = [
@@ -30,6 +32,7 @@ class Vehicle extends Model
         'check_key_copy'  => 'boolean',
         'check_manual'    => 'boolean',
         'sold_at'         => 'datetime',
+        'published'       => 'boolean',
     ];
 
     // ================= RELACIONES =================

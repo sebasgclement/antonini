@@ -28,12 +28,14 @@ class Customer extends Model
         'notes',
         'dni_front',
         'dni_back',
+        'is_insurer',
     ];
 
     // ⚠️ IMPORTANTE: Esto convierte el string de la fecha en un objeto Carbon
     // para poder preguntar cosas como: if ($customer->locked_until > now())
     protected $casts = [
         'locked_until' => 'datetime',
+        'is_insurer'   => 'boolean',
     ];
 
     // Relación: Quién cargó el cliente (Creador)

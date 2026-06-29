@@ -84,17 +84,6 @@ class ReservationController extends Controller
             'partners.*.photo'      => 'nullable|image|max:5120',
         ]);
 
-        // 2. Validación lógica del 08 (Permuta)
-        if (!empty($data['used_vehicle_id'])) {
-            $checklist = json_decode($request->used_vehicle_checklist, true);
-            if (empty($checklist['08']) || $checklist['08'] !== true) {
-                 return response()->json([
-                    'message' => 'No se puede tomar el usado sin el 08 firmado.',
-                    'errors' => ['used_vehicle_checklist' => ['El 08 es obligatorio para la toma.']]
-                 ], 422);
-            }
-        }
-
         try {
             return DB::transaction(function () use ($data, $request) {
                 
@@ -249,17 +238,6 @@ class ReservationController extends Controller
             ], 422);
         }
 
-        // 2. Validar checklist 08 si cambia
-        if ($request->has('used_vehicle_checklist') && $finalUsedId) {
-            $checklist = json_decode($request->used_vehicle_checklist, true);
-            if (empty($checklist['08']) || $checklist['08'] !== true) {
-                 return response()->json([
-                    'message' => 'Falta el 08 firmado.',
-                    'errors' => ['used_vehicle_checklist' => ['El 08 es obligatorio.']]
-                 ], 422);
-            }
-        }
-
         try {
             // --- REAJUSTE DE SALDO Y PRECIO EN ARS ---
             $balanceFields = ['price', 'deposit', 'credit_bank', 'transfer_cost', 'administrative_cost', 'used_vehicle_price', 'currency', 'exchange_rate'];
@@ -287,6 +265,11 @@ class ReservationController extends Controller
             unset($data['status']);
 
             $reservation->update($data);
+
+            // Recalcular entrada de CC de la toma si el valor cambió
+            if ($request->has('used_vehicle_price')) {
+                $this->ccService->onTradeInUpdated($reservation->fresh());
+            }
 
             // Sincronizar estado del vehículo si el status cambió
             if ($newStatus && $newStatus !== $oldStatus) {

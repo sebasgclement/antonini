@@ -39,6 +39,7 @@ use App\Models\Iva;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\CurrentAccountController;
 use App\Http\Controllers\Api\MailController;
+use App\Http\Controllers\InsuranceController;
 
 
 // ================== 1. RUTAS PÚBLICAS ==================
@@ -91,6 +92,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //Orden de servicio
     Route::apiResource('service-orders', ServiceOrderController::class);
+
+    // Siniestros / CC Aseguradoras
+    Route::get   ('/insurance/siniestros',                                  [InsuranceController::class, 'siniestros']);
+    Route::get   ('/insurance/overdue-count',                               [InsuranceController::class, 'overdueCount']);
+    Route::get   ('/insurers',                                              [InsuranceController::class, 'insurers']);
+    Route::post  ('/insurers',                                              [InsuranceController::class, 'storeInsurer']);
+    Route::post  ('/service-orders/{order}/insurance-payments',             [InsuranceController::class, 'storePayment']);
+    Route::delete('/service-orders/{order}/insurance-payments/{payment}',   [InsuranceController::class, 'deletePayment']);
 
     // Correo
     Route::get   ('/mail/inbox',            [MailController::class, 'inbox']);

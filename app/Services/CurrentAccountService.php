@@ -77,6 +77,39 @@ class CurrentAccountService
         $this->recalculate($reservation->customer_id);
     }
 
+    public function onTradeInUpdated(Reservation $reservation): void
+    {
+        $reservation->loadMissing('usedVehicle');
+        $used    = $reservation->usedVehicle;
+        $uLabel  = $used ? "{$used->brand} {$used->model}" : "usado";
+        $newAmt  = (float) ($reservation->used_vehicle_price ?? 0);
+
+        $entry = CurrentAccount::where('reservation_id', $reservation->id)
+            ->where('concept', 'like', 'Toma -%')
+            ->first();
+
+        if ($entry) {
+            if ($newAmt > 0) {
+                $entry->credit  = $newAmt;
+                $entry->concept = "Toma - $uLabel";
+                $entry->save();
+            } else {
+                $entry->delete();
+            }
+        } elseif ($newAmt > 0) {
+            $this->insert($reservation->customer_id, [
+                'reservation_id' => $reservation->id,
+                'concept'        => "Toma - $uLabel",
+                'debit'          => 0,
+                'credit'         => $newAmt,
+                'status'         => 'pagado',
+                'payment_date'   => now()->toDateString(),
+            ]);
+        }
+
+        $this->recalculate($reservation->customer_id);
+    }
+
     public function onReservationPaymentCreated(ReservationPayment $payment): void
     {
         $payment->loadMissing(['method', 'reservation.vehicle']);

@@ -16,12 +16,14 @@ class ServiceOrderItem extends Model
         'quantity',
         'unit_price',
         'subtotal',
+        'includes_iva',
     ];
 
     protected $casts = [
-        'quantity'   => 'decimal:2',
-        'unit_price' => 'decimal:2',
-        'subtotal'   => 'decimal:2',
+        'quantity'    => 'decimal:2',
+        'unit_price'  => 'decimal:2',
+        'subtotal'    => 'decimal:2',
+        'includes_iva' => 'boolean',
     ];
 
     // ================= RELACIONES =================

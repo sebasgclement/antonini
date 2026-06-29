@@ -20,6 +20,10 @@ class ServiceOrder extends Model
         'insurance_company',
         'policy_number',
         'claim_number',
+        'invoice_number',
+        'invoice_date',
+        'insurer_id',
+        'insurance_due_date',
         'mileage',
         'notes',
         'subtotal',
@@ -62,5 +66,15 @@ class ServiceOrder extends Model
     public function items()
     {
         return $this->hasMany(ServiceOrderItem::class);
+    }
+
+    public function insurer()
+    {
+        return $this->belongsTo(Customer::class, 'insurer_id');
+    }
+
+    public function insurancePayments()
+    {
+        return $this->hasMany(InsurancePayment::class);
     }
 }

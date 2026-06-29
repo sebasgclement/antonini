@@ -47,15 +47,20 @@ class ServiceOrderController extends Controller
             $orderNumber = 'OS-' . now()->format('Ymd') . '-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
 
             // B. Creamos la Cabecera de la orden
+            $isInsurance = $request->type === 'insurance';
             $order = ServiceOrder::create([
                 'order_number'      => $orderNumber,
                 'customer_id'       => $request->customer_id,
                 'vehicle_id'        => $request->vehicle_id,
                 'technician_id'     => $request->technician_id,
                 'type'              => $request->type,
-                'insurance_company' => $request->type === 'insurance' ? $request->insurance_company : null,
-                'policy_number'     => $request->type === 'insurance' ? $request->policy_number : null,
-                'claim_number'      => $request->type === 'insurance' ? $request->claim_number : null,
+                'insurance_company'  => $isInsurance ? $request->insurance_company : null,
+                'insurer_id'         => $isInsurance ? $request->insurer_id : null,
+                'insurance_due_date' => $isInsurance ? $request->insurance_due_date : null,
+                'policy_number'      => $isInsurance ? $request->policy_number : null,
+                'claim_number'       => $isInsurance ? $request->claim_number : null,
+                'invoice_number'     => $isInsurance ? $request->invoice_number : null,
+                'invoice_date'       => $isInsurance ? $request->invoice_date : null,
                 'mileage'           => $request->mileage,
                 'notes'             => $request->notes,
                 'discount'          => $request->discount ?? 0,
@@ -66,7 +71,9 @@ class ServiceOrderController extends Controller
 
             // C. Guardamos los Renglones (Items) y descontamos Stock
             foreach ($request->items as $item) {
-                $subtotalItem = $item['quantity'] * $item['unit_price'];
+                $includesIva  = !empty($item['includes_iva']);
+                $baseSubtotal = $item['quantity'] * $item['unit_price'];
+                $subtotalItem = $includesIva ? $baseSubtotal : $baseSubtotal * 1.21;
                 $subtotalGeneral += $subtotalItem;
 
                 ServiceOrderItem::create([
@@ -76,6 +83,7 @@ class ServiceOrderController extends Controller
                     'quantity'         => $item['quantity'],
                     'unit_price'       => $item['unit_price'],
                     'subtotal'         => $subtotalItem,
+                    'includes_iva'     => $includesIva,
                 ]);
 
                 if (!empty($item['product_id'])) {
@@ -123,9 +131,13 @@ class ServiceOrderController extends Controller
             'mileage'           => 'nullable|integer',
             'notes'             => 'nullable|string',
             'discount'          => 'nullable|numeric|min:0',
-            'insurance_company' => 'nullable|string',
-            'policy_number'     => 'nullable|string',
-            'claim_number'      => 'nullable|string',
+            'insurance_company'  => 'nullable|string',
+            'insurer_id'         => 'nullable|exists:customers,id',
+            'insurance_due_date' => 'nullable|date',
+            'policy_number'      => 'nullable|string',
+            'claim_number'       => 'nullable|string',
+            'invoice_number'    => 'nullable|string',
+            'invoice_date'      => 'nullable|date',
         ]);
 
         $oldStatus = $serviceOrder->status;

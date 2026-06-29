@@ -25,6 +25,7 @@ class VehicleController extends Controller
         // incluyendo los vendidos (el cliente puede traer su propio auto comprado aquí).
         // Buscamos tanto por owner (customer_id directo) como por comprador (reserva confirmada).
         if ($request->filled('customer_id')) {
+            // Selector de taller: mostrar todos los vehículos del cliente sin filtro de destino
             $cid = (int) $request->customer_id;
             $query->where(function ($q) use ($cid) {
                 $q->where('customer_id', $cid)
@@ -33,9 +34,14 @@ class VehicleController extends Controller
                          ->whereIn('status', ['confirmada', 'vendido']);
                   });
             });
-        } elseif ($request->input('status') !== 'vendido' && !$request->has('show_history')) {
-            // Filtro histórico normal: ocultar vendidos para no saturar la lista
-            $query->where('status', '!=', 'vendido');
+        } else {
+            // Stock de ventas: solo STOCK_COMERCIAL por defecto
+            $destino = $request->input('destino_vehiculo', 'STOCK_COMERCIAL');
+            $query->where('destino_vehiculo', $destino);
+
+            if ($request->input('status') !== 'vendido' && !$request->has('show_history')) {
+                $query->where('status', '!=', 'vendido');
+            }
         }
 
         // 3. Lógica del Buscador
@@ -107,6 +113,8 @@ class VehicleController extends Controller
             'check_key_copy' => 'boolean', // 🆕 duplicado llave
             'check_manual'   => 'boolean', // 🆕 manual
             'notes' => 'nullable|string',
+            'destino_vehiculo' => 'nullable|in:STOCK_COMERCIAL,TALLER_CLIENTE',
+            'published' => 'nullable|boolean',
 
             // 📸 Validaciones nuevas
             'photo_front' => 'nullable|image|max:4096',
@@ -162,6 +170,8 @@ class VehicleController extends Controller
             'check_key_copy' => 'boolean', // 🆕 duplicado llave
             'check_manual'   => 'boolean', // 🆕 manual
             'notes' => 'nullable|string',
+            'destino_vehiculo' => 'nullable|in:STOCK_COMERCIAL,TALLER_CLIENTE',
+            'published' => 'nullable|boolean',
 
             // 📸 Validaciones nuevas
             'photo_front' => 'nullable|image|max:4096',
