@@ -61,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dolar',           [DashboardController::class, 'getDolar']); 
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 
+    Route::get('/customers/workshop', [CustomerController::class, 'workshopCustomers']);
     Route::apiResource('customers', CustomerController::class);
     Route::post('/customers/{id}/events', [CustomerController::class, 'storeEvent']);
     Route::get('/customers/{id}/events',  [CustomerController::class, 'getEvents']);

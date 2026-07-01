@@ -31,10 +31,22 @@ class ServiceOrderController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'vehicle_id'  => 'required|exists:vehicles,id',
             'type'        => 'required|in:particular,insurance',
-            'items'       => 'required|array|min:1', // Los renglones
+            'items'       => 'required|array|min:1',
             'items.*.description' => 'required|string',
             'items.*.quantity'    => 'required|numeric|min:0.1',
             'items.*.unit_price'  => 'required|numeric|min:0',
+            // Seguro
+            'insurer_id'         => 'nullable|exists:customers,id',
+            'insurance_due_date' => 'nullable|date',
+            'insurance_company'  => 'nullable|string|max:255',
+            'policy_number'      => 'nullable|string|max:255',
+            'claim_number'       => 'nullable|string|max:255',
+            'invoice_number'     => 'nullable|string|max:255',
+            'invoice_date'       => 'nullable|date',
+            // Otros
+            'mileage'  => 'nullable|integer',
+            'notes'    => 'nullable|string',
+            'discount' => 'nullable|numeric|min:0',
         ]);
 
         // 2. Usamos una Transacción (Si algo falla, no se guarda nada a medias)

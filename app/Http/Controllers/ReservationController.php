@@ -70,6 +70,7 @@ class ReservationController extends Controller
             'exchange_rate'   => 'nullable|numeric|min:0',
             'transfer_cost'   => 'nullable|numeric|min:0',
             'administrative_cost' => 'nullable|numeric|min:0',
+            'date'            => 'nullable|date',
 
             // Validaciones de Permuta
             'used_vehicle_id'        => 'nullable|exists:vehicles,id|different:vehicle_id',
@@ -94,8 +95,9 @@ class ReservationController extends Controller
                 $partnersData = $request->partners ?? [];
                 unset($data['partners']); 
 
-                // --- B. Asignar Vendedor ---
-                $data['seller_id'] = Auth::id(); 
+                // --- B. Asignar Vendedor y Fecha ---
+                $data['seller_id'] = Auth::id();
+                $data['date']      = $data['date'] ?? now();
 
                 // --- C. CÁLCULO FINANCIERO OBLIGATORIO (Backend) ---
                 $price        = floatval($data['price']);
@@ -121,12 +123,11 @@ class ReservationController extends Controller
                 $data['balance']   = $calculatedBalance;
                 $data['price_ars'] = $priceARS; // Precio congelado en ARS al tipo de cambio del momento
 
-                // Definimos estado inicial basado en la deuda
-                if ($calculatedBalance > 0) {
+                // Definimos estado inicial — nunca cerrar si el precio es 0
+                if ($priceARS <= 0 || $calculatedBalance > 0) {
                     $data['status'] = 'pendiente';
                 } else {
-                    // Si pagó todo de una (raro en reserva, pero posible)
-                    $data['status'] = 'confirmada'; 
+                    $data['status'] = 'confirmada';
                 }
 
                 // --- D. Crear la Reserva ---

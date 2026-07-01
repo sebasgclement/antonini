@@ -72,4 +72,9 @@ class Customer extends Model
     {
         return $this->hasMany(\App\Models\Reservation::class, 'customer_id');
     }
+
+    public function serviceOrders()
+    {
+        return $this->hasMany(\App\Models\ServiceOrder::class, 'customer_id');
+    }
 }

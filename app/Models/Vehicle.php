@@ -17,14 +17,16 @@ class Vehicle extends Model
         'sold_at',
         'destino_vehiculo',
         'published',
+        'client_asking_price',
     ];
 
     protected $casts = [
-        'year'            => 'integer',
-        'km'              => 'integer',
-        'reference_price' => 'decimal:2',
-        'take_price'      => 'decimal:2',
-        'price'           => 'decimal:2',
+        'year'                => 'integer',
+        'km'                  => 'integer',
+        'reference_price'     => 'decimal:2',
+        'take_price'          => 'decimal:2',
+        'price'               => 'decimal:2',
+        'client_asking_price' => 'decimal:2',
         'check_spare'     => 'boolean',
         'check_jack'      => 'boolean',
         'check_tools'     => 'boolean',

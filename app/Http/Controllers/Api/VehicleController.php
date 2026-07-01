@@ -35,9 +35,12 @@ class VehicleController extends Controller
                   });
             });
         } else {
-            // Stock de ventas: solo STOCK_COMERCIAL por defecto
-            $destino = $request->input('destino_vehiculo', 'STOCK_COMERCIAL');
-            $query->where('destino_vehiculo', $destino);
+            // Stock de ventas: STOCK_COMERCIAL + SOLO_OFRECIDO por defecto
+            if ($request->filled('destino_vehiculo')) {
+                $query->where('destino_vehiculo', $request->input('destino_vehiculo'));
+            } else {
+                $query->whereIn('destino_vehiculo', ['STOCK_COMERCIAL', 'SOLO_OFRECIDO']);
+            }
 
             if ($request->input('status') !== 'vendido' && !$request->has('show_history')) {
                 $query->where('status', '!=', 'vendido');
@@ -113,7 +116,8 @@ class VehicleController extends Controller
             'check_key_copy' => 'boolean', // 🆕 duplicado llave
             'check_manual'   => 'boolean', // 🆕 manual
             'notes' => 'nullable|string',
-            'destino_vehiculo' => 'nullable|in:STOCK_COMERCIAL,TALLER_CLIENTE',
+            'destino_vehiculo'    => 'nullable|in:STOCK_COMERCIAL,TALLER_CLIENTE,SOLO_OFRECIDO',
+            'client_asking_price' => 'nullable|numeric',
             'published' => 'nullable|boolean',
 
             // 📸 Validaciones nuevas
@@ -170,7 +174,8 @@ class VehicleController extends Controller
             'check_key_copy' => 'boolean', // 🆕 duplicado llave
             'check_manual'   => 'boolean', // 🆕 manual
             'notes' => 'nullable|string',
-            'destino_vehiculo' => 'nullable|in:STOCK_COMERCIAL,TALLER_CLIENTE',
+            'destino_vehiculo'    => 'nullable|in:STOCK_COMERCIAL,TALLER_CLIENTE,SOLO_OFRECIDO',
+            'client_asking_price' => 'nullable|numeric',
             'published' => 'nullable|boolean',
 
             // 📸 Validaciones nuevas

@@ -53,6 +53,33 @@ class CustomerController extends Controller
         return response()->json(['ok' => true, 'data' => $rows]);
     }
 
+    // GET /api/customers/workshop
+    public function workshopCustomers(Request $request)
+    {
+        $term = trim($request->query('search', ''));
+
+        $rows = Customer::withCount('serviceOrders')
+            ->where(function ($q) {
+                $q->whereHas('serviceOrders')
+                  ->orWhereHas('vehicles', function ($qv) {
+                      $qv->where('destino_vehiculo', 'TALLER_CLIENTE');
+                  });
+            })
+            ->when($term, function ($q) use ($term) {
+                $q->where(function ($qq) use ($term) {
+                    $qq->where('first_name', 'like', "%$term%")
+                       ->orWhere('last_name', 'like', "%$term%")
+                       ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$term%"])
+                       ->orWhere('doc_number', 'like', "%$term%")
+                       ->orWhere('phone', 'like', "%$term%");
+                });
+            })
+            ->latest()
+            ->paginate(20);
+
+        return response()->json(['ok' => true, 'data' => $rows]);
+    }
+
     // POST /api/customers
     public function store(CustomerStoreRequest $req)
     {
