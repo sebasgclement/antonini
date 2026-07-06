@@ -217,7 +217,7 @@ class ReservationController extends Controller
             'payment_method'      => 'nullable|string',
             'payment_details'     => 'nullable|string',
             'comments'            => 'nullable|string',
-            'status'              => 'nullable|string|in:pendiente,reservado,confirmada,vendido,anulada',
+            'status'              => 'nullable|string|in:pendiente,reservado,confirmada,vendida,vendido,anulada',
             'used_vehicle_id'        => 'nullable|exists:vehicles,id',
             'used_vehicle_price'     => 'nullable|numeric|min:0',
             'used_vehicle_checklist' => 'nullable|string',
@@ -278,7 +278,7 @@ class ReservationController extends Controller
                 $vehicle = $reservation->vehicle;
                 if ($vehicle) {
                     match ($newStatus) {
-                        'confirmada', 'vendido' => $this->statusService->onConfirmed($vehicle),
+                        'confirmada', 'vendida', 'vendido' => $this->statusService->onConfirmed($vehicle),
                         'anulada'               => $this->statusService->onCancelled($vehicle),
                         'pendiente', 'reservado' => $this->statusService->reserve($vehicle),
                         default                 => null,

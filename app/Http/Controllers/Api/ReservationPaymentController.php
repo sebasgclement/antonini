@@ -6,12 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
 use App\Services\CurrentAccountService;
+use App\Services\VehicleStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class ReservationPaymentController extends Controller
 {
-    public function __construct(private CurrentAccountService $ccService) {}
+    public function __construct(
+        private CurrentAccountService $ccService,
+        private VehicleStatusService $statusService,
+    ) {}
     public function index(Request $request)
     {
         $query = ReservationPayment::with(['reservation', 'method']);
@@ -142,7 +146,7 @@ class ReservationPaymentController extends Controller
 
     private function syncBalance(int $reservationId): void
     {
-        $reservation = Reservation::with('payments')->find($reservationId);
+        $reservation = Reservation::with(['payments', 'vehicle'])->find($reservationId);
         if (!$reservation) return;
 
         $price    = (float) ($reservation->price ?? 0);
@@ -159,6 +163,15 @@ class ReservationPaymentController extends Controller
                  - $credit
                  - $trade;
 
-        $reservation->updateQuietly(['balance' => $balance]);
+        $updates = ['balance' => $balance];
+
+        if ($priceARS > 0 && $balance <= 0 && !in_array($reservation->status, ['vendida', 'anulada'])) {
+            $updates['status'] = 'vendida';
+            if ($reservation->vehicle) {
+                $this->statusService->onConfirmed($reservation->vehicle);
+            }
+        }
+
+        $reservation->updateQuietly($updates);
     }
 }
