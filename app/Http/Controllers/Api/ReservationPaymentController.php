@@ -165,8 +165,8 @@ class ReservationPaymentController extends Controller
 
         $updates = ['balance' => $balance];
 
-        if ($priceARS > 0 && $balance <= 0 && !in_array($reservation->status, ['vendida', 'anulada'])) {
-            $updates['status'] = 'vendida';
+        if ($priceARS > 0 && $balance <= 0 && !in_array($reservation->status, ['vendido', 'anulada'])) {
+            $updates['status'] = 'vendido';
             if ($reservation->vehicle) {
                 $this->statusService->onConfirmed($reservation->vehicle);
             }
