@@ -38,7 +38,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->id === 1 || $this->roles()->where('name', 'admin')->exists();
+        return $this->id === 1 || $this->roles()->whereRaw('LOWER(name) = ?', ['admin'])->exists();
     }
 
 }

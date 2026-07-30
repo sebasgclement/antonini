@@ -27,7 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => RoleMiddleware::class,
-            'accounting' => \App\Http\Middleware::class,
+            'accounting' => \App\Http\Middleware\CheckAccountingRole::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

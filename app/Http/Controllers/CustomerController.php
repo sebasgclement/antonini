@@ -222,7 +222,7 @@ class CustomerController extends Controller
 
     // ... (Tu lógica de permisos y bloqueos se mantiene igual) ...
     $isOwner = (int)$customer->seller_id === (int)$user->id;
-    $isAdmin = $user->role === 'admin' || $user->role_id === 1;
+    $isAdmin = $user->isAdmin();
     $isLocked = $customer->locked_until && $customer->locked_until > now();
 
     if ($customer->seller_id && !$isOwner && !$isAdmin && $isLocked) {
