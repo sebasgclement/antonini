@@ -74,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     Route::get   ('/vehicles/{vehicle}/expenses',           [VehicleExpenseController::class, 'index']);
     Route::post  ('/vehicles/{vehicle}/expenses',           [VehicleExpenseController::class, 'store']);
+    Route::put   ('/vehicles/{vehicle}/expenses/{expense}', [VehicleExpenseController::class, 'update']);
     Route::delete('/vehicles/{vehicle}/expenses/{expense}', [VehicleExpenseController::class, 'destroy']);
 
     Route::apiResource('reservations', ReservationController::class);
