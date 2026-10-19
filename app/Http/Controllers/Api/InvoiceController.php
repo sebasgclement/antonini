@@ -29,6 +29,11 @@ class InvoiceController extends Controller
             'customer_id'      => 'nullable|exists:customers,id',
         ]);
 
+        // Los comprobantes internos (no fiscales) sólo los ve un admin
+        if (!auth()->user()->isAdmin()) {
+            $request->merge(['is_fiscal' => 1]);
+        }
+
         $query = Invoice::with([
                 'customer:id,first_name,last_name,cuit,doc_number',
                 'businessUnit:id,name',
@@ -48,12 +53,16 @@ class InvoiceController extends Controller
         $sales = $invoices->whereIn('type', ['A', 'B', 'X', 'ND'])->sum('total')
                - $invoices->where('type', 'NC')->sum('total');
 
+        // Cobrado = recibos + ventas de contado (que no generan recibo)
+        $collected = $invoices->where('type', 'Recibo')->sum('total')
+                   + $invoices->where('contado', true)->sum('total');
+
         return response()->json([
             'invoices' => $invoices,
             'totals'   => [
                 'count'     => $invoices->count(),
                 'sales'     => round($sales, 2),
-                'collected' => round($invoices->where('type', 'Recibo')->sum('total'), 2),
+                'collected' => round($collected, 2),
             ],
         ]);
     }
@@ -92,7 +101,14 @@ class InvoiceController extends Controller
                 'notes'                  => 'nullable|string|max:1000',
             ]);
             $isFiscal = $type !== 'X';
+        }
 
+        // Los comprobantes internos (no fiscales) quedan reservados a administradores
+        if (!$isFiscal && !auth()->user()->isAdmin()) {
+            return response()->json(['message' => 'Sólo un administrador puede emitir comprobantes internos.'], 403);
+        }
+
+        if (!$isSimple) {
             // La letra tiene que coincidir con la condición IVA del cliente
             if ($isFiscal) {
                 $customer = Customer::with('taxResponsibility')->find($request->customer_id);
@@ -227,6 +243,8 @@ class InvoiceController extends Controller
                 $total     = $subtotal + $ivaAmount;
                 $label     = $isFiscal ? "Factura {$type}" : 'Venta no fiscal';
 
+                $contado = $request->boolean('contado');
+
                 $invoice = Invoice::create([
                     'customer_id'      => $request->customer_id,
                     'business_unit_id' => $request->business_unit_id,
@@ -234,6 +252,7 @@ class InvoiceController extends Controller
                     'type'             => $type,
                     'is_fiscal'        => $isFiscal,
                     'fiscal_status'    => $this->initialFiscalStatus($type, $isFiscal),
+                    'contado'          => $contado,
                     'subtotal'         => $subtotal,
                     'iva_amount'       => $ivaAmount,
                     'total'            => $total,
@@ -245,51 +264,18 @@ class InvoiceController extends Controller
 
                 $invoice->items()->createMany($itemsData);
 
-                $contado    = $request->boolean('contado');
-                $newBalance = $previousBalance + $total;
-
-                // Entrada DEBE en cuenta corriente
-                CurrentAccount::create([
-                    'customer_id'  => $request->customer_id,
-                    'invoice_id'   => $invoice->id,
-                    'concept'      => "{$label} N° {$invoice->number}",
-                    'debit'        => $total,
-                    'credit'       => 0,
-                    'balance'      => $newBalance,
-                    'is_fiscal'    => $isFiscal,
-                    'status'       => $contado ? 'pagado' : 'pendiente',
-                    'payment_date' => $contado ? now()->toDateString() : null,
-                ]);
-
-                // Modo contado: Recibo automático que cancela esta venta
-                if ($contado) {
-                    $recibo = Invoice::create([
-                        'customer_id'      => $request->customer_id,
-                        'business_unit_id' => $request->business_unit_id,
-                        'user_id'          => auth()->id(),
-                        'type'             => 'Recibo',
-                        'is_fiscal'        => $isFiscal,
-                        'fiscal_status'    => $this->initialFiscalStatus('Recibo', $isFiscal),
-                        'subtotal'         => $total,
-                        'iva_amount'       => 0,
-                        'total'            => $total,
-                        'notes'            => "Recibo de {$label} N° {$invoice->number}",
-                    ]);
-                    $recibo->update([
-                        'number' => ($isFiscal ? 'RB' : 'RBX') . '-0001-' . str_pad($recibo->id, 8, '0', STR_PAD_LEFT),
-                    ]);
-
+                // Contado: se cobra en el momento, no pasa por cuenta corriente.
+                // Cuenta corriente: entrada DEBE por el total.
+                if (!$contado) {
                     CurrentAccount::create([
-                        'customer_id'  => $request->customer_id,
-                        'invoice_id'   => $recibo->id,
-                        'concept'      => "Recibo N° {$recibo->number} (Contado)",
-                        'debit'        => 0,
-                        'credit'       => $total,
-                        // Vuelve al saldo previo: la venta queda cancelada, la deuda anterior sigue
-                        'balance'      => $previousBalance,
-                        'is_fiscal'    => $isFiscal,
-                        'status'       => 'pagado',
-                        'payment_date' => now()->toDateString(),
+                        'customer_id' => $request->customer_id,
+                        'invoice_id'  => $invoice->id,
+                        'concept'     => "{$label} N° {$invoice->number}",
+                        'debit'       => $total,
+                        'credit'      => 0,
+                        'balance'     => $previousBalance + $total,
+                        'is_fiscal'   => $isFiscal,
+                        'status'      => 'pendiente',
                     ]);
                 }
 

@@ -18,6 +18,7 @@ class Invoice extends Model
         'type',
         'is_fiscal',
         'fiscal_status',
+        'contado',
         'number',
         'subtotal',
         'iva_amount',
@@ -27,6 +28,7 @@ class Invoice extends Model
 
     protected $casts = [
         'is_fiscal'  => 'boolean',
+        'contado'    => 'boolean',
         'subtotal'   => 'float',
         'iva_amount' => 'float',
         'total'      => 'float',
