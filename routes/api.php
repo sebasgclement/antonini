@@ -92,6 +92,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/customers/{id}/current-account/pay', [CurrentAccountController::class, 'storePayment']);
     Route::post('/customers/{id}/current-account/charge', [CurrentAccountController::class, 'storeConcept']);
     Route::delete('/customers/{id}/current-account/{movementId}', [CurrentAccountController::class, 'destroy']);
+    Route::get('/current-accounts/aging', [CurrentAccountController::class, 'aging']);
+    Route::get('/current-accounts/aging/count', [CurrentAccountController::class, 'agingCount']);
 
     //Orden de servicio
     Route::apiResource('service-orders', ServiceOrderController::class);

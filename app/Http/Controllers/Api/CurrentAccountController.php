@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 class CurrentAccountController extends Controller
 {
     // GET /customers/{id}/current-account
-    public function index($customerId)
+    public function index($customerId, CurrentAccountService $ccService)
     {
         $customer = Customer::findOrFail($customerId);
 
@@ -28,11 +28,63 @@ class CurrentAccountController extends Controller
             ->get();
 
         $currentBalance = $movements->first()?->balance ?? 0;
+        $openDebts      = $ccService->openDebts((int) $customerId);
 
         return response()->json([
             'customer_name'   => $customer->first_name . ' ' . $customer->last_name,
             'current_balance' => $currentBalance,
             'movements'       => $movements,
+            // Cargos con saldo pendiente (pagos imputados FIFO) y su vencimiento
+            'open_debts'      => $openDebts,
+            'aging'           => $ccService->agingSummary($openDebts),
+            'due_days'        => CurrentAccountService::DUE_DAYS,
+        ]);
+    }
+
+    // GET /current-accounts/aging — clientes con deuda, del más urgente al menos urgente
+    public function aging(CurrentAccountService $ccService)
+    {
+        $rows = $ccService->agingByCustomer();
+
+        $customers = Customer::whereIn('id', array_keys($rows))
+            ->get(['id', 'first_name', 'last_name', 'phone', 'email'])
+            ->keyBy('id');
+
+        $priority = ['vencido' => 0, 'vence_hoy' => 1, 'por_vencer' => 2, 'al_dia' => 3];
+
+        $data = collect($rows)
+            ->map(fn ($r, $id) => [
+                'customer'   => $customers[$id] ?? null,
+                'aging'      => $r['aging'],
+                'open_debts' => $r['open_debts'],
+            ])
+            ->filter(fn ($r) => $r['customer'] !== null)
+            ->sortBy([
+                fn ($a, $b) => $priority[$a['aging']['status']] <=> $priority[$b['aging']['status']],
+                fn ($a, $b) => $b['aging']['max_days'] <=> $a['aging']['max_days'],
+            ])
+            ->values();
+
+        return response()->json([
+            'data'   => $data,
+            'totals' => [
+                'total'     => round($data->sum('aging.total'), 2),
+                'overdue'   => round($data->sum('aging.overdue'), 2),
+                'due_soon'  => round($data->sum('aging.due_soon') + $data->sum('aging.due_today'), 2),
+            ],
+            'due_days'  => CurrentAccountService::DUE_DAYS,
+            'warn_days' => CurrentAccountService::WARN_DAYS,
+        ]);
+    }
+
+    // GET /current-accounts/aging/count — para el badge del menú
+    public function agingCount(CurrentAccountService $ccService)
+    {
+        $statuses = collect($ccService->agingByCustomer())->pluck('aging.status');
+
+        return response()->json([
+            'overdue'  => $statuses->filter(fn ($s) => $s === 'vencido')->count(),
+            'due_soon' => $statuses->filter(fn ($s) => in_array($s, ['vence_hoy', 'por_vencer']))->count(),
         ]);
     }
 

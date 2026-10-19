@@ -188,6 +188,130 @@ class CurrentAccountService
         $this->recalculate($order->customer_id);
     }
 
+    // =====================================================================
+    // VENCIMIENTOS: cada cargo vence a los DUE_DAYS días. Desde WARN_DAYS se avisa "por vencer".
+    // =====================================================================
+    public const DUE_DAYS  = 30;
+    public const WARN_DAYS = 20;
+
+    /**
+     * Cargos con saldo pendiente de un cliente. Como los pagos no se imputan a un cargo
+     * puntual, se aplican primero a los cargos más viejos (FIFO).
+     *
+     * @return array<int, array{movement_id:int, concept:string, date:string, due_date:string, amount:float, remaining:float, days:int, days_to_due:int, status:string}>
+     */
+    public function openDebts(int $customerId): array
+    {
+        $movements = CurrentAccount::where('customer_id', $customerId)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'concept', 'debit', 'credit', 'created_at']);
+
+        return $this->allocate($movements);
+    }
+
+    /** Resumen de antigüedad de deuda de un cliente (para badges y listados). */
+    public function agingSummary(array $openDebts): array
+    {
+        $summary = ['total' => 0.0, 'overdue' => 0.0, 'due_today' => 0.0, 'due_soon' => 0.0, 'current' => 0.0, 'max_days' => 0, 'status' => 'al_dia'];
+
+        foreach ($openDebts as $d) {
+            $summary['total'] += $d['remaining'];
+            $key = match ($d['status']) {
+                'vencido'   => 'overdue',
+                'vence_hoy' => 'due_today',
+                'por_vencer'=> 'due_soon',
+                default     => 'current',
+            };
+            $summary[$key] += $d['remaining'];
+            $summary['max_days'] = max($summary['max_days'], $d['days']);
+        }
+
+        // El estado del cliente es el de su deuda más urgente
+        $summary['status'] = $summary['overdue'] > 0 ? 'vencido'
+            : ($summary['due_today'] > 0 ? 'vence_hoy'
+            : ($summary['due_soon'] > 0 ? 'por_vencer'
+            : ($summary['total'] > 0 ? 'al_dia' : 'sin_deuda')));
+
+        foreach (['total', 'overdue', 'due_today', 'due_soon', 'current'] as $k) {
+            $summary[$k] = round($summary[$k], 2);
+        }
+
+        return $summary;
+    }
+
+    /** Todos los clientes con deuda abierta, con su antigüedad. */
+    public function agingByCustomer(): array
+    {
+        $movements = CurrentAccount::orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'customer_id', 'concept', 'debit', 'credit', 'created_at'])
+            ->groupBy('customer_id');
+
+        $rows = [];
+        foreach ($movements as $customerId => $list) {
+            $open = $this->allocate($list);
+            if (empty($open)) continue;
+            $rows[(int) $customerId] = [
+                'open_debts' => $open,
+                'aging'      => $this->agingSummary($open),
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function allocate($movements): array
+    {
+        $debts   = [];
+        $credits = 0.0;
+
+        foreach ($movements as $m) {
+            if ((float) $m->debit > 0) {
+                $debts[] = ['m' => $m, 'remaining' => (float) $m->debit];
+            }
+            $credits += (float) $m->credit;
+        }
+
+        // Aplicar todos los pagos/créditos a los cargos más antiguos
+        foreach ($debts as &$d) {
+            if ($credits <= 0) break;
+            $applied        = min($credits, $d['remaining']);
+            $d['remaining'] -= $applied;
+            $credits        -= $applied;
+        }
+        unset($d);
+
+        $today = now()->startOfDay();
+        $open  = [];
+
+        foreach ($debts as $d) {
+            if (round($d['remaining'], 2) <= 0) continue;
+
+            $date      = $d['m']->created_at->copy()->startOfDay();
+            $days      = (int) $date->diffInDays($today);
+            $daysToDue = self::DUE_DAYS - $days;
+
+            $status = $daysToDue < 0 ? 'vencido'
+                : ($daysToDue === 0 ? 'vence_hoy'
+                : ($days >= self::WARN_DAYS ? 'por_vencer' : 'al_dia'));
+
+            $open[] = [
+                'movement_id' => $d['m']->id,
+                'concept'     => $d['m']->concept,
+                'date'        => $date->toDateString(),
+                'due_date'    => $date->copy()->addDays(self::DUE_DAYS)->toDateString(),
+                'amount'      => round((float) $d['m']->debit, 2),
+                'remaining'   => round($d['remaining'], 2),
+                'days'        => $days,
+                'days_to_due' => $daysToDue,
+                'status'      => $status,
+            ];
+        }
+
+        return $open;
+    }
+
     public function recalculate(int $customerId): void
     {
         DB::transaction(function () use ($customerId) {
