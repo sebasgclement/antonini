@@ -12,10 +12,56 @@ use App\Models\CurrentAccount;
 
 class InvoiceController extends Controller
 {
+    // A / B   => factura fiscal (pasa por ARCA)
+    // X       => venta interna / no fiscal (no pasa por ARCA ni genera asiento contable)
+    // NC/ND/Recibo => comprobantes simples (monto + concepto), fiscales o no según `is_fiscal`
+    private const SIMPLE_TYPES = ['NC', 'ND', 'Recibo'];
+
+    // GET /invoices  — listado para reportes (ej: ?is_fiscal=0&from=2026-10-01&to=2026-10-31)
+    public function index(Request $request)
+    {
+        $request->validate([
+            'from'             => 'nullable|date',
+            'to'               => 'nullable|date',
+            'is_fiscal'        => 'nullable|boolean',
+            'type'             => 'nullable|string|max:10',
+            'business_unit_id' => 'nullable|exists:business_units,id',
+            'customer_id'      => 'nullable|exists:customers,id',
+        ]);
+
+        $query = Invoice::with([
+                'customer:id,first_name,last_name,cuit,doc_number',
+                'businessUnit:id,name',
+                'user:id,name',
+            ])
+            ->when($request->filled('from'), fn ($q) => $q->whereDate('created_at', '>=', $request->from))
+            ->when($request->filled('to'), fn ($q) => $q->whereDate('created_at', '<=', $request->to))
+            ->when($request->filled('is_fiscal'), fn ($q) => $q->where('is_fiscal', $request->boolean('is_fiscal')))
+            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
+            ->when($request->filled('business_unit_id'), fn ($q) => $q->where('business_unit_id', $request->business_unit_id))
+            ->when($request->filled('customer_id'), fn ($q) => $q->where('customer_id', $request->customer_id))
+            ->orderByDesc('created_at');
+
+        $invoices = $query->get();
+
+        // Ventas (A/B/X/ND suman) menos créditos (NC). Los recibos son cobros, no ventas.
+        $sales = $invoices->whereIn('type', ['A', 'B', 'X', 'ND'])->sum('total')
+               - $invoices->where('type', 'NC')->sum('total');
+
+        return response()->json([
+            'invoices' => $invoices,
+            'totals'   => [
+                'count'     => $invoices->count(),
+                'sales'     => round($sales, 2),
+                'collected' => round($invoices->where('type', 'Recibo')->sum('total'), 2),
+            ],
+        ]);
+    }
+
     public function store(Request $request)
     {
-        $type = $request->input('type');
-        $isSimple = in_array($type, ['NC', 'ND', 'Recibo']);
+        $type     = $request->input('type');
+        $isSimple = in_array($type, self::SIMPLE_TYPES);
 
         // 1. Validación según tipo de comprobante
         if ($isSimple) {
@@ -25,36 +71,48 @@ class InvoiceController extends Controller
                 'type'             => 'required|string|in:NC,ND,Recibo',
                 'amount'           => 'required|numeric|min:0.01',
                 'concept'          => 'required|string|max:500',
+                'is_fiscal'        => 'nullable|boolean',
             ]);
+            $isFiscal = $request->boolean('is_fiscal', true);
         } else {
             $request->validate([
-                'customer_id'      => 'required|exists:customers,id',
-                'business_unit_id' => 'required|exists:business_units,id',
-                'type'             => 'required|string|in:A,B',
-                'items'            => 'required|array|min:1',
-                'items.*.id'       => 'required|exists:products,id',
-                'items.*.quantity' => 'required|integer|min:1',
-                'contado'          => 'nullable|boolean',
+                'customer_id'            => 'required|exists:customers,id',
+                'business_unit_id'       => 'required|exists:business_units,id',
+                'type'                   => 'required|string|in:A,B,X',
+                'items'                  => 'required|array|min:1',
+                'items.*.quantity'       => 'required|integer|min:1',
+                // Ítem del catálogo...
+                'items.*.id'             => 'nullable|exists:products,id',
+                // ...o ítem libre cargado desde la factura
+                'items.*.description'    => 'required_without:items.*.id|nullable|string|max:255',
+                'items.*.unit_price'     => 'required_without:items.*.id|nullable|numeric|min:0',
+                'items.*.iva_percentage' => 'nullable|numeric|in:0,10.5,21,27',
+                'items.*.item_type'      => 'nullable|in:product,service',
+                'contado'                => 'nullable|boolean',
+                'notes'                  => 'nullable|string|max:1000',
             ]);
+            $isFiscal = $type !== 'X';
 
-            // Factura A requiere CUIT del cliente
-            if ($type === 'A') {
-                $customer = Customer::find($request->customer_id);
-                if (empty($customer?->cuit)) {
+            // La letra tiene que coincidir con la condición IVA del cliente
+            if ($isFiscal) {
+                $customer = Customer::with('taxResponsibility')->find($request->customer_id);
+                $error    = $this->checkInvoiceLetter($customer, $type);
+                if ($error) {
                     return response()->json([
-                        'message' => 'Factura A requiere CUIT del cliente',
-                        'errors'  => ['customer_id' => ['El cliente seleccionado no tiene CUIT registrado']],
+                        'message' => $error,
+                        'errors'  => ['customer_id' => [$error]],
                     ], 422);
                 }
             }
         }
 
         try {
-            return DB::transaction(function () use ($request, $type, $isSimple) {
+            return DB::transaction(function () use ($request, $type, $isSimple, $isFiscal) {
 
                 // Saldo anterior del cliente
                 $lastMovement = CurrentAccount::where('customer_id', $request->customer_id)
                     ->orderBy('id', 'desc')
+                    ->lockForUpdate()
                     ->first();
                 $previousBalance = $lastMovement ? (float) $lastMovement->balance : 0;
 
@@ -70,12 +128,15 @@ class InvoiceController extends Controller
                         'ND'     => 'ND',
                         'Recibo' => 'RB',
                     };
+                    if (!$isFiscal) $prefix .= 'X';
 
                     $invoice = Invoice::create([
                         'customer_id'      => $request->customer_id,
                         'business_unit_id' => $request->business_unit_id,
                         'user_id'          => auth()->id(),
                         'type'             => $type,
+                        'is_fiscal'        => $isFiscal,
+                        'fiscal_status'    => $this->initialFiscalStatus($type, $isFiscal),
                         'subtotal'         => $amount,
                         'iva_amount'       => 0,
                         'total'            => $amount,
@@ -86,16 +147,19 @@ class InvoiceController extends Controller
                     ]);
 
                     // NC y Recibo restan (crédito). ND suma (débito).
-                    $isCredit = in_array($type, ['NC', 'Recibo']);
+                    $isCredit   = in_array($type, ['NC', 'Recibo']);
                     $newBalance = $isCredit ? $previousBalance - $amount : $previousBalance + $amount;
 
                     CurrentAccount::create([
-                        'customer_id' => $request->customer_id,
-                        'invoice_id'  => $invoice->id,
-                        'concept'     => "{$type} N° {$invoice->number} — {$concept}",
-                        'debit'       => $isCredit ? 0 : $amount,
-                        'credit'      => $isCredit ? $amount : 0,
-                        'balance'     => $newBalance,
+                        'customer_id'  => $request->customer_id,
+                        'invoice_id'   => $invoice->id,
+                        'concept'      => "{$type} N° {$invoice->number} — {$concept}",
+                        'debit'        => $isCredit ? 0 : $amount,
+                        'credit'       => $isCredit ? $amount : 0,
+                        'balance'      => $newBalance,
+                        'is_fiscal'    => $isFiscal,
+                        'status'       => $type === 'Recibo' ? 'pagado' : 'pendiente',
+                        'payment_date' => $type === 'Recibo' ? now()->toDateString() : null,
                     ]);
 
                     return response()->json([
@@ -105,84 +169,127 @@ class InvoiceController extends Controller
                 }
 
                 // ===========================================================
-                // RAMA: Factura A / B  (con items y carrito)
+                // RAMA: Factura A / B / Venta no fiscal X  (con items)
                 // ===========================================================
                 $subtotal  = 0;
+                $ivaAmount = 0;
                 $itemsData = [];
+                // Las ventas fiscales descuentan del stock oficial; las no fiscales, del interno
+                $stockField = $isFiscal ? 'stock_official' : 'stock_internal';
 
                 foreach ($request->items as $item) {
-                    $product  = Product::findOrFail($item['id']);
                     $quantity = (int) $item['quantity'];
-                    $unitPrice = (float) $product->sale_price;
-                    $lineTotal = $unitPrice * $quantity;
-                    $subtotal += $lineTotal;
+
+                    if (!empty($item['id'])) {
+                        $product = Product::with('iva')->lockForUpdate()->findOrFail($item['id']);
+
+                        if ($product->type === 'product' && $product->{$stockField} < $quantity) {
+                            throw new \DomainException(
+                                "Stock insuficiente de \"{$product->description}\" (disponible: {$product->{$stockField}})"
+                            );
+                        }
+
+                        $description = $product->description;
+                        $unitPrice   = (float) $product->sale_price;
+                        $ivaPct      = (float) ($product->iva->percentage ?? 21);
+                        $itemType    = $product->type;
+
+                        if ($product->type === 'product') {
+                            $product->decrement($stockField, $quantity);
+                        }
+                    } else {
+                        $product     = null;
+                        $description = $item['description'];
+                        $unitPrice   = (float) $item['unit_price'];
+                        $ivaPct      = (float) ($item['iva_percentage'] ?? 21);
+                        $itemType    = $item['item_type'] ?? 'service';
+                    }
+
+                    $lineTotal  = $unitPrice * $quantity;
+                    $subtotal  += $lineTotal;
+                    // Sólo la factura A discrimina IVA
+                    if ($type === 'A') {
+                        $ivaAmount += $lineTotal * $ivaPct / 100;
+                    }
 
                     $itemsData[] = [
-                        'product_id'  => $product->id,
-                        'description' => $product->description,
-                        'quantity'    => $quantity,
-                        'unit_price'  => $unitPrice,
-                        'subtotal'    => $lineTotal,
+                        'product_id'     => $product?->id,
+                        'item_type'      => $itemType,
+                        'description'    => $description,
+                        'quantity'       => $quantity,
+                        'unit_price'     => $unitPrice,
+                        'iva_percentage' => $ivaPct,
+                        'subtotal'       => $lineTotal,
                     ];
-
-                    if ($product->type === 'product') {
-                        $product->decrement('stock_official', $quantity);
-                    }
                 }
 
-                $ivaAmount = ($type === 'A') ? $subtotal * 0.21 : 0;
+                $ivaAmount = round($ivaAmount, 2);
                 $total     = $subtotal + $ivaAmount;
+                $label     = $isFiscal ? "Factura {$type}" : 'Venta no fiscal';
 
                 $invoice = Invoice::create([
                     'customer_id'      => $request->customer_id,
                     'business_unit_id' => $request->business_unit_id,
                     'user_id'          => auth()->id(),
                     'type'             => $type,
+                    'is_fiscal'        => $isFiscal,
+                    'fiscal_status'    => $this->initialFiscalStatus($type, $isFiscal),
                     'subtotal'         => $subtotal,
                     'iva_amount'       => $ivaAmount,
                     'total'            => $total,
                     'notes'            => $request->notes,
                 ]);
                 $invoice->update([
-                    'number' => '0001-' . str_pad($invoice->id, 8, '0', STR_PAD_LEFT),
+                    'number' => ($isFiscal ? '' : 'X-') . '0001-' . str_pad($invoice->id, 8, '0', STR_PAD_LEFT),
                 ]);
 
                 $invoice->items()->createMany($itemsData);
 
-                // Entrada DEBE en cuenta corriente
+                $contado    = $request->boolean('contado');
                 $newBalance = $previousBalance + $total;
+
+                // Entrada DEBE en cuenta corriente
                 CurrentAccount::create([
-                    'customer_id' => $request->customer_id,
-                    'invoice_id'  => $invoice->id,
-                    'concept'     => "Factura {$type} N° {$invoice->number}",
-                    'debit'       => $total,
-                    'credit'      => 0,
-                    'balance'     => $newBalance,
+                    'customer_id'  => $request->customer_id,
+                    'invoice_id'   => $invoice->id,
+                    'concept'      => "{$label} N° {$invoice->number}",
+                    'debit'        => $total,
+                    'credit'       => 0,
+                    'balance'      => $newBalance,
+                    'is_fiscal'    => $isFiscal,
+                    'status'       => $contado ? 'pagado' : 'pendiente',
+                    'payment_date' => $contado ? now()->toDateString() : null,
                 ]);
 
-                // Modo contado: generar Recibo automático para saldo $0
-                if ($request->boolean('contado')) {
+                // Modo contado: Recibo automático que cancela esta venta
+                if ($contado) {
                     $recibo = Invoice::create([
                         'customer_id'      => $request->customer_id,
                         'business_unit_id' => $request->business_unit_id,
                         'user_id'          => auth()->id(),
                         'type'             => 'Recibo',
+                        'is_fiscal'        => $isFiscal,
+                        'fiscal_status'    => $this->initialFiscalStatus('Recibo', $isFiscal),
                         'subtotal'         => $total,
                         'iva_amount'       => 0,
                         'total'            => $total,
-                        'notes'            => "Recibo de Factura {$type} N° {$invoice->number}",
+                        'notes'            => "Recibo de {$label} N° {$invoice->number}",
                     ]);
                     $recibo->update([
-                        'number' => 'RB-0001-' . str_pad($recibo->id, 8, '0', STR_PAD_LEFT),
+                        'number' => ($isFiscal ? 'RB' : 'RBX') . '-0001-' . str_pad($recibo->id, 8, '0', STR_PAD_LEFT),
                     ]);
 
                     CurrentAccount::create([
-                        'customer_id' => $request->customer_id,
-                        'invoice_id'  => $recibo->id,
-                        'concept'     => "Recibo N° {$recibo->number} (Contado)",
-                        'debit'       => 0,
-                        'credit'      => $total,
-                        'balance'     => 0,
+                        'customer_id'  => $request->customer_id,
+                        'invoice_id'   => $recibo->id,
+                        'concept'      => "Recibo N° {$recibo->number} (Contado)",
+                        'debit'        => 0,
+                        'credit'       => $total,
+                        // Vuelve al saldo previo: la venta queda cancelada, la deuda anterior sigue
+                        'balance'      => $previousBalance,
+                        'is_fiscal'    => $isFiscal,
+                        'status'       => 'pagado',
+                        'payment_date' => now()->toDateString(),
                     ]);
                 }
 
@@ -192,11 +299,43 @@ class InvoiceController extends Controller
                 ], 201);
             });
 
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => '❌ Error al procesar la venta',
                 'error'   => $e->getMessage(),
             ], 500);
         }
+    }
+
+    // Devuelve el mensaje de error, o null si la letra corresponde a la condición IVA del cliente
+    private function checkInvoiceLetter(?Customer $customer, string $type): ?string
+    {
+        $condition = $customer?->taxResponsibility;
+
+        if (!$condition) {
+            // Sin condición cargada se lo trata como Consumidor Final
+            return $type === 'A'
+                ? 'El cliente no tiene condición frente al IVA cargada. Completala para emitir Factura A.'
+                : null;
+        }
+
+        if ($condition->invoice_letter !== $type) {
+            return "A un cliente {$condition->description} corresponde emitirle Factura {$condition->invoice_letter}.";
+        }
+
+        if ($type === 'A' && empty($customer->cuit)) {
+            return 'Factura A requiere CUIT del cliente';
+        }
+
+        return null;
+    }
+
+    // no_fiscal: nunca va a ARCA | pendiente: falta pedir CAE | no_aplica: recibo (no requiere CAE)
+    private function initialFiscalStatus(string $type, bool $isFiscal): string
+    {
+        if (!$isFiscal) return 'no_fiscal';
+        return $type === 'Recibo' ? 'no_aplica' : 'pendiente';
     }
 }

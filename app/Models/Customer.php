@@ -22,6 +22,7 @@ class Customer extends Model
         'doc_type',
         'doc_number',
         'cuit',
+        'tax_responsibility_id',
         'marital_status',
         'address',
         'city',
@@ -48,6 +49,12 @@ class Customer extends Model
     public function seller()
     {
         return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    // Condición frente al IVA (Resp. Inscripto, Monotributo, Consumidor Final, etc.)
+    public function taxResponsibility()
+    {
+        return $this->belongsTo(TaxResponsibility::class);
     }
 
     // Accessors para las URLs de las fotos

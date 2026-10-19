@@ -16,11 +16,20 @@ class Invoice extends Model
         'business_unit_id',
         'user_id',
         'type',
+        'is_fiscal',
+        'fiscal_status',
         'number',
         'subtotal',
         'iva_amount',
         'total',
         'notes',
+    ];
+
+    protected $casts = [
+        'is_fiscal'  => 'boolean',
+        'subtotal'   => 'float',
+        'iva_amount' => 'float',
+        'total'      => 'float',
     ];
 
     // --- RELACIONES ---

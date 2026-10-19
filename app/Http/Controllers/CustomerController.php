@@ -32,12 +32,14 @@ class CustomerController extends Controller
 
         // 2. Búsqueda General (La que usa la lista)
         $term = trim($request->query('search', ''));
+        // El CUIT se guarda sin guiones: "20-1234" también tiene que encontrar "201234..."
+        $cuitTerm = preg_replace('/\D/', '', $term);
 
         $rows = Customer::query()
-            ->with(['user', 'seller'])
+            ->with(['user', 'seller', 'taxResponsibility'])
             // Filtro inteligente
-            ->when($term, function ($q) use ($term) {
-                $q->where(function ($qq) use ($term) {
+            ->when($term, function ($q) use ($term, $cuitTerm) {
+                $q->where(function ($qq) use ($term, $cuitTerm) {
                     $qq->where('first_name', 'like', "%$term%")
                        ->orWhere('last_name', 'like', "%$term%")
                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$term%"])
@@ -45,6 +47,9 @@ class CustomerController extends Controller
                        ->orWhere('doc_number', 'like', "%$term%")
                        ->orWhere('cuit', 'like', "%$term%")
                        ->orWhere('phone', 'like', "%$term%");
+                    if ($cuitTerm !== '' && $cuitTerm !== $term) {
+                        $qq->orWhere('cuit', 'like', "%$cuitTerm%");
+                    }
                 });
             })
             ->latest()
@@ -99,7 +104,7 @@ class CustomerController extends Controller
 
         $c = Customer::create($data);
 
-        return response()->json(['ok' => true, 'data' => $c], 201);
+        return response()->json(['ok' => true, 'data' => $c->load('taxResponsibility')], 201);
     }
 
     // GET /api/customers/{id}
@@ -108,6 +113,7 @@ class CustomerController extends Controller
     $customer = \App\Models\Customer::with([
         'vehicles',
         'seller',
+        'taxResponsibility',
         'reservations' => function ($q) {
             $q->with([
                 'vehicle:id,brand,model,plate,year,status',

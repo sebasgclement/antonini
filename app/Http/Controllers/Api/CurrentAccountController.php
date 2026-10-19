@@ -18,7 +18,7 @@ class CurrentAccountController extends Controller
 
         $movements = CurrentAccount::where('customer_id', $customerId)
             ->with([
-                'invoice:id,number',
+                'invoice:id,number,type,is_fiscal',
                 'reservation:id,vehicle_id',
                 'reservation.vehicle:id,plate,brand,model',
                 'serviceOrder:id,vehicle_id',

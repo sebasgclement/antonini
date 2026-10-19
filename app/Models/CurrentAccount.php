@@ -19,6 +19,7 @@ class CurrentAccount extends Model
         'debit',
         'credit',
         'balance',
+        'is_fiscal',
         'payment_date',
         'status',
         'notes',
@@ -28,6 +29,7 @@ class CurrentAccount extends Model
         'debit'        => 'float',
         'credit'       => 'float',
         'balance'      => 'float',
+        'is_fiscal'    => 'boolean',
         'payment_date' => 'date',
     ];
 
